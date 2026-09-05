@@ -62,7 +62,7 @@ export default function TaskDetailModal({ task, employee, days = [], onClose, on
       await api.employees.sendWarning(employee.id, {
         task_id: task.id,
         project_id: task.project_id,
-        message: `Warning: You have been blocked or missed ${maxStreak} consecutive days on task "${task.title}". Please take immediate action.`
+        message: `Warning: You have been stalled or missed ${maxStreak} consecutive days on task "${task.title}". Please take immediate action.`
       });
       alert('Warning sent successfully');
     } catch (err) {
@@ -111,7 +111,7 @@ export default function TaskDetailModal({ task, employee, days = [], onClose, on
         <div
           className="flex items-center justify-between px-6 py-4"
           style={{
-            background: 'rgba(255,255,255,0.04)',
+            background: 'var(--table-th-bg)',
             borderBottom: '1px solid var(--color-border)',
           }}
         >
@@ -220,7 +220,7 @@ export default function TaskDetailModal({ task, employee, days = [], onClose, on
               style={{
                 background: '#FAFBFC',
                 borderColor: 'rgba(255,255,255,0.10)',
-                color: '#f0ede8',
+                color: 'var(--color-text-1)',
               }}
             >
               <div className="flex items-start gap-2 mb-2 font-semibold text-blue-800 text-xs">
@@ -243,7 +243,7 @@ export default function TaskDetailModal({ task, employee, days = [], onClose, on
                 </div>
                 <div className="flex items-center gap-2 text-xs flex-wrap">
                   <span className="text-emerald-700 font-semibold">{loggedDays} Logged</span>
-                  {blockedDays > 0 && <span className="text-rose-600 font-semibold">• {blockedDays} Blocked</span>}
+                  {blockedDays > 0 && <span className="text-rose-600 font-semibold">• {blockedDays} Stalled</span>}
                   {missedDays > 0 && <span className="text-amber-700 font-semibold">• {missedDays} Missed</span>}
                   <span className="text-gray-500">• {pendingDays} Pending</span>
                 </div>
@@ -288,7 +288,7 @@ export default function TaskDetailModal({ task, employee, days = [], onClose, on
         {/* Footer */}
         <div
           className="flex justify-between items-center px-6 py-3"
-          style={{ borderTop: '1px solid var(--color-border)', background: 'rgba(255,255,255,0.04)' }}
+          style={{ borderTop: '1px solid var(--color-border)', background: 'var(--table-th-bg)' }}
         >
           <div className="flex gap-2">
             {showWarningButtons && (

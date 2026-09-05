@@ -13,7 +13,7 @@ export function authenticateToken(req, res, next) {
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
         if (err) {
-            return res.status(403).json({ error: 'Invalid or expired session token' });
+            return res.status(401).json({ error: 'Session expired or invalid', is_expired: true });
         }
 
         // Fetch fresh user record
@@ -34,10 +34,17 @@ export function requirePM(req, res, next) {
     next();
 }
 
+export function requireSuperuser(req, res, next) {
+    if (!req.user || req.user.user_type !== 'superuser') {
+        return res.status(403).json({ error: 'Superuser authorization required for this resource' });
+    }
+    next();
+}
+
 export function signToken(user) {
     return jwt.sign(
         { id: user.id, email: user.email, user_type: user.user_type },
         JWT_SECRET,
-        { expiresIn: '7d' }
+        { expiresIn: '1h' }
     );
 }

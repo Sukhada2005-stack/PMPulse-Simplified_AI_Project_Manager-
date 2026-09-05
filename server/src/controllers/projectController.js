@@ -9,7 +9,7 @@ export const createProject = (req, res) => {
         }
 
         const insertProject = db.prepare(`
-            INSERT INTO projects (title, description, start_date, end_date, created_by, status)
+            INSERT INTO projects (title, description, start_date, end_date, manager_id, status)
             VALUES (?, ?, ?, ?, ?, 'active')
         `);
 
@@ -25,7 +25,7 @@ export const createProject = (req, res) => {
             });
         }
 
-        const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId);
+        const project = db.prepare('SELECT * FROM projects WHERE id = ? AND manager_id = ?').get(projectId, req.user.id);
         res.status(201).json({ message: 'Project created successfully', project });
     } catch (err) {
         console.error('Create project error:', err);
@@ -41,25 +41,22 @@ export const getProjects = (req, res) => {
             projects = db.prepare(`
                 SELECT 
                     p.*,
-                    u.full_name as creator_name,
                     (SELECT COUNT(*) FROM project_members pm WHERE pm.project_id = p.id) as member_count,
                     (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) as task_count,
                     (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.status = 'in_progress') as active_task_count
                 FROM projects p
-                LEFT JOIN users u ON p.created_by = u.id
+                WHERE p.manager_id = ?
                 ORDER BY p.created_at DESC
-            `).all();
+            `).all(req.user.id);
         } else {
             projects = db.prepare(`
                 SELECT 
                     p.*,
-                    u.full_name as creator_name,
-                    (SELECT COUNT(*) FROM project_members pm WHERE pm.project_id = p.id) as member_count,
+                    (SELECT COUNT(*) FROM project_members pm2 WHERE pm2.project_id = p.id) as member_count,
                     (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) as task_count,
                     (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.status = 'in_progress') as active_task_count
                 FROM projects p
                 JOIN project_members pm ON p.id = pm.project_id
-                LEFT JOIN users u ON p.created_by = u.id
                 WHERE pm.user_id = ?
                 ORDER BY p.created_at DESC
             `).all(req.user.id);
@@ -139,17 +136,17 @@ export const createTask = (req, res) => {
             return res.status(400).json({ error: 'Task title, start date, and end date are required' });
         }
 
-        const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId);
+        const project = db.prepare('SELECT id FROM projects WHERE id = ? AND manager_id = ?').get(projectId, req.user.id);
         if (!project) {
             return res.status(404).json({ error: 'Target project does not exist' });
         }
 
         const insertTask = db.prepare(`
-            INSERT INTO tasks (project_id, title, description, start_date, end_date, status)
+            INSERT INTO tasks (project_id, manager_id, title, description, start_date, end_date, status)
             VALUES (?, ?, ?, ?, ?, 'in_progress')
         `);
 
-        const result = insertTask.run(projectId, title, description || '', start_date, end_date);
+        const result = insertTask.run(projectId, req.user.id, title, description || '', start_date, end_date);
         const taskId = result.lastInsertRowid;
 
         if (Array.isArray(assignee_ids) && assignee_ids.length > 0) {
@@ -241,7 +238,7 @@ export const addProjectMember = (req, res) => {
             return res.status(400).json({ error: 'user_id is required' });
         }
 
-        const project = db.prepare('SELECT id, title FROM projects WHERE id = ?').get(projectId);
+        const project = db.prepare('SELECT id, title FROM projects WHERE id = ? AND manager_id = ?').get(projectId, req.user.id);
         if (!project) {
             return res.status(404).json({ error: 'Project not found' });
         }
@@ -272,7 +269,7 @@ export const updateProject = (req, res) => {
         const projectId = parseInt(req.params.id, 10);
         const { status, end_date } = req.body;
 
-        const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId);
+        const project = db.prepare('SELECT id FROM projects WHERE id = ? AND manager_id = ?').get(projectId, req.user.id);
         if (!project) {
             return res.status(404).json({ error: 'Project not found' });
         }
@@ -306,7 +303,7 @@ export const deleteProject = (req, res) => {
     try {
         const projectId = parseInt(req.params.id, 10);
 
-        const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId);
+        const project = db.prepare('SELECT id FROM projects WHERE id = ? AND manager_id = ?').get(projectId, req.user.id);
         if (!project) {
             return res.status(404).json({ error: 'Project not found' });
         }
@@ -334,7 +331,7 @@ export const removeProjectMember = (req, res) => {
         const projectId = parseInt(req.params.id, 10);
         const userId = parseInt(req.params.userId, 10);
 
-        const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId);
+        const project = db.prepare('SELECT id FROM projects WHERE id = ? AND manager_id = ?').get(projectId, req.user.id);
         if (!project) {
             return res.status(404).json({ error: 'Project not found' });
         }

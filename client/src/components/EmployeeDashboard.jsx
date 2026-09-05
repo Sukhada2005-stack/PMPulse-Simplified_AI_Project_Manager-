@@ -145,24 +145,19 @@ export default function EmployeeDashboard() {
   return (
     <div className="space-y-6 animate-fade-up">
       {/* ── Employee Greeting & Quick Status Strip ──────────────────── */}
-      <div className="jira-card p-6" style={{ background: '#1a1814' }}>
+      <div className="jira-card p-6 border-l-4 border-l-[var(--acube-gold)]" style={{ background: 'var(--color-surface-solid)' }}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <img
-              src={user?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.full_name}`}
-              alt={user?.full_name}
-              className="w-12 h-12 rounded-full border border-gray-200 object-cover"
-            />
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold tracking-tight" style={{ color: '#f0ede8' }}>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl font-black tracking-tight" style={{ color: 'var(--color-text-1)' }}>
                   Welcome, {user?.full_name}
                 </h1>
-                <span className="lozenge lozenge-blue">
-                  Contributor Portal
+                <span className="lozenge" style={{ background: 'var(--acube-gold)', color: 'var(--color-surface-solid)', fontWeight: 'bold' }}>
+                  CONTRIBUTOR PORTAL
                 </span>
               </div>
-              <p className="text-xs mt-0.5" style={{ color: '#8e8b85' }}>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-3)' }}>
                 {user?.role_title} • Zero Agile overhead daily logging
               </p>
             </div>
@@ -175,16 +170,17 @@ export default function EmployeeDashboard() {
                 setSelectedChatProjectId(firstProjectId);
                 setShowChatModal(true);
               }}
-              className="btn-secondary text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100 text-xs font-bold"
+              className="btn-secondary text-[var(--acube-gold)] hover:bg-[#2a2824] border-[#333] text-xs font-bold"
+              style={{ background: 'var(--table-th-bg)' }}
               title="Open Project Team Chat & Meeting Sync"
             >
-              <MessageSquare className="w-3.5 h-3.5 text-blue-600" />
+              <MessageSquare className="w-3.5 h-3.5" />
               <span>Project Chat &amp; Sync</span>
             </button>
 
-            <div className="flex items-center gap-2 px-3.5 py-2 rounded-lg border border-gray-200 text-xs" style={{ background: 'rgba(255,255,255,0.04)' }}>
-              <Calendar className="w-4 h-4 text-blue-600" />
-              <span className="font-semibold" style={{ color: '#f0ede8' }}>{todayFormatted}</span>
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-lg border border-[#333] text-xs" style={{ background: 'var(--table-th-bg)' }}>
+              <Calendar className="w-4 h-4 text-[var(--acube-gold)]" />
+              <span className="font-semibold" style={{ color: 'var(--color-text-1)' }}>{todayFormatted}</span>
             </div>
           </div>
         </div>
@@ -193,18 +189,18 @@ export default function EmployeeDashboard() {
       {/* Warnings Section */}
       {warnings.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-sm font-bold text-rose-700 flex items-center gap-2">
+          <h3 className="text-sm font-bold text-rose-500 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4" />
             Urgent Warnings
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {warnings.map(w => (
-              <div key={w.id} className="p-4 rounded-xl border border-rose-200 bg-rose-50/50 flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
+              <div key={w.id} className="p-4 rounded-xl border border-rose-900/50 flex items-start gap-3" style={{ background: 'rgba(255,0,0,0.05)' }}>
+                <AlertTriangle className="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-sm font-bold text-rose-800">{w.project_title} - {w.task_title}</h4>
-                  <p className="text-xs text-rose-700 mt-1 leading-relaxed">{w.message}</p>
-                  <div className="text-[10px] text-rose-500 font-semibold mt-2">
+                  <h4 className="text-sm font-bold text-rose-400">{w.project_title} - {w.task_title}</h4>
+                  <p className="text-xs text-rose-300 mt-1 leading-relaxed">{w.message}</p>
+                  <div className="text-[10px] text-rose-600 font-semibold mt-2">
                     {new Date(w.created_at + 'Z').toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'medium' })}
                   </div>
                 </div>
@@ -215,15 +211,15 @@ export default function EmployeeDashboard() {
       )}
 
       {loading ? (
-        <div className="py-20 text-center jira-card" style={{ background: '#1a1814' }}>
-          <RefreshCw className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-2" />
-          <p className="text-sm" style={{ color: '#8e8b85' }}>Loading your assigned deliverables...</p>
+        <div className="py-20 text-center jira-card" style={{ background: 'var(--color-surface-solid)' }}>
+          <RefreshCw className="w-8 h-8 animate-spin text-[var(--acube-gold)] mx-auto mb-2" />
+          <p className="text-sm" style={{ color: 'var(--color-text-3)' }}>Loading your assigned deliverables...</p>
         </div>
       ) : tasks.length === 0 ? (
-        <div className="jira-card p-12 text-center" style={{ background: '#1a1814' }}>
-          <FolderGit2 className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-          <h3 className="font-bold text-base" style={{ color: '#f0ede8' }}>No Active Tasks Assigned</h3>
-          <p className="text-xs mt-1" style={{ color: '#8e8b85' }}>
+        <div className="jira-card p-12 text-center" style={{ background: 'var(--color-surface-solid)' }}>
+          <FolderGit2 className="w-12 h-12 mx-auto text-gray-600 mb-2" />
+          <h3 className="font-bold text-base" style={{ color: 'var(--color-text-1)' }}>No Active Tasks Assigned</h3>
+          <p className="text-xs mt-1" style={{ color: 'var(--color-text-3)' }}>
             Your Project Manager has not provisioned tasks to your profile yet.
           </p>
         </div>
@@ -233,8 +229,8 @@ export default function EmployeeDashboard() {
           {/* ── Left Column: My Active Tasks Cards List (5 Cols) ─────── */}
           <div className="lg:col-span-5 space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style={{ color: '#c5c4c1' }}>
-                <Briefcase className="w-3.5 h-3.5 text-blue-600" />
+              <h2 className="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--color-text-2)' }}>
+                <Briefcase className="w-3.5 h-3.5 text-blue-400" />
                 <span>My Active Deliverables ({tasks.length})</span>
               </h2>
             </div>
@@ -251,17 +247,17 @@ export default function EmployeeDashboard() {
                     onClick={() => handleTaskSelect(t)}
                     className="jira-card p-4 transition-all cursor-pointer"
                     style={{
-                      background: isSelected ? '#F4F7FC' : '#FFFFFF',
-                      borderColor: isSelected ? '#eeb20d' : 'rgba(255,255,255,0.10)',
-                      boxShadow: isSelected ? '0 0 0 2px rgba(0,82,204,0.2)' : undefined
+                      background: isSelected ? '#2a2824' : 'var(--color-surface-solid)',
+                      borderColor: isSelected ? 'var(--acube-gold)' : 'rgba(255,255,255,0.10)',
+                      boxShadow: isSelected ? '0 0 0 1px var(--acube-gold)' : undefined
                     }}
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div>
-                        <span className="lozenge lozenge-blue font-mono" style={{ fontSize: '10px' }}>
+                        <span className="lozenge font-mono uppercase font-bold" style={{ fontSize: '9px', background: 'var(--acube-gold)', color: 'var(--color-surface-solid)' }}>
                           {t.project_title}
                         </span>
-                        <h3 className="text-sm font-bold mt-1.5 leading-snug" style={{ color: '#f0ede8' }}>
+                        <h3 className="text-sm font-bold mt-2 leading-snug" style={{ color: 'var(--color-text-1)' }}>
                           {t.title}
                         </h3>
                       </div>
@@ -272,13 +268,13 @@ export default function EmployeeDashboard() {
                       </span>
                     </div>
 
-                    <p className="text-xs line-clamp-2 leading-relaxed mb-3" style={{ color: '#c5c4c1' }}>
+                    <p className="text-xs line-clamp-2 leading-relaxed mb-3" style={{ color: 'var(--color-text-2)' }}>
                       {t.description || 'No detailed specifications provided.'}
                     </p>
 
-                    <div className="flex items-center justify-between pt-2 border-t border-gray-100 text-[11px] gap-2 flex-wrap">
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-700/50 text-[11px] gap-2 flex-wrap">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-gray-500">
+                        <span className="font-mono font-semibold" style={{ color: 'var(--color-text-3)' }}>
                           {t.start_date} → {t.end_date}
                         </span>
                         <button
@@ -288,23 +284,23 @@ export default function EmployeeDashboard() {
                             setSelectedChatProjectId(t.project_id);
                             setShowChatModal(true);
                           }}
-                          className="px-2 py-0.5 rounded text-[10px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 flex items-center gap-1 transition-colors"
+                          className="px-2 py-0.5 rounded text-[10px] font-semibold text-blue-400 bg-blue-900/20 hover:bg-blue-900/40 border border-blue-900/50 flex items-center gap-1 transition-colors"
                           title="Open Team Chat for this project"
                         >
-                          <MessageSquare className="w-3 h-3 text-blue-600" />
+                          <MessageSquare className="w-3 h-3 text-blue-400" />
                           <span>Chat</span>
                         </button>
                       </div>
 
                       {isSubmitted ? (
                         <span className={`flex items-center gap-1 font-bold ${
-                          isGreen ? 'text-emerald-700' : 'text-rose-700'
+                          isGreen ? 'text-emerald-400' : 'text-rose-400'
                         }`}>
                           <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>{isGreen ? "Today's Log Recorded" : "Blocker Logged"}</span>
+                          <span>{isGreen ? "Today's Log Recorded" : "Stalled"}</span>
                         </span>
                       ) : (
-                        <span className="text-amber-600 font-semibold flex items-center gap-1">
+                        <span className="text-amber-500 font-semibold flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5" />
                           <span>Awaiting Today's Log</span>
                         </span>
@@ -318,22 +314,22 @@ export default function EmployeeDashboard() {
 
           {/* ── Right Column: Frictionless Daily Log Submission Card ─── */}
           <div className="lg:col-span-7">
-            <div className="jira-card p-6 space-y-5 sticky top-20" style={{ background: '#1a1814' }}>
+            <div className="jira-card p-6 space-y-5 sticky top-20" style={{ background: 'var(--color-surface-solid)' }}>
               
               {/* Card Header */}
-              <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+              <div className="flex items-center justify-between pb-4 border-b border-gray-700/80">
                 <div>
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
-                    <Flame className="w-4 h-4 text-emerald-600" />
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-500 flex items-center gap-1.5">
+                    <Flame className="w-4 h-4 text-emerald-400" />
                     <span>Frictionless Daily Progress Entry</span>
                   </div>
-                  <h2 className="text-lg font-bold mt-0.5" style={{ color: '#f0ede8' }}>
+                  <h2 className="text-lg font-bold mt-0.5" style={{ color: 'var(--color-text-1)' }}>
                     {selectedTask ? selectedTask.title : 'Select a Deliverable'}
                   </h2>
                 </div>
 
                 {selectedTask?.has_submitted_today && (
-                  <span className="lozenge lozenge-success">
+                  <span className="lozenge lozenge-success font-bold px-2 py-1">
                     <CheckCircle2 className="w-3.5 h-3.5 inline mr-1" />
                     Submitted for Today
                   </span>
@@ -345,11 +341,11 @@ export default function EmployeeDashboard() {
                 <div
                   className={`p-3.5 rounded-lg text-xs font-semibold flex items-center gap-2.5 ${
                     submissionFeedback.type === 'success'
-                      ? 'bg-green-50 border border-green-200 text-emerald-800'
-                      : 'bg-amber-50 border border-amber-200 text-amber-800'
+                      ? 'bg-emerald-900/20 border border-emerald-900/50 text-emerald-400'
+                      : 'bg-orange-900/20 border border-orange-900/50 text-orange-400'
                   }`}
                 >
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  <CheckCircle2 className={`w-4 h-4 flex-shrink-0 ${submissionFeedback.type === 'success' ? 'text-emerald-500' : 'text-orange-500'}`} />
                   <span>{submissionFeedback.message}</span>
                 </div>
               )}
@@ -359,14 +355,14 @@ export default function EmployeeDashboard() {
                 
                 {/* Mode Toggle Switch */}
                 <div
-                  className="flex items-center justify-between p-3.5 rounded-lg border border-gray-200"
-                  style={{ background: 'rgba(255,255,255,0.04)' }}
+                  className="flex items-center justify-between p-3.5 rounded-lg border border-gray-700/80 transition-colors"
+                  style={{ background: didNotWork ? 'rgba(255,0,0,0.05)' : 'var(--table-th-bg)' }}
                 >
                   <div>
-                    <span className="text-xs font-bold" style={{ color: '#f0ede8' }}>
+                    <span className={`text-xs font-bold block mb-0.5 ${didNotWork ? 'text-rose-400' : 'text-[#f0ede8]'}`}>
                       Encountered a Blocker Today?
                     </span>
-                    <p className="text-[11px]" style={{ color: '#8e8b85' }}>
+                    <p className="text-[11px]" style={{ color: 'var(--color-text-3)' }}>
                       Toggle on if third-party APIs, vendor dependencies, or internal assets prevented work
                     </p>
                   </div>
@@ -377,21 +373,21 @@ export default function EmployeeDashboard() {
                       setDidNotWork(!didNotWork);
                       setSubmissionFeedback(null);
                     }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
                       didNotWork
-                        ? 'bg-rose-600 text-white shadow-sm'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        ? 'bg-rose-900/30 text-rose-300 border-rose-800'
+                        : 'bg-[#0d0c0a] text-[#c5c4c1] border-[#333] hover:bg-[#2a2824]'
                     }`}
                   >
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    <span>{didNotWork ? 'Blocker Mode (ON)' : 'No Blockers'}</span>
+                    <AlertTriangle className={`w-3.5 h-3.5 ${didNotWork ? 'text-rose-400' : ''}`} />
+                    <span>{didNotWork ? 'Stalling Mode (ON)' : 'No Stalling'}</span>
                   </button>
                 </div>
 
                 {/* Input Fields */}
                 {!didNotWork ? (
                   <div>
-                    <label className="block text-xs font-bold mb-1.5" style={{ color: '#f0ede8' }}>
+                    <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--color-text-1)' }}>
                       What did you accomplish today? *
                     </label>
                     <textarea
@@ -400,12 +396,13 @@ export default function EmployeeDashboard() {
                       value={workText}
                       onChange={e => setWorkText(e.target.value)}
                       placeholder="e.g., Integrated refund event handler and partial settlement reconciliation routines..."
-                      className="jira-input text-xs w-full leading-relaxed"
+                      className="jira-input text-xs w-full leading-relaxed border-[#333] focus:border-[var(--acube-gold)]"
+                      style={{ background: '#0d0c0a', color: 'var(--color-text-2)' }}
                     />
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-xs font-bold text-rose-700 mb-1.5">
+                    <label className="block text-xs font-bold text-rose-400 mb-1.5">
                       Specify Blocker Reason &amp; Impacted Dependency *
                     </label>
                     <textarea
@@ -413,8 +410,9 @@ export default function EmployeeDashboard() {
                       required
                       value={noWorkReason}
                       onChange={e => setNoWorkReason(e.target.value)}
-                      placeholder="e.g., Blocked: Awaiting payment gateway API documentation and sandbox credentials from third-party vendor..."
-                      className="jira-input text-xs w-full leading-relaxed border-rose-300 focus:border-rose-500 bg-rose-50/40"
+                      placeholder="e.g., Stalled: Awaiting payment gateway API documentation and sandbox credentials from third-party vendor..."
+                      className="jira-input text-xs w-full leading-relaxed border-rose-900/50 focus:border-rose-500 placeholder-rose-900/50"
+                      style={{ background: 'rgba(255,0,0,0.05)', color: '#ff8a80' }}
                     />
                   </div>
                 )}
@@ -424,10 +422,9 @@ export default function EmployeeDashboard() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className={`btn-primary w-full justify-center text-sm py-3 font-bold ${
-                      didNotWork ? 'bg-rose-600 hover:bg-rose-700' : ''
+                    className={`btn-primary w-full justify-center text-sm py-3 font-bold border-0 ${
+                      didNotWork ? 'bg-rose-600 hover:bg-rose-700 text-white' : 'bg-[#eeb20d] hover:bg-[#d6a00a] text-[#1a1814]'
                     }`}
-                    style={didNotWork ? { background: '#ff6b6b' } : {}}
                   >
                     {submitting ? (
                       <RefreshCw className="w-4 h-4 animate-spin" />
@@ -438,7 +435,7 @@ export default function EmployeeDashboard() {
                       {submitting
                         ? 'Recording Daily Entry...'
                         : didNotWork
-                        ? 'Submit Blocker Notification'
+                        ? 'Submit Stalling Notification'
                         : selectedTask?.has_submitted_today
                         ? 'Update Today\'s Daily Work Log'
                         : 'Submit Daily Work Log'}

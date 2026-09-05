@@ -36,8 +36,8 @@ export const submitDailyLog = (req, res) => {
         }
 
         const upsertLog = db.prepare(`
-            INSERT INTO daily_logs (task_id, user_id, log_date, work_text, has_worked, no_work_reason)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO daily_logs (task_id, user_id, log_date, work_text, has_worked, no_work_reason, manager_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(task_id, user_id, log_date) DO UPDATE SET
                 work_text = excluded.work_text,
                 has_worked = excluded.has_worked,
@@ -51,7 +51,8 @@ export const submitDailyLog = (req, res) => {
             effectiveDate,
             isWorked ? work_text.trim() : null,
             isWorked ? 1 : 0,
-            !isWorked ? no_work_reason.trim() : null
+            !isWorked ? no_work_reason.trim() : null,
+            task.manager_id
         );
 
         const savedLog = db.prepare(`
@@ -79,7 +80,7 @@ export const getProjectMatrix = (req, res) => {
         const { date_from, date_to } = req.query;
 
         // Fetch project and its tasks
-        const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId);
+        const project = db.prepare('SELECT * FROM projects WHERE id = ? AND manager_id = ?').get(projectId, req.user.id);
         if (!project) {
             return res.status(404).json({ error: 'Project not found' });
         }
@@ -278,8 +279,9 @@ export const getFleetMatrix = (req, res) => {
             SELECT t.*, p.title as project_title, p.id as project_id
             FROM tasks t
             JOIN projects p ON t.project_id = p.id
+            WHERE p.manager_id = ?
             ORDER BY p.title ASC, t.start_date ASC
-        `).all();
+        `).all(req.user.id);
 
         const rows = [];
 
@@ -337,7 +339,20 @@ export const getFleetMatrix = (req, res) => {
             });
         });
 
-        res.json({ dates: dayList, rows });
+        // Compute summary stats scoped to this PM's data only
+        let totalLogged = 0, totalBlockers = 0, totalPending = 0, totalMissed = 0;
+        rows.forEach(row => {
+            row.days.forEach(d => {
+                if (d.status === 'logged')   totalLogged++;
+                else if (d.status === 'no_work') totalBlockers++;
+                else if (d.status === 'pending') totalPending++;
+                else if (d.status === 'missed')  totalMissed++;
+            });
+        });
+        const totalTracked = totalLogged + totalBlockers + totalMissed;
+        const compliancePct = totalTracked > 0 ? Math.round((totalLogged / totalTracked) * 100) : 0;
+
+        res.json({ dates: dayList, rows, summary: { totalLogged, totalBlockers, totalPending, totalMissed, compliancePct } });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

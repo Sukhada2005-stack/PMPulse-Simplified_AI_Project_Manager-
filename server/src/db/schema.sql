@@ -6,22 +6,25 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     full_name TEXT NOT NULL,
     role_title TEXT NOT NULL, -- e.g. 'Frontend Dev', 'QA Lead', 'UI Designer', 'Project Director'
-    user_type TEXT CHECK(user_type IN ('pm', 'employee')) NOT NULL DEFAULT 'employee',
+    user_type TEXT CHECK(user_type IN ('superuser', 'pm', 'employee')) NOT NULL DEFAULT 'employee',
     status TEXT NOT NULL DEFAULT 'active', -- 'active', 'inactive'
+    is_first_login INTEGER NOT NULL DEFAULT 0,
     avatar_url TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    manager_id INTEGER, -- For employees to belong to a PM
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS projects (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     description TEXT,
-    created_by INTEGER NOT NULL,
+    manager_id INTEGER NOT NULL,
     start_date DATE,
     end_date DATE,
     status TEXT NOT NULL DEFAULT 'active', -- 'active', 'in-review', 'completed', 'archived'
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS project_members (
@@ -37,13 +40,15 @@ CREATE TABLE IF NOT EXISTS project_members (
 CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     project_id INTEGER NOT NULL,
+    manager_id INTEGER NOT NULL,
     title TEXT NOT NULL,
     description TEXT,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
-    status TEXT NOT NULL DEFAULT 'in_progress', -- 'in_progress', 'completed', 'blocked'
+    status TEXT NOT NULL DEFAULT 'in_progress', -- 'in_progress', 'completed', 'stalled'
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS task_assignees (
@@ -59,6 +64,7 @@ CREATE TABLE IF NOT EXISTS daily_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     task_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
+    manager_id INTEGER NOT NULL,
     log_date DATE NOT NULL,
     work_text TEXT,
     has_worked INTEGER NOT NULL DEFAULT 1, -- 1 for true, 0 for false ('No Work Done')
@@ -66,7 +72,8 @@ CREATE TABLE IF NOT EXISTS daily_logs (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(task_id, user_id, log_date),
     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Fast Indexes for Date-Matrix, Multi-dimension AI queries & Employee 360 Analytics

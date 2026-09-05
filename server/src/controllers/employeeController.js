@@ -18,10 +18,10 @@ export const createEmployee = (req, res) => {
         const avatar = avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(full_name)}`;
 
         const stmt = db.prepare(`
-            INSERT INTO users (email, password_hash, full_name, role_title, user_type, status, avatar_url)
-            VALUES (?, ?, ?, ?, 'employee', 'active', ?)
+            INSERT INTO users (email, password_hash, full_name, role_title, user_type, status, avatar_url, manager_id)
+            VALUES (?, ?, ?, ?, 'employee', 'active', ?, ?)
         `);
-        const result = stmt.run(email, password_hash, full_name, role_title, avatar);
+        const result = stmt.run(email, password_hash, full_name, role_title, avatar, req.user.id);
 
         const newUser = db.prepare(`
             SELECT id, email, full_name, role_title, user_type, status, avatar_url, created_at 
@@ -46,9 +46,9 @@ export const getEmployees = (req, res) => {
                 (SELECT COUNT(*) FROM daily_logs dl WHERE dl.user_id = u.id AND dl.has_worked = 1) as green_logs_count,
                 (SELECT COUNT(*) FROM daily_logs dl WHERE dl.user_id = u.id AND dl.has_worked = 0) as blocker_count
             FROM users u
-            WHERE u.user_type = 'employee'
+            WHERE u.user_type = 'employee' AND u.manager_id = ?
             ORDER BY u.full_name ASC
-        `).all();
+        `).all(req.user.id);
 
         // Calculate consistency scores
         const enhanced = employees.map(emp => {
@@ -70,13 +70,14 @@ export const getEmployees = (req, res) => {
 export const getEmployeeAnalytics = (req, res) => {
     try {
         const employeeId = parseInt(req.params.id, 10);
+        // Verify the employee belongs to this PM's team
         const employee = db.prepare(`
             SELECT id, email, full_name, role_title, user_type, status, avatar_url, created_at
-            FROM users WHERE id = ?
-        `).get(employeeId);
+            FROM users WHERE id = ? AND manager_id = ?
+        `).get(employeeId, req.user.id);
 
         if (!employee) {
-            return res.status(404).json({ error: 'Employee not found' });
+            return res.status(404).json({ error: 'Employee not found or access denied' });
         }
 
         // 1. Module 1: Allocated Projects & Active Tasks Breakdown
@@ -319,8 +320,8 @@ export const deleteEmployee = (req, res) => {
         const employeeId = parseInt(req.params.id, 10);
 
         const employee = db.prepare(`
-            SELECT id, full_name, user_type FROM users WHERE id = ?
-        `).get(employeeId);
+            SELECT id, full_name, user_type FROM users WHERE id = ? AND manager_id = ?
+        `).get(employeeId, req.user.id);
 
         if (!employee) {
             return res.status(404).json({ error: 'Employee not found' });

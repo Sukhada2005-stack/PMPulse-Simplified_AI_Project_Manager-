@@ -38,9 +38,10 @@ export default function LogDetailModal({ logData, onClose }) {
       onClick={e => e.target === e.currentTarget && onClose()}
     >
       <div
-        className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[90vh] z-[10000]"
+        className="relative w-full max-w-lg rounded-xl shadow-2xl border border-gray-800 overflow-hidden flex flex-col max-h-[90vh] z-[10000]"
         style={{
-          boxShadow: '0 20px 60px rgba(9,30,66,0.25)',
+          background: 'var(--color-surface-solid)',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
           margin: 'auto',
         }}
       >
@@ -48,7 +49,7 @@ export default function LogDetailModal({ logData, onClose }) {
         <div
           className="flex items-center justify-between px-5 py-4"
           style={{
-            background: isWorked ? 'rgba(56,221,159,0.12)' : isNoWork ? 'rgba(255,107,107,0.12)' : 'rgba(255,255,255,0.04)',
+            background: isWorked ? 'rgba(56,221,159,0.12)' : isNoWork ? 'rgba(255,107,107,0.12)' : 'var(--table-th-bg)',
             borderBottom: '1px solid var(--color-border)',
           }}
         >
@@ -56,7 +57,7 @@ export default function LogDetailModal({ logData, onClose }) {
             <div
               className="p-2 rounded-lg"
               style={{
-                background: isWorked ? '#38dd9f' : isNoWork ? '#ff6b6b' : '#8e8b85',
+                background: isWorked ? '#38dd9f' : isNoWork ? '#ff6b6b' : 'var(--color-text-3)',
               }}
             >
               {isWorked
@@ -90,7 +91,7 @@ export default function LogDetailModal({ logData, onClose }) {
           {/* Contributor Card */}
           <div
             className="rounded-lg p-3"
-            style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border-soft)' }}
+            style={{ background: 'var(--table-th-bg)', border: '1px solid var(--color-border-soft)' }}
           >
             <div
               className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider mb-1.5"
@@ -111,7 +112,7 @@ export default function LogDetailModal({ logData, onClose }) {
           <div
             className="rounded-lg p-3 transition-colors"
             style={{
-              background: 'var(--color-bg)',
+              background: 'var(--table-th-bg)',
               border: '1px solid var(--color-border-soft)',
             }}
           >
@@ -146,7 +147,7 @@ export default function LogDetailModal({ logData, onClose }) {
             <span className={`lozenge ${
               isWorked ? 'lozenge-success' : isNoWork ? 'lozenge-danger' : 'lozenge-default'
             }`}>
-              {isWorked ? '✓ LOGGED' : isNoWork ? '⚠ BLOCKED' : dayStatus?.label || 'PENDING'}
+              {isWorked ? '✓ LOGGED' : isNoWork ? '⚠ STALLED' : dayStatus?.label || 'PENDING'}
             </span>
           </div>
 
@@ -161,16 +162,16 @@ export default function LogDetailModal({ logData, onClose }) {
             <div
               className="text-sm leading-relaxed p-3.5 rounded-lg border"
               style={{
-                background: '#FAFBFC',
+                background: 'var(--table-th-bg)',
                 borderColor: 'rgba(255,255,255,0.10)',
                 color: 'var(--color-text-1)',
               }}
             >
-              <p className="font-semibold text-xs text-blue-700 mb-1 flex items-center gap-1.5">
+              <p className="font-semibold text-xs text-blue-400 mb-1 flex items-center gap-1.5">
                 <span>📌</span>
                 <span>{task?.title}</span>
               </p>
-              <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
+              <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--color-text-3)' }}>
                 {task?.description || 'No detailed specifications provided for this deliverable.'}
               </p>
             </div>
@@ -212,8 +213,8 @@ export default function LogDetailModal({ logData, onClose }) {
                 className="text-sm leading-relaxed p-3.5 rounded-lg"
                 style={{
                   background: 'rgba(255,107,107,0.12)',
-                  border: '1px solid rgba(222,53,11,0.2)',
-                  color: '#BF2600',
+                  border: '1px solid rgba(255,107,107,0.2)',
+                  color: '#ff6b6b',
                   fontStyle: 'italic',
                 }}
               >
@@ -224,33 +225,41 @@ export default function LogDetailModal({ logData, onClose }) {
 
           {/* Pending / Missed Notice */}
           {(dayStatus?.status === 'pending' || dayStatus?.status === 'missed') && (
-            <div
-              className="p-3.5 rounded-lg border text-xs leading-relaxed"
-              style={{
-                background: dayStatus?.status === 'missed' ? '#FFF0B3' : 'rgba(238,178,13,0.08)',
-                borderColor: dayStatus?.status === 'missed' ? '#FFE380' : 'rgba(238,178,13,0.12)',
-                color: dayStatus?.status === 'missed' ? '#f0ede8' : '#eeb20d',
-              }}
-            >
-              <div className="font-bold flex items-center gap-1.5 mb-1">
-                <Clock className="w-3.5 h-3.5" />
-                <span>
-                  {dayStatus?.status === 'missed' ? 'Submission Awaited / Past Due' : 'Scheduled Workday'}
-                </span>
+            dayStatus?.status === 'missed' ? (
+              <div className="p-3.5 rounded-lg border text-xs leading-relaxed bg-red-950 border-red-700 text-white font-bold">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Submission Awaited / Past Due</span>
+                </div>
+                <p className="text-xs">
+                  {`No daily log was submitted by ${employee?.full_name || 'contributor'} for this workday.`}
+                </p>
               </div>
-              <p className="text-xs" style={{ color: 'var(--color-text-2)' }}>
-                {dayStatus?.status === 'missed'
-                  ? `No daily log was submitted by ${employee?.full_name || 'contributor'} for this workday.`
-                  : `This task is scheduled within the active window (${task?.start_date} → ${task?.end_date}). Daily log entry will be submitted by ${employee?.full_name || 'the assignee'} upon progress completion.`}
-              </p>
-            </div>
+            ) : (
+              <div
+                className="p-3.5 rounded-lg border text-xs leading-relaxed"
+                style={{
+                  background: 'rgba(238,178,13,0.08)',
+                  borderColor: 'rgba(238,178,13,0.12)',
+                  color: '#eeb20d',
+                }}
+              >
+                <div className="font-bold flex items-center gap-1.5 mb-1">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Scheduled Workday</span>
+                </div>
+                <p className="text-xs" style={{ color: 'var(--color-text-2)' }}>
+                  {`This task is scheduled within the active window (${task?.start_date} → ${task?.end_date}). Daily log entry will be submitted by ${employee?.full_name || 'the assignee'} upon progress completion.`}
+                </p>
+              </div>
+            )
           )}
 
           {/* N/A state */}
           {dayStatus?.status === 'na' && (
             <div
               className="text-sm p-3.5 rounded-lg text-center"
-              style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--color-text-3)' }}
+              style={{ background: 'var(--table-th-bg)', color: 'var(--color-text-3)' }}
             >
               This date is outside the task's scheduled active window.
             </div>
@@ -260,7 +269,7 @@ export default function LogDetailModal({ logData, onClose }) {
         {/* Footer */}
         <div
           className="flex justify-end gap-2 px-5 py-3"
-          style={{ borderTop: '1px solid var(--color-border)', background: 'rgba(255,255,255,0.04)' }}
+          style={{ borderTop: '1px solid var(--color-border)', background: 'var(--table-th-bg)' }}
         >
           <button onClick={onClose} className="btn-secondary">
             Close

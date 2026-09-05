@@ -21,24 +21,56 @@ export function AuthProvider({ children }) {
 
   // Initialize session or default to PM (Alex Mercer)
   useEffect(() => {
-    async function initAuth() {
+    const initAuth = async () => {
       await fetchAllUsers();
-      const savedToken = localStorage.getItem('pulsepm_token');
-      if (savedToken) {
-        try {
-          const res = await api.auth.getMe();
-          setUser(res.user);
-        } catch (err) {
-          console.warn('Session expired, logging into default PM profile');
-          loginAsDefaultPM();
-        }
-      } else {
-        loginAsDefaultPM();
-      }
+      // TEMPORARILY DISABLED: Forcing the Landing Page to be the entry point
+      // const savedToken = localStorage.getItem('pulsepm_token');
+      // if (savedToken) {
+      //   try {
+      //     const res = await api.auth.getMe();
+      //     setUser(res.user);
+      //   } catch (err) {
+      //     console.warn('Session expired, removing token');
+      //     localStorage.removeItem('pulsepm_token');
+      //     setToken(null);
+      //   }
+      // }
+
       setLoading(false);
-    }
+    };
     initAuth();
   }, []);
+
+  // Inactivity Timer (1 hour = 3600000 ms)
+  useEffect(() => {
+    let timeoutId;
+
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      // Only set timer if user is logged in
+      if (token) {
+        timeoutId = setTimeout(() => {
+          console.warn('Session expired due to inactivity');
+          localStorage.removeItem('pulsepm_token');
+          window.dispatchEvent(new CustomEvent('session_expired'));
+        }, 3600000);
+      }
+    };
+
+    // Listen to user activity
+    const events = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll'];
+    const handleActivity = () => resetTimer();
+
+    if (token) {
+      events.forEach(event => window.addEventListener(event, handleActivity));
+      resetTimer(); // Initialize timer
+    }
+
+    return () => {
+      clearTimeout(timeoutId);
+      events.forEach(event => window.removeEventListener(event, handleActivity));
+    };
+  }, [token]);
 
   const loginAsDefaultPM = async () => {
     try {
@@ -67,17 +99,28 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const res = await api.auth.login(email, password);
-    localStorage.setItem('pulsepm_token', res.token);
-    setToken(res.token);
-    setUser(res.user);
+    if (!res.requires_password_change) {
+      localStorage.setItem('pulsepm_token', res.token);
+      setToken(res.token);
+      setUser(res.user);
+    }
     return res;
+  };
+
+  const completeLogin = (tokenData, userData) => {
+    localStorage.setItem('pulsepm_token', tokenData);
+    setToken(tokenData);
+    setUser(userData);
   };
 
   const logout = () => {
     localStorage.removeItem('pulsepm_token');
     setToken(null);
     setUser(null);
-    loginAsDefaultPM();
+  };
+
+  const updateUser = (newData) => {
+    setUser(prev => prev ? { ...prev, ...newData } : null);
   };
 
   return (
@@ -87,8 +130,10 @@ export function AuthProvider({ children }) {
       allUsers,
       loading,
       login,
+      completeLogin,
       logout,
       switchUser,
+      updateUser,
       refreshUsers: fetchAllUsers,
       isPM: user?.user_type === 'pm'
     }}>

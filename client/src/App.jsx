@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
 import Sidebar from './components/Sidebar';
 import PMDashboard from './components/PMDashboard';
 import CalendarMatrix from './components/CalendarMatrix';
@@ -7,10 +8,14 @@ import WorkforceDirectory from './components/WorkforceDirectory';
 import Employee360View from './components/Employee360View';
 import AISummaryHub from './components/AISummaryHub';
 import EmployeeDashboard from './components/EmployeeDashboard';
-import { Sparkles, Loader2 } from 'lucide-react';
+import SuperuserDashboard from './components/SuperuserDashboard';
+import LandingPage from './components/LandingPage';
+import SetPassword from './components/SetPassword';
+import SessionReauthModal from './components/SessionReauthModal';
+import { Sparkles, Loader2, Sun, Moon, LogOut } from 'lucide-react';
 
 function MainApp() {
-  const { user, isPM, loading } = useAuth();
+  const { user, isPM, loading, logout } = useAuth();
   const [activeTab, setActiveTab]             = useState('dashboard');
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [selected360EmployeeId, setSelected360EmployeeId] = useState(null);
@@ -18,7 +23,7 @@ function MainApp() {
   useEffect(() => {
     if (!loading && user) {
       if (isPM && activeTab === 'employee_dash') setActiveTab('dashboard');
-      if (!isPM) setActiveTab('employee_dash');
+      if (!isPM && user.user_type !== 'superuser') setActiveTab('employee_dash');
     }
   }, [user?.user_type, loading]);
 
@@ -35,7 +40,7 @@ function MainApp() {
   /* ── Loading Splash ──────────────────────────────────────────── */
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center" style={{ background: '#0f0e0b' }}>
+      <div className="min-h-screen flex flex-col items-center justify-center" style={{ background: 'var(--color-bg)' }}>
         <div
           className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5 shadow-lg"
           style={{ background: 'linear-gradient(135deg, #eeb20d, #f2b50d)' }}
@@ -43,11 +48,20 @@ function MainApp() {
           <span className="text-white font-black text-2xl" style={{ color: '#161410' }}>P</span>
         </div>
         <Loader2 className="w-6 h-6 animate-spin mb-3" style={{ color: '#eeb20d' }} />
-        <h2 className="text-lg font-bold" style={{ color: '#f0ede8' }}>Initializing PulsePM…</h2>
-        <p className="text-sm mt-1" style={{ color: '#8e8b85' }}>Connecting to relational data core and AI engine</p>
+        <h2 className="text-lg font-bold" style={{ color: 'var(--color-text-1)' }}>Initializing PulsePM…</h2>
+        <p className="text-sm mt-1" style={{ color: 'var(--color-text-3)' }}>Connecting to relational data core and AI engine</p>
       </div>
     );
   }
+
+  if (!user) {
+    return <LandingPage />;
+  }
+
+  if (user.is_first_login === 1) {
+    return <SetPassword />;
+  }
+
 
   /* ── Page Title lookup ───────────────────────────────────────── */
   const pageTitles = {
@@ -58,7 +72,9 @@ function MainApp() {
     ai_summary:      'AI Executive Summary Hub',
     employee_dash:   'My Tasks & Daily Log',
   };
-  const pageTitle = pageTitles[activeTab] || 'PulsePM';
+  const pageTitle = user.user_type === 'superuser' ? 'Superuser Hub' : (pageTitles[activeTab] || 'PulsePM');
+
+  const { isDark, toggleTheme } = useTheme();
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--color-bg)', overflow: 'hidden' }}>
@@ -80,26 +96,51 @@ function MainApp() {
             >
               PMPulse
             </h1>
-            <div 
-              className="flex items-center gap-1.5 mt-1 ml-16" 
+            <div
+              className="flex items-center gap-1.5 mt-1 ml-16"
               style={{ color: 'var(--color-text-1)', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.08em' }}
             >
               <span style={{ color: 'var(--color-text-3)' }}>BY</span>
               <div className="flex items-center gap-1 opacity-90">
-                <img 
-                  src="https://www.acubeai.com/favicon-32x32.png" 
-                  alt="Acube Symbol" 
+                <img
+                  src="https://www.acubeai.com/favicon-32x32.png"
+                  alt="Acube Symbol"
                   className="w-3.5 h-3.5 object-contain mb-0.5"
                 />
                 <span className="font-bold tracking-widest text-[12px]">ACUBE AI</span>
               </div>
             </div>
           </div>
-          <div
-            className="text-[12px] font-bold hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg"
-            style={{ background: 'rgba(255,255,255,0.03)', color: 'var(--color-text-2)', border: '1px solid var(--color-border-soft)' }}
-          >
-            {pageTitle}
+          <div className="flex items-center gap-3">
+            {/* Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="theme-toggle-btn"
+              title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              aria-label="Toggle theme"
+            >
+              {isDark
+                ? <Sun size={16} style={{ color: 'var(--accent-gold)' }} />
+                : <Moon size={16} style={{ color: 'var(--color-text-2)' }} />
+              }
+            </button>
+            <div
+              className="text-[12px] font-bold hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg"
+              style={{ background: 'var(--page-title-bg)', color: 'var(--color-text-2)', border: '1px solid var(--page-title-border)' }}
+            >
+              {pageTitle}
+            </div>
+
+            {/* Sign Out Button */}
+            <button
+              onClick={logout}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-transparent hover:border-gray-200 dark:hover:border-white/10"
+              style={{ color: 'var(--color-text-2)' }}
+              title="Sign Out"
+            >
+              <LogOut size={16} />
+              <span className="hidden sm:inline">Sign Out</span>
+            </button>
           </div>
         </header>
 
@@ -163,8 +204,11 @@ function MainApp() {
             </>
           )}
 
+          {/* Superuser View */}
+          {user?.user_type === 'superuser' && <SuperuserDashboard />}
+
           {/* Employee View */}
-          {!isPM && <EmployeeDashboard />}
+          {!isPM && user?.user_type !== 'superuser' && <EmployeeDashboard />}
         </main>
 
         {/* Footer */}
@@ -172,8 +216,8 @@ function MainApp() {
           className="no-print"
           style={{
             padding: '12px 24px',
-            borderTop: '1px solid rgba(255,255,255,0.06)',
-            background: 'rgba(22,20,16,0.9)',
+            borderTop: '1px solid var(--footer-border)',
+            background: 'var(--footer-bg)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -184,17 +228,21 @@ function MainApp() {
           <span className="text-xs font-bold" style={{ color: 'var(--color-text-2)' }}>
             PulsePM — Lightweight AI Project Management
           </span>
-
         </footer>
       </div>
+      
+      {/* Global Session Re-auth Modal */}
+      <SessionReauthModal />
     </div>
   );
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <MainApp />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <MainApp />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

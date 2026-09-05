@@ -116,7 +116,7 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
   return (
     <div className="space-y-6 animate-fade-up">
       {/* Header & Onboard Action */}
-      <div className="jira-card p-5 flex flex-wrap items-center justify-between gap-4" style={{ background: '#1a1814' }}>
+      <div className="jira-card p-5 flex flex-wrap items-center justify-between gap-4" style={{ background: 'var(--color-surface-solid)' }}>
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-lg bg-blue-50 text-blue-600">
             <Users className="w-5 h-5" />
@@ -139,7 +139,8 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search directory..."
-              className="jira-input pl-9 pr-3 text-xs w-48 sm:w-64"
+              className="jira-input pr-3 text-xs w-48 sm:w-64"
+              style={{ paddingLeft: '2.25rem' }}
             />
           </div>
 
@@ -155,12 +156,27 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
 
       {/* Directory Grid */}
       {loading ? (
-        <div className="py-20 text-center jira-card" style={{ background: '#1a1814' }}>
+        <div className="py-20 text-center jira-card" style={{ background: 'var(--color-surface-solid)' }}>
           <RefreshCw className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-2" />
           <p className="text-sm" style={{ color: 'var(--color-text-3)' }}>Loading active workforce directory...</p>
         </div>
+      ) : employees.length === 0 ? (
+        <div className="jira-card p-10 flex flex-col items-center justify-center text-center space-y-4 rounded-xl" style={{ background: 'var(--color-surface-solid)' }}>
+          <Users className="w-12 h-12 text-gray-500" />
+          <div>
+            <h3 className="text-xl font-bold" style={{ color: 'var(--color-text-1)' }}>0 Team Members</h3>
+            <p className="text-sm mt-2 max-w-sm mx-auto" style={{ color: 'var(--color-text-3)' }}>Your workforce directory is completely clean. Start onboarding contributors to assign them to projects.</p>
+          </div>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="btn-primary mt-4"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Onboard First Contributor</span>
+          </button>
+        </div>
       ) : filteredEmployees.length === 0 ? (
-        <div className="jira-card p-10 text-center rounded-xl" style={{ background: '#1a1814', color: 'var(--color-text-3)' }}>
+        <div className="jira-card p-10 text-center rounded-xl" style={{ background: 'var(--color-surface-solid)', color: 'var(--color-text-3)' }}>
           No employees match the search query.
         </div>
       ) : (
@@ -169,18 +185,14 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
             <div
               key={emp.id}
               className="jira-card p-5 flex flex-col justify-between group transition-all"
-              style={{ background: '#1a1814' }}
+              style={{ background: 'var(--color-surface-solid)' }}
             >
               <div>
                 <div className="flex items-start justify-between gap-3 mb-3.5">
                   <div className="flex items-center gap-3">
-                    <img
-                      src={emp.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.full_name}`}
-                      alt={emp.full_name}
-                      className="w-11 h-11 rounded-full border border-gray-200 object-cover"
-                    />
+
                     <div>
-                      <h3 className="font-bold text-sm" style={{ color: '#f0ede8' }}>
+                      <h3 className="font-bold text-sm" style={{ color: 'var(--color-text-1)' }}>
                         {emp.full_name}
                       </h3>
                       <p className="text-xs font-medium text-blue-600 mt-0.5">{emp.role_title}</p>
@@ -192,13 +204,13 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
                   </span>
                 </div>
 
-                <div className="space-y-1.5 text-xs p-3 rounded-lg border border-gray-100 mb-3" style={{ background: 'rgba(255,255,255,0.04)' }}>
-                  <div className="flex items-center gap-2 truncate" style={{ color: '#c5c4c1' }}>
+                <div className="space-y-1.5 text-xs p-3 rounded-lg border border-gray-100 mb-3" style={{ background: 'var(--table-th-bg)' }}>
+                  <div className="flex items-center gap-2 truncate" style={{ color: 'var(--color-text-2)' }}>
                     <Mail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                     <span className="font-mono text-[11px] truncate">{emp.email}</span>
                   </div>
-                  <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-gray-200/60" style={{ color: '#8e8b85' }}>
-                    <span>Projects: <b style={{ color: '#f0ede8' }}>{emp.project_count}</b></span>
+                  <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-gray-200/60" style={{ color: 'var(--color-text-3)' }}>
+                    <span>Projects: <b style={{ color: 'var(--color-text-1)' }}>{emp.project_count}</b></span>
                     <span>Active Tasks: <b className="text-blue-600">{emp.active_task_count}</b></span>
                   </div>
                 </div>
@@ -245,7 +257,7 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
         >
           <div
             className="w-full max-w-sm jira-card p-6 border shadow-2xl animate-fade-up"
-            style={{ background: '#1a1814' }}
+            style={{ background: 'var(--color-surface-solid)' }}
           >
             {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
@@ -253,7 +265,7 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
                 <div className="p-1.5 rounded bg-red-50">
                   <UserMinus className="w-4 h-4 text-red-500" />
                 </div>
-                <h3 className="font-bold text-sm" style={{ color: '#f0ede8' }}>
+                <h3 className="font-bold text-sm" style={{ color: 'var(--color-text-1)' }}>
                   Remove Employee
                 </h3>
               </div>
@@ -269,10 +281,10 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
             <div className="rounded-lg p-4 mb-5 border border-red-200" style={{ background: '#FFF5F5' }}>
               <div className="flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                <div className="text-xs" style={{ color: '#c5c4c1' }}>
+                <div className="text-xs" style={{ color: 'var(--color-text-2)' }}>
                   <p className="font-bold text-red-700 mb-1">This action is irreversible.</p>
                   <p>You are about to permanently remove&nbsp;
-                    <span className="font-bold" style={{ color: '#f0ede8' }}>{removeTarget.full_name}</span>
+                    <span className="font-bold" style={{ color: 'var(--color-text-1)' }}>{removeTarget.full_name}</span>
                     &nbsp;from the system. All their daily logs, task assignments, and project memberships will be deleted.
                   </p>
                 </div>
@@ -315,14 +327,14 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
         >
           <div
             className="w-full max-w-md jira-card p-6 border shadow-2xl space-y-4 animate-fade-up"
-            style={{ background: '#1a1814' }}
+            style={{ background: 'var(--color-surface-solid)' }}
           >
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded bg-blue-50 text-blue-600">
                   <UserPlus className="w-4 h-4" />
                 </div>
-                <h3 className="font-bold text-sm" style={{ color: '#f0ede8' }}>
+                <h3 className="font-bold text-sm" style={{ color: 'var(--color-text-1)' }}>
                   Onboard New Contributor
                 </h3>
               </div>
@@ -336,7 +348,7 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
 
             <form onSubmit={handleCreateEmployee} className="space-y-3.5 text-xs">
               <div>
-                <label className="block font-bold mb-1 uppercase tracking-wider text-[11px]" style={{ color: '#c5c4c1' }}>Full Name *</label>
+                <label className="block font-bold mb-1 uppercase tracking-wider text-[11px]" style={{ color: 'var(--color-text-2)' }}>Full Name *</label>
                 <input
                   type="text"
                   required
@@ -348,7 +360,7 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
               </div>
 
               <div>
-                <label className="block font-bold mb-1 uppercase tracking-wider text-[11px]" style={{ color: '#c5c4c1' }}>Work Email / Username *</label>
+                <label className="block font-bold mb-1 uppercase tracking-wider text-[11px]" style={{ color: 'var(--color-text-2)' }}>Work Email / Username *</label>
                 <input
                   type="email"
                   required
@@ -360,7 +372,7 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
               </div>
 
               <div>
-                <label className="block font-bold mb-1 uppercase tracking-wider text-[11px]" style={{ color: '#c5c4c1' }}>Departmental Job Role *</label>
+                <label className="block font-bold mb-1 uppercase tracking-wider text-[11px]" style={{ color: 'var(--color-text-2)' }}>Departmental Job Role *</label>
                 <input
                   type="text"
                   required
@@ -372,7 +384,7 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
               </div>
 
               <div>
-                <label className="block font-bold mb-1 uppercase tracking-wider text-[11px]" style={{ color: '#c5c4c1' }}>Initial Password *</label>
+                <label className="block font-bold mb-1 uppercase tracking-wider text-[11px]" style={{ color: 'var(--color-text-2)' }}>Initial Password *</label>
                 <div className="relative">
                   <Key className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input

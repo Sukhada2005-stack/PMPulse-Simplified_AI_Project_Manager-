@@ -24,6 +24,14 @@ async function request(endpoint, options = {}) {
   try {
     const res = await fetch(url, config);
     const data = await res.json();
+    
+    if (res.status === 401) {
+      localStorage.removeItem('pulsepm_token');
+      window.dispatchEvent(new CustomEvent('session_expired'));
+      // Throw a specific error to allow components to silently fail
+      throw new Error('session_expired');
+    }
+
     if (!res.ok) {
       throw new Error(data.error || 'Server request failed');
     }
@@ -41,7 +49,15 @@ export const api = {
       body: JSON.stringify({ email, password })
     }),
     getMe: () => request('/auth/me'),
-    getUsers: () => request('/auth/users')
+    getUsers: () => request('/auth/users'),
+    changePassword: (password) => request('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ password })
+    }),
+    setPermanentPassword: (email, initialPassword, newPassword) => request('/auth/set-permanent-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, initial_password: initialPassword, new_password: newPassword })
+    })
   },
   employees: {
     getAll: () => request('/employees'),
@@ -56,6 +72,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     })
+  },
+  pms: {
+    getAll: () => request('/pms'),
+    create: (data) => request('/pms', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+    remove: (id) => request(`/pms/${id}`, { method: 'DELETE' })
   },
   projects: {
     getAll: () => request('/projects'),

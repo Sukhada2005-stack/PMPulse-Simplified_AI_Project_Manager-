@@ -81,8 +81,9 @@ export default function Navbar({ activeTab, onSelectTab }) {
             })}
           </nav>
 
-          {/* User Profile & 1-Click Role Switcher */}
-          <div className="relative">
+          <div className="flex items-center gap-2">
+            {/* User Profile & 1-Click Role Switcher */}
+            <div className="relative">
             <button
               onClick={() => setShowUserDropdown(!showUserDropdown)}
               className="flex items-center gap-2.5 p-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-white/10 transition-all text-xs"
@@ -164,6 +165,16 @@ export default function Navbar({ activeTab, onSelectTab }) {
                 </div>
               </div>
             )}
+            </div>
+            
+            <button
+              onClick={logout}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white transition-colors"
+              title="Sign Out"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Sign Out</span>
+            </button>
           </div>
 
         </div>

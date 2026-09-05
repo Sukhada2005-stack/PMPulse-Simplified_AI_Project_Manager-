@@ -24,6 +24,7 @@ import ProjectChatModal from './ProjectChatModal';
 export default function PMDashboard({ onNavigateTab, onSelectEmployee360 }) {
   const [projects, setProjects] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [compliancePct, setCompliancePct] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
@@ -35,12 +36,21 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360 }) {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [projRes, empRes] = await Promise.all([
+      const today = new Date();
+      const dateFrom = new Date(today);
+      dateFrom.setDate(today.getDate() - 10);
+      const dateTo = new Date(today);
+      dateTo.setDate(today.getDate() + 7);
+      const fmt = d => d.toISOString().split('T')[0];
+
+      const [projRes, empRes, fleetRes] = await Promise.all([
         api.projects.getAll(),
-        api.employees.getAll()
+        api.employees.getAll(),
+        api.dailyLogs.getFleetMatrix(fmt(dateFrom), fmt(dateTo))
       ]);
       setProjects(projRes.projects || []);
       setEmployees(empRes.employees || []);
+      setCompliancePct(fleetRes?.summary?.compliancePct ?? 0);
     } catch (err) {
       console.error('Failed to load PM dashboard data:', err);
     } finally {
@@ -60,7 +70,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360 }) {
   return (
     <div className="space-y-6 animate-fade-up">
       {/* ── Top Executive Banner & Action Bar ──────────────────────── */}
-      <div className="jira-card p-6 relative overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)' }}>
+      <div className="jira-card p-6 relative overflow-hidden" style={{ background: 'var(--table-th-bg)' }}>
         <div className="flex flex-wrap items-center justify-between gap-6 relative z-10">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -108,7 +118,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360 }) {
 
         {/* Executive High-Level KPI Strip */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-gray-100">
-          <div className="stat-card" style={{ background: 'rgba(255,255,255,0.04)' }}>
+          <div className="stat-card" style={{ background: 'var(--table-th-bg)' }}>
             <div className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-3)' }}>
               Active Projects
             </div>
@@ -120,7 +130,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360 }) {
             </div>
           </div>
 
-          <div className="stat-card" style={{ background: 'rgba(255,255,255,0.04)' }}>
+          <div className="stat-card" style={{ background: 'var(--table-th-bg)' }}>
             <div className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-3)' }}>
               Tracked Deliverables
             </div>
@@ -132,7 +142,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360 }) {
             </div>
           </div>
 
-          <div className="stat-card" style={{ background: 'rgba(255,255,255,0.04)' }}>
+          <div className="stat-card" style={{ background: 'var(--table-th-bg)' }}>
             <div className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-3)' }}>
               Workforce Headcount
             </div>
@@ -144,12 +154,12 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360 }) {
             </div>
           </div>
 
-          <div className="stat-card" style={{ background: 'rgba(255,255,255,0.04)' }}>
+          <div className="stat-card" style={{ background: 'var(--table-th-bg)' }}>
             <div className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-3)' }}>
               Avg Logging Compliance
             </div>
             <div className="text-2xl font-black mt-0.5" style={{ color: 'var(--color-success)' }}>
-              94.2%
+              {compliancePct}%
             </div>
             <div className="text-[11px] font-medium" style={{ color: 'var(--color-text-3)' }}>
               On-time daily submissions
@@ -165,144 +175,129 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360 }) {
             <FolderGit2 className="w-4 h-4 text-blue-600" />
             <span>Active Project Containers ({projects.length})</span>
           </h2>
-          <button
-            onClick={() => onNavigateTab('calendar_matrix')}
-            className="text-xs font-bold flex items-center gap-1 hover:underline"
-            style={{ color: '#eeb20d' }}
-          >
-            <span>Open Calendar Heatmap Matrix</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {projects.map(proj => (
-            <div
-              key={proj.id}
-              className="jira-card p-5 flex flex-col justify-between group transition-all"
-              style={{ background: 'rgba(255,255,255,0.04)' }}
-            >
+          {projects.length === 0 ? (
+            <div className="col-span-full jira-card p-10 flex flex-col items-center justify-center text-center space-y-4" style={{ background: 'var(--table-th-bg)' }}>
+              <FolderGit2 className="w-12 h-12 text-gray-500" />
               <div>
-                <div className="flex items-start justify-between gap-3 mb-2.5">
-                  <span className="lozenge lozenge-success">
-                    {proj.status || 'Active'}
-                  </span>
-                  <span className="lozenge lozenge-default font-mono">
-                    {proj.task_count || 0} Tasks
-                  </span>
-                </div>
-
-                {/* Project Title — Clean, High Contrast, Always Visible */}
-                <h3
-                  className="font-bold text-base transition-colors leading-snug"
-                  style={{ color: '#f0ede8' }}
-                >
-                  {proj.title}
-                </h3>
-                
-                {/* Description */}
-                <p
-                  className="text-xs line-clamp-2 mt-1.5 leading-relaxed"
-                  style={{ color: '#c5c4c1' }}
-                >
-                  {proj.description || 'No description provided.'}
-                </p>
-
-                {/* Team Avatars */}
-                <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
-                  <div className="flex items-center -space-x-2 overflow-hidden">
-                    {proj.members?.slice(0, 4).map(m => (
-                      <img
-                        key={m.id}
-                        src={m.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${m.full_name}`}
-                        alt={m.full_name}
-                        title={`${m.full_name} (${m.role_title})`}
-                        className="inline-block h-7 w-7 rounded-full ring-2 ring-white/10 object-cover border border-white/10"
-                      />
-                    ))}
-                    {proj.members?.length > 4 && (
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-white/10 text-[10px] font-bold text-white/60 ring-2 ring-white/10 border border-white/10">
-                        +{proj.members.length - 4}
-                      </span>
-                    )}
+                <h3 className="text-xl font-bold" style={{ color: 'var(--color-text-1)' }}>0 Projects</h3>
+                <p className="text-sm mt-2 max-w-sm mx-auto" style={{ color: 'var(--color-text-3)' }}>Your workspace is completely clean. No active projects are provisioned yet. Start by creating your first project container to begin tracking deliverables.</p>
+              </div>
+              <button
+                onClick={() => setShowNewProjectModal(true)}
+                className="btn-primary mt-4"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create First Project</span>
+              </button>
+            </div>
+          ) : (
+            projects.map(proj => (
+              <div
+                key={proj.id}
+                className="jira-card p-5 flex flex-col justify-between group transition-all"
+                style={{ background: 'var(--table-th-bg)' }}
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-3 mb-2.5">
+                    <span className="lozenge lozenge-success">
+                      {proj.status || 'Active'}
+                    </span>
+                    <span className="lozenge lozenge-default font-mono">
+                      {proj.task_count || 0} Tasks
+                    </span>
                   </div>
 
-                  <span className="text-xs font-semibold flex items-center gap-1" style={{ color: '#eeb20d' }}>
-                    <Users className="w-3.5 h-3.5" />
-                    <span>{proj.member_count} Members</span>
-                  </span>
+                  {/* Project Title — Clean, High Contrast, Always Visible */}
+                  <h3
+                    className="font-bold text-base transition-colors leading-snug"
+                    style={{ color: 'var(--color-text-1)' }}
+                  >
+                    {proj.title}
+                  </h3>
+                  
+                  {/* Description */}
+                  <p
+                    className="text-xs line-clamp-2 mt-1.5 leading-relaxed"
+                    style={{ color: 'var(--color-text-2)' }}
+                  >
+                    {proj.description || 'No description provided.'}
+                  </p>
+
+                  {/* Team Avatars */}
+                  <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
+                    <div></div>
+
+                    <span className="text-xs font-semibold flex items-center gap-1" style={{ color: '#eeb20d' }}>
+                      <Users className="w-3.5 h-3.5" />
+                      <span>{proj.member_count} Members</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Quick Actions */}
+                <div className="mt-4 pt-3 border-t border-white/10 flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedProjectIdForTask(proj.id);
+                      setShowNewTaskModal(true);
+                    }}
+                    className="btn-secondary flex-1 justify-center text-xs px-2"
+                    title="Provision New Task in Project"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Task</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setSelectedChatProjectId(proj.id);
+                      setShowChatModal(true);
+                    }}
+                    className="btn-secondary text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100 flex-1 justify-center text-xs px-2"
+                    title="Open Team Chat & Meeting Scheduler"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Chat</span>
+                  </button>
+
+                  <button
+                    onClick={() => onNavigateTab('calendar_matrix', proj.id)}
+                    className="btn-primary flex-1 justify-center text-xs px-2"
+                    title="Open Calendar Heatmap Matrix"
+                  >
+                    <span>Matrix</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      if (window.confirm('Are you sure you want to delete this project? This cannot be undone.')) {
+                        try {
+                          await api.projects.delete(proj.id);
+                          fetchDashboardData();
+                        } catch (err) {
+                          alert(err.message || 'Failed to delete project');
+                        }
+                      }
+                    }}
+                    className="btn-secondary text-red-600 bg-red-50 hover:bg-red-100 border-red-200 justify-center text-xs px-2"
+                    title="Delete Project"
+                    style={{ padding: '0 8px' }}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
-
-              {/* Quick Actions */}
-              <div className="mt-4 pt-3 border-t border-white/10 flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    setSelectedProjectIdForTask(proj.id);
-                    setShowNewTaskModal(true);
-                  }}
-                  className="btn-secondary flex-1 justify-center text-xs px-2"
-                  title="Provision New Task in Project"
-                >
-                  <Plus className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Task</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setSelectedChatProjectId(proj.id);
-                    setShowChatModal(true);
-                  }}
-                  className="btn-secondary text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100 flex-1 justify-center text-xs px-2"
-                  title="Open Team Chat & Meeting Scheduler"
-                >
-                  <MessageSquare className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Chat</span>
-                </button>
-
-                <button
-                  onClick={() => onNavigateTab('calendar_matrix', proj.id)}
-                  className="btn-primary flex-1 justify-center text-xs px-2"
-                  title="Open Calendar Heatmap Matrix"
-                >
-                  <span>Matrix</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-
-                <button
-                  onClick={async () => {
-                    if (window.confirm('Are you sure you want to delete this project? This cannot be undone.')) {
-                      try {
-                        await api.projects.delete(proj.id);
-                        fetchDashboardData();
-                      } catch (err) {
-                        alert(err.message || 'Failed to delete project');
-                      }
-                    }
-                  }}
-                  className="btn-secondary text-red-600 bg-red-50 hover:bg-red-100 border-red-200 justify-center text-xs px-2"
-                  title="Delete Project"
-                  style={{ padding: '0 8px' }}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
 
       {/* ── Embedded Calendar Heatmap Matrix Section ────────────────── */}
       <div className="space-y-3 pt-2">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-bold flex items-center gap-2" style={{ color: 'var(--color-text-1)' }}>
-              <Calendar className="w-4 h-4 text-blue-600" />
-              <span>Interactive Calendar Matrix Heatmap (The GUI)</span>
-            </h2>
-
-          </div>
-        </div>
 
         <CalendarMatrix
           onOpenAISummary={() => onNavigateTab('ai_summary')}

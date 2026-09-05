@@ -15,9 +15,8 @@ import {
 } from 'lucide-react';
 
 export default function Sidebar({ activeTab, onSelectTab }) {
-  const { user, isPM, allUsers, switchUser, logout } = useAuth();
+  const { user, isPM } = useAuth();
   const [expanded, setExpanded]     = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
 
   const pmNavItems = [
     { id: 'dashboard',       label: 'Project Dashboard',       icon: LayoutDashboard },
@@ -44,7 +43,7 @@ export default function Sidebar({ activeTab, onSelectTab }) {
       {/* ── SIDEBAR ──────────────────────────────────────────────── */}
       <aside
         onMouseEnter={() => setExpanded(true)}
-        onMouseLeave={() => { setExpanded(false); setShowUserMenu(false); }}
+        onMouseLeave={() => setExpanded(false)}
         className="no-print"
         style={{
           position: 'fixed',
@@ -52,7 +51,7 @@ export default function Sidebar({ activeTab, onSelectTab }) {
           left: 0,
           bottom: 0,
           width: w,
-          background: '#161410',
+          background: 'var(--navy)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'flex-start',
@@ -90,7 +89,7 @@ export default function Sidebar({ activeTab, onSelectTab }) {
               justifyContent: 'center',
               flexShrink: 0,
               fontWeight: 900,
-              color: '#161410',
+              color: 'var(--navy)',
               fontSize: 15,
               letterSpacing: '-0.5px',
             }}
@@ -181,8 +180,7 @@ export default function Sidebar({ activeTab, onSelectTab }) {
 
         {/* User Profile Row */}
         <div style={{ width: '100%', position: 'relative' }}>
-          <button
-            onClick={() => setShowUserMenu(v => !v)}
+          <div
             title={!expanded ? user?.full_name : undefined}
             style={{
               display: 'flex',
@@ -191,27 +189,12 @@ export default function Sidebar({ activeTab, onSelectTab }) {
               width: '100%',
               padding: '7px 8px',
               borderRadius: 6,
-              border: 'none',
-              cursor: 'pointer',
-              background: showUserMenu ? 'rgba(255,255,255,0.1)' : 'transparent',
+              background: 'transparent',
               transition,
               boxSizing: 'border-box',
             }}
-            onMouseEnter={e => { if (!showUserMenu) e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
-            onMouseLeave={e => { if (!showUserMenu) e.currentTarget.style.background = 'transparent'; }}
           >
-            <img
-              src={user?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.full_name}`}
-              alt={user?.full_name}
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: '50%',
-                border: '2px solid rgba(255,255,255,0.2)',
-                objectFit: 'cover',
-                flexShrink: 0,
-              }}
-            />
+
             <span
               style={{
                 opacity: expanded ? 1 : 0,
@@ -226,113 +209,10 @@ export default function Sidebar({ activeTab, onSelectTab }) {
                 {user?.full_name}
               </div>
               <div style={{ color: '#eeb20d', fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                {isPM ? '🛡 PM' : '👤 Contributor'}
+                {user?.user_type === 'superuser' ? '👑 Superuser' : user?.user_type === 'pm' ? '🛡 PM' : '👤 Contributor'}
               </div>
             </span>
-            {expanded && (
-              <ChevronDown size={12} color="rgba(255,255,255,0.4)" style={{ marginLeft: 'auto', flexShrink: 0 }} />
-            )}
-          </button>
-
-          {/* User Switcher Dropdown */}
-          {showUserMenu && expanded && (
-            <div
-              style={{
-                position: 'absolute',
-                bottom: '100%',
-                left: 0,
-                marginBottom: 8,
-                width: 210,
-                background: '#1f1d17',
-                borderRadius: 10,
-                boxShadow: '0 20px 60px rgba(9,30,66,0.25)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                overflow: 'hidden',
-                zIndex: 200,
-              }}
-            >
-              {/* Header */}
-              <div style={{ padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#8e8b85', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Switch User</span>
-                <Zap size={11} color="#eeb20d" />
-              </div>
-
-              {/* Users List */}
-              <div style={{ maxHeight: 220, overflowY: 'auto', padding: 4 }}>
-                {allUsers?.map(u => {
-                  const isSel = u.id === user?.id;
-                  return (
-                    <button
-                      key={u.id}
-                      onClick={() => { switchUser(u.email); setShowUserMenu(false); }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        width: '100%',
-                        padding: '7px 8px',
-                        borderRadius: 6,
-                        border: 'none',
-                        cursor: 'pointer',
-                        background: isSel ? 'rgba(238,178,13,0.12)' : 'transparent',
-                        textAlign: 'left',
-                        transition: 'background 0.12s',
-                      }}
-                      onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-                      onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = 'transparent'; }}
-                    >
-                      <img
-                        src={u.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.full_name}`}
-                        alt={u.full_name}
-                        style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.12)', flexShrink: 0 }}
-                      />
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: '#f0ede8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.full_name}</div>
-                        <div style={{ fontSize: 10, color: '#8e8b85', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.role_title}</div>
-                      </div>
-                      <span style={{
-                        fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 3,
-                        background: u.user_type === 'pm' ? 'rgba(238,178,13,0.15)' : 'rgba(255,255,255,0.06)',
-                        color: u.user_type === 'pm' ? '#eeb20d' : '#8e8b85',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.04em',
-                        flexShrink: 0,
-                      }}>
-                        {u.user_type === 'pm' ? 'PM' : 'EMP'}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Sign out */}
-              <div style={{ padding: 4, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                <button
-                  onClick={() => { logout(); setShowUserMenu(false); }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 7,
-                    width: '100%',
-                    padding: '7px 8px',
-                    borderRadius: 6,
-                    border: 'none',
-                    cursor: 'pointer',
-                    background: 'transparent',
-                    color: '#ff6b6b',
-                    fontSize: 12,
-                    fontWeight: 500,
-                    transition: 'background 0.12s',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,107,107,0.1)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-                >
-                  <LogOut size={13} />
-                  Sign Out
-                </button>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       </aside>
 

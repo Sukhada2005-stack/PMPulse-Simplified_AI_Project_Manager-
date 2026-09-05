@@ -72,17 +72,14 @@ function AISummaryPanel({ projects, onClose, onOpenAISummary }) {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <Sparkles className="w-4 h-4 text-yellow-300" />
-            <span className="text-xs font-bold text-blue-200 uppercase tracking-wider">AI Summary Control</span>
+            <span className="text-xs font-bold text-[var(--color-text-3)] uppercase tracking-wider">AI Summary Control</span>
           </div>
-          <h3 className="text-white font-bold text-sm">Generate Executive Summary</h3>
-          <p className="text-blue-200 text-[11px] mt-0.5">
-            Synthesize matrix data into AI-powered insights
-          </p>
+          <h3 className="text-[var(--color-text-1)] font-bold text-sm">Generate Executive Summary</h3>
         </div>
         {onClose && (
           <button
             onClick={onClose}
-            className="text-blue-200 hover:text-white transition-colors p-1 rounded"
+            className="text-[var(--color-text-3)] hover:text-[var(--color-text-1)] transition-colors p-1 rounded"
           >
             <X className="w-4 h-4" />
           </button>
@@ -266,7 +263,7 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
       if (currentProjectId === 'fleet' || !currentProjectId) {
         const data = await api.dailyLogs.getFleetMatrix(dateFrom, dateTo);
         setMatrixData({
-          project: { title: 'All Projects — Fleet-Level Heatmap' },
+          project: { title: '' },
           dates: data.dates,
           rows: data.rows,
         });
@@ -363,25 +360,17 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
         {/* Page Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className="lozenge lozenge-blue">
-                <CalendarIcon className="w-3 h-3 inline mr-1" />
-                Live Matrix
-              </span>
-              <span className="lozenge lozenge-default">
-                {matrixData?.project?.title || 'Loading...'}
-              </span>
-              {matrixData?.project?.start_date && matrixData?.project?.end_date && (
+            {matrixData?.project?.start_date && matrixData?.project?.end_date && (
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className="lozenge" style={{ background: '#EAE6FF', color: '#403294' }}>
                   <Clock className="w-3 h-3 inline mr-1" />
                   Deadline: {matrixData.project.start_date} to {matrixData.project.end_date}
                 </span>
-              )}
-            </div>
+              </div>
+            )}
             <h1 className="text-xl font-bold" style={{ color: 'var(--color-text-1)' }}>
               Calendar Matrix Tracker
             </h1>
-
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
@@ -682,11 +671,7 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
                         style={{ padding: '10px 14px', minWidth: '280px', width: '280px' }}
                       >
                         <div className="flex items-start gap-2.5">
-                          <img
-                            src={row.employee.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${row.employee.full_name}`}
-                            alt={row.employee.full_name}
-                            className="w-7 h-7 rounded-full object-cover border border-white/10 flex-shrink-0 mt-0.5"
-                          />
+
                           <div className="min-w-0 flex-1">
                             <div
                               className="text-xs font-bold truncate"
@@ -747,7 +732,7 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
                                 title="Click to view blocker reason"
                               >
                                 <AlertTriangle className="w-3 h-3 flex-shrink-0" />
-                                <span className="hidden sm:inline">Blocked</span>
+                                <span className="hidden sm:inline">Stalled</span>
                               </button>
                             )}
                             {(s === 'pending' || s === 'missed') && (
@@ -818,7 +803,7 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
         >
           <div
             className="w-full max-w-md jira-card border shadow-2xl animate-fade-up flex flex-col"
-            style={{ background: '#1a1814', maxHeight: '80vh' }}
+            style={{ background: 'var(--color-surface-solid)', maxHeight: '80vh' }}
           >
             {/* Modal Header */}
             <div className="flex items-center justify-between p-5 border-b border-white/10">
@@ -827,17 +812,17 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
                   <UserPlus className="w-4 h-4 text-yellow-400" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm" style={{ color: '#f0ede8' }}>
+                  <h3 className="font-bold text-sm" style={{ color: 'var(--color-text-1)' }}>
                     Add Member to Project
                   </h3>
-                  <p className="text-[11px] mt-0.5" style={{ color: '#8e8b85' }}>
+                  <p className="text-[11px] mt-0.5" style={{ color: 'var(--color-text-3)' }}>
                     {projects.find(p => String(p.id) === String(currentProjectId))?.title || 'Current Project'}
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowAddMemberModal(false)}
-                className="text-white/40 hover:text-white/70 p-1 rounded"
+                className="text-white/40 hover:text-[var(--color-text-1)]/70 p-1 rounded"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -883,7 +868,7 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
                   <p className="text-xs">Fetching available workforce members...</p>
                 </div>
               ) : allEmployees.length === 0 ? (
-                <div className="text-center py-10 text-xs" style={{ color: '#8e8b85' }}>
+                <div className="text-center py-10 text-xs" style={{ color: 'var(--color-text-3)' }}>
                   {memberSearch
                     ? 'No available contributors match your search.'
                     : 'All workforce contributors are already members of this project.'}
@@ -899,7 +884,7 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
                     <div
                       key={emp.id}
                       className="flex items-center gap-3 p-3 rounded-lg border border-white/10 hover:border-yellow-500/30 transition-colors"
-                      style={{ background: 'rgba(255,255,255,0.04)' }}
+                      style={{ background: 'var(--table-th-bg)' }}
                     >
                       <img
                         src={emp.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.full_name}`}
@@ -907,7 +892,7 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
                         className="w-9 h-9 rounded-full border border-white/10 object-cover flex-shrink-0"
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="font-bold text-xs truncate" style={{ color: '#f0ede8' }}>
+                        <div className="font-bold text-xs truncate" style={{ color: 'var(--color-text-1)' }}>
                           {emp.full_name}
                         </div>
                         <div className="text-[11px] text-yellow-400 font-medium truncate">
@@ -921,7 +906,7 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
                         style={{
                           background: addingMember === emp.id ? '#d9a00a' : '#eeb20d',
                           border: '1px solid #eeb20d',
-                          color: '#161410'
+                          color: 'var(--navy)'
                         }}
                       >
                         {addingMember === emp.id
@@ -954,21 +939,21 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
         >
           <div
             className="w-full max-w-md jira-card border shadow-2xl animate-fade-up flex flex-col p-6"
-            style={{ background: '#1a1814' }}
+            style={{ background: 'var(--color-surface-solid)' }}
           >
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 rounded bg-amber-50">
                 <Clock className="w-6 h-6 text-amber-600" />
               </div>
               <div>
-                <h3 className="font-bold text-lg" style={{ color: '#f0ede8' }}>Project Deadline Reached</h3>
-                <p className="text-sm" style={{ color: '#8e8b85' }}>
+                <h3 className="font-bold text-lg" style={{ color: 'var(--color-text-1)' }}>Project Deadline Reached</h3>
+                <p className="text-sm" style={{ color: 'var(--color-text-3)' }}>
                   {deadlineProject.title} ended on {deadlineProject.end_date}.
                 </p>
               </div>
             </div>
 
-            <p className="text-sm mb-6" style={{ color: '#c5c4c1' }}>
+            <p className="text-sm mb-6" style={{ color: 'var(--color-text-2)' }}>
               The scheduled deadline for this project has been reached. Please mark the project as completed or extend the deadline to continue tracking work.
             </p>
 

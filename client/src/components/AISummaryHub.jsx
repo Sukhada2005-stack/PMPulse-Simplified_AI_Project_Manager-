@@ -157,7 +157,7 @@ export default function AISummaryHub() {
   return (
     <div className="space-y-6 animate-fade-up">
       {/* Dimension Selector Tabs Strip */}
-      <div className="jira-card p-2 overflow-x-auto" style={{ background: '#1a1814' }}>
+      <div className="jira-card p-2 overflow-x-auto" style={{ background: 'var(--color-surface-solid)' }}>
         <div className="flex items-center gap-1.5 min-w-max">
           {DIMENSIONS.map(dim => {
             const Icon = dim.icon;
@@ -182,7 +182,7 @@ export default function AISummaryHub() {
       </div>
 
       {/* Multi-Dimensional Filter Control Panel & Synthesis Action */}
-      <div className="jira-card p-5 space-y-4" style={{ background: '#1a1814' }}>
+      <div className="jira-card p-5 space-y-4" style={{ background: 'var(--color-surface-solid)' }}>
         <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-gray-100">
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-600">
             <Filter className="w-4 h-4" />
@@ -206,8 +206,8 @@ export default function AISummaryHub() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
           
           {/* 1. Date Range Preset */}
-          <div className="p-3 rounded-lg border border-gray-200 space-y-1.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
-            <label className="font-semibold flex items-center gap-1.5" style={{ color: '#c5c4c1' }}>
+          <div className="p-3 rounded-lg border border-gray-200 space-y-1.5" style={{ background: 'var(--table-th-bg)' }}>
+            <label className="font-semibold flex items-center gap-1.5" style={{ color: 'var(--color-text-2)' }}>
               <Calendar className="w-3.5 h-3.5 text-blue-600" />
               <span>Timeframe Window:</span>
             </label>
@@ -224,8 +224,8 @@ export default function AISummaryHub() {
           </div>
 
           {/* 2. Project Filter */}
-          <div className="p-3 rounded-lg border border-gray-200 space-y-1.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
-            <label className="font-semibold flex items-center gap-1.5" style={{ color: '#c5c4c1' }}>
+          <div className="p-3 rounded-lg border border-gray-200 space-y-1.5" style={{ background: 'var(--table-th-bg)' }}>
+            <label className="font-semibold flex items-center gap-1.5" style={{ color: 'var(--color-text-2)' }}>
               <FolderGit2 className="w-3.5 h-3.5 text-blue-600" />
               <span>Project Scope:</span>
             </label>
@@ -242,8 +242,8 @@ export default function AISummaryHub() {
           </div>
 
           {/* 3. Employee Filter */}
-          <div className="p-3 rounded-lg border border-gray-200 space-y-1.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
-            <label className="font-semibold flex items-center gap-1.5" style={{ color: '#c5c4c1' }}>
+          <div className="p-3 rounded-lg border border-gray-200 space-y-1.5" style={{ background: 'var(--table-th-bg)' }}>
+            <label className="font-semibold flex items-center gap-1.5" style={{ color: 'var(--color-text-2)' }}>
               <Users className="w-3.5 h-3.5 text-blue-600" />
               <span>Personnel Filter:</span>
             </label>
@@ -260,8 +260,8 @@ export default function AISummaryHub() {
           </div>
 
           {/* 4. Status Filter */}
-          <div className="p-3 rounded-lg border border-gray-200 space-y-1.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
-            <label className="font-semibold flex items-center gap-1.5" style={{ color: '#c5c4c1' }}>
+          <div className="p-3 rounded-lg border border-gray-200 space-y-1.5" style={{ background: 'var(--table-th-bg)' }}>
+            <label className="font-semibold flex items-center gap-1.5" style={{ color: 'var(--color-text-2)' }}>
               <CheckSquare className="w-3.5 h-3.5 text-blue-600" />
               <span>Log Status Filter:</span>
             </label>
@@ -281,22 +281,22 @@ export default function AISummaryHub() {
 
       {/* Generated Multi-Dimensional Report Card */}
       {loading ? (
-        <div className="py-24 text-center jira-card" style={{ background: '#1a1814' }}>
+        <div className="py-24 text-center jira-card" style={{ background: 'var(--color-surface-solid)' }}>
           <Sparkles className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-2" />
-          <p className="text-sm font-bold" style={{ color: '#f0ede8' }}>AI Synthesis In Progress</p>
-          <p className="text-xs mt-1" style={{ color: '#8e8b85' }}>
+          <p className="text-sm font-bold" style={{ color: 'var(--color-text-1)' }}>AI Synthesis In Progress</p>
+          <p className="text-xs mt-1" style={{ color: 'var(--color-text-3)' }}>
             Transforming unstructured daily text logs into executive insights across the selected dimension...
           </p>
         </div>
       ) : !s ? (
-        <div className="py-16 text-center jira-card" style={{ background: '#1a1814', color: '#8e8b85' }}>
+        <div className="py-16 text-center jira-card" style={{ background: 'var(--color-surface-solid)', color: 'var(--color-text-3)' }}>
           Click "Generate AI Summary" to trigger real-time multi-dimensional synthesis.
         </div>
       ) : (
         <div className="space-y-6 animate-fade-up">
           
           {/* Executive Header & Meta Strip */}
-          <div className="jira-card p-6 border-l-4 border-l-blue-600" style={{ background: '#1a1814' }}>
+          <div className="jira-card p-6 border-l-4 border-l-blue-600" style={{ background: 'var(--color-surface-solid)' }}>
             <div className="flex flex-wrap items-start justify-between gap-4 pb-4 border-b border-gray-100">
               <div>
                 <div className="flex items-center gap-2 mb-1">
@@ -307,7 +307,7 @@ export default function AISummaryHub() {
                     {s.timeframe}
                   </span>
                 </div>
-                <h2 className="text-xl font-bold mt-1" style={{ color: '#f0ede8' }}>
+                <h2 className="text-xl font-bold mt-1" style={{ color: 'var(--color-text-1)' }}>
                   {s.title}
                 </h2>
               </div>
@@ -331,7 +331,7 @@ export default function AISummaryHub() {
               </h3>
               <div
                 className="p-4 rounded-lg text-xs sm:text-sm leading-relaxed"
-                style={{ background: 'rgba(238,178,13,0.08)', border: '1px solid rgba(238,178,13,0.12)', color: '#f0ede8' }}
+                style={{ background: 'rgba(238,178,13,0.08)', border: '1px solid rgba(238,178,13,0.12)', color: 'var(--color-text-1)' }}
               >
                 <p className="whitespace-pre-wrap leading-relaxed">
                   {s.executive_summary}
@@ -344,10 +344,10 @@ export default function AISummaryHub() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
             {/* Key Accomplishments */}
-            <div className="jira-card p-6" style={{ background: '#1a1814' }}>
+            <div className="jira-card p-6" style={{ background: 'var(--color-surface-solid)' }}>
               <div className="flex items-center gap-2 mb-4">
                 <TrendingUp className="w-4 h-4 text-emerald-600" />
-                <h3 className="font-bold text-sm" style={{ color: '#f0ede8' }}>
+                <h3 className="font-bold text-sm" style={{ color: 'var(--color-text-1)' }}>
                   Key Accomplishments &amp; Solved Work
                 </h3>
               </div>
@@ -367,10 +367,10 @@ export default function AISummaryHub() {
             </div>
 
             {/* Critical Impediments & Action Items */}
-            <div className="jira-card p-6" style={{ background: '#1a1814' }}>
+            <div className="jira-card p-6" style={{ background: 'var(--color-surface-solid)' }}>
               <div className="flex items-center gap-2 mb-4">
                 <AlertCircle className="w-4 h-4 text-rose-600" />
-                <h3 className="font-bold text-sm" style={{ color: '#f0ede8' }}>
+                <h3 className="font-bold text-sm" style={{ color: 'var(--color-text-1)' }}>
                   Critical Impediments &amp; Action Items
                 </h3>
               </div>

@@ -1,16 +1,20 @@
 import express from 'express';
-import { login, getMe, listAllUsers } from '../controllers/authController.js';
+import { login, getMe, listAllUsers, checkRole, changePassword, setPermanentPassword } from '../controllers/authController.js';
 import { createEmployee, getEmployees, getEmployeeAnalytics, deleteEmployee, sendWarning, getMyWarnings } from '../controllers/employeeController.js';
 import { createProject, getProjects, getProjectById, createTask, getMyTasks, addProjectMember, updateProject, deleteProject, removeProjectMember } from '../controllers/projectController.js';
 import { submitDailyLog, getProjectMatrix, getFleetMatrix } from '../controllers/dailyLogController.js';
 import { generateSummary } from '../controllers/aiController.js';
 import { getProjectMessages, sendProjectMessage } from '../controllers/chatController.js';
-import { authenticateToken, requirePM } from '../middleware/auth.js';
+import { createPM, getPMs, deletePM } from '../controllers/superuserController.js';
+import { authenticateToken, requirePM, requireSuperuser } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // --- Authentication & User Switcher ---
+router.post('/auth/check-role', checkRole);
 router.post('/auth/login', login);
+router.post('/auth/set-permanent-password', setPermanentPassword);
+router.post('/auth/change-password', authenticateToken, changePassword);
 router.get('/auth/me', authenticateToken, getMe);
 router.get('/auth/users', listAllUsers);
 
@@ -21,6 +25,11 @@ router.get('/employees/my/warnings', authenticateToken, getMyWarnings);
 router.post('/employees/:id/warnings', authenticateToken, requirePM, sendWarning);
 router.get('/employees/:id/analytics', authenticateToken, requirePM, getEmployeeAnalytics);
 router.delete('/employees/:id', authenticateToken, requirePM, deleteEmployee);
+
+// --- Superuser Operations ---
+router.post('/pms', authenticateToken, requireSuperuser, createPM);
+router.get('/pms', authenticateToken, requireSuperuser, getPMs);
+router.delete('/pms/:id', authenticateToken, requireSuperuser, deletePM);
 
 // --- Project Operations ---
 router.post('/projects', authenticateToken, requirePM, createProject);
