@@ -1,7 +1,7 @@
 # PulsePM — Complete Project Codebase
 
 > **Notice:** This document contains the full source code of all files across the PulsePM platform in a single consolidated reference file.
-> **Generated On:** 2026-09-11T11:14:18.249Z
+> **Generated On:** 2026-09-11T15:53:27.892Z
 > **Total Files:** 64
 
 ---
@@ -51,7 +51,7 @@
 - [client/src/components/LogDetailModal.jsx](#file-client-src-components-logdetailmodal-jsx) `(10.8 KB)`
 - [client/src/components/Navbar.jsx](#file-client-src-components-navbar-jsx) `(12.6 KB)`
 - [client/src/components/OtherWorkspaces.jsx](#file-client-src-components-otherworkspaces-jsx) `(12.5 KB)`
-- [client/src/components/PMDashboard.jsx](#file-client-src-components-pmdashboard-jsx) `(143.3 KB)`
+- [client/src/components/PMDashboard.jsx](#file-client-src-components-pmdashboard-jsx) `(144.4 KB)`
 - [client/src/components/ProjectChatModal.jsx](#file-client-src-components-projectchatmodal-jsx) `(28.4 KB)`
 - [client/src/components/ProjectTaskModal.jsx](#file-client-src-components-projecttaskmodal-jsx) `(21.8 KB)`
 - [client/src/components/SessionReauthModal.jsx](#file-client-src-components-sessionreauthmodal-jsx) `(4.5 KB)`
@@ -9223,7 +9223,7 @@ export default function OtherWorkspaces({ onNavigateTab }) {
 ## File: client/src/components/PMDashboard.jsx <a id="file-client-src-components-pmdashboard-jsx"></a>
 
 - **Path:** `client/src/components/PMDashboard.jsx`
-- **Size:** 143.30 KB | **Lines:** 2727 | **Language:** `jsx`
+- **Size:** 144.41 KB | **Lines:** 2759 | **Language:** `jsx`
 
 ```jsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
@@ -9898,17 +9898,17 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
         'Authorization': `Bearer ${token}`
       }
     })
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then(data => {
-        if (data.tasks) {
+        if (Array.isArray(data.tasks)) {
           setWorkspaceTasks(data.tasks);
-        } else {
-          setWorkspaceTasks([]);
         }
       })
       .catch(err => {
         console.error("Error fetching tasks:", err);
-        setWorkspaceTasks([]);
       });
 
     // Fetch Documents with strict overwrite
@@ -10466,14 +10466,17 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     return ['Unassigned', pmLabel, ...uniqueTeam];
   }, [user, currentUser, workspaceMembers]);
 
-  const handleSaveDraftTask = () => {
+  const handleSaveDraftTask = async () => {
     if (!draftTask.title.trim()) {
       setDraftTask({ columnId: null, boardType: null, title: '', assignee: 'Unassigned', dueDate: '' });
       return;
     }
 
+    const newKey = `VVM-${workspaceTasks.length + 1}`;
+    const newId = Date.now();
+
     const newTask = {
-      id: `KAN-${Date.now()}`, // Or your standard ID generator
+      id: `KAN-${newId}`, // Or your standard ID generator
       taskName: draftTask.title,
       description: draftTask.title,
       status: draftTask.columnId,
@@ -10483,18 +10486,47 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       type: 'Task' // Default
     };
 
+    const todayDate = new Date().toLocaleDateString('en-GB');
+    const newOverallEntry = {
+      'Issue / Task / Enhancement': draftTask.title,
+      'Status': draftTask.columnId,
+      'Responsible': draftTask.assignee,
+      'Completed': draftTask.dueDate,
+      'Priority': 'Medium',
+      'Added ': todayDate,
+      'id': newId,
+      'key': newKey
+    };
+
+    if (selectedWorkspace) {
+      try {
+        const token = localStorage.getItem('pulsepm_token');
+        await fetch(`/api/workspaces/${selectedWorkspace.id}/tasks`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(newOverallEntry)
+        });
+      } catch (error) {
+        console.error('Failed to persist task to database:', error);
+      }
+    }
+
     if (draftTask.boardType === 'active') {
       setBoardTasks(prev => [...prev, newTask]);
     } else {
       setBoardBacklogTasks(prev => [...prev, newTask]);
     }
+    setWorkspaceTasks(prev => [newOverallEntry, ...prev]);
 
     // Reset Draft
     setDraftTask({ columnId: null, boardType: null, title: '', assignee: 'Unassigned', dueDate: '' });
   };
 
   return (
-    <div className="flex flex-1 min-h-[calc(100vh-5rem)] -m-6">
+    <div className="flex flex-1 min-h-[calc(100vh-5rem)] -m-6 min-w-0">
       {/* Inside your Sidebar container */}
       <div className="w-16 flex flex-col items-center py-4 border-r border-slate-200 dark:border-slate-800/60 gap-2 shrink-0">
         <button 
@@ -10508,7 +10540,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 p-6">
+      <div className="flex-1 min-w-0 p-6">
         {sidebarView === 'overview' && (
           <div className="overview-container space-y-8 p-2">
             
@@ -10663,7 +10695,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
         )}
 
         {sidebarView === 'workspace' && (
-          <div className="workspace-container">
+          <div className="workspace-container w-full min-w-0 max-w-full box-border">
             <div className="flex flex-col items-start gap-1 mb-8">
               <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
                 Spaces
@@ -10859,7 +10891,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
           {activeView === 'list' && (
             <>
               {/* Active Sprint Header (List View) */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between px-5 py-3 mb-6 bg-slate-800/40 border border-slate-700/50 rounded-lg shadow-sm">
+              <div className="w-full max-w-full box-border flex flex-col md:flex-row md:items-center justify-between px-5 py-3 mb-6 bg-slate-800/40 border border-slate-700/50 rounded-lg shadow-sm">
                 <div>
                   <h2 className="text-md font-semibold text-white">Active Sprint</h2>
                   <span className="text-xs text-slate-400">{sprintConfig ? `${sprintConfig.start} — ${sprintConfig.end}` : '07 Sept 2026 — 14 Sept 2026'}</span>
@@ -11104,7 +11136,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
           {activeView === 'board' && (
             <>
               {/* Active Sprint Header */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between px-5 py-3 mb-6 bg-slate-800/40 border border-slate-700/50 rounded-lg shadow-sm">
+              <div className="w-full max-w-full box-border flex flex-col md:flex-row md:items-center justify-between px-5 py-3 mb-6 bg-slate-800/40 border border-slate-700/50 rounded-lg shadow-sm">
                 <div>
                   <h2 className="text-md font-semibold text-white">Active Sprint</h2>
                   <span className="text-xs text-slate-400">{sprintConfig ? `${sprintConfig.start} — ${sprintConfig.end}` : '07 Sept 2026 — 14 Sept 2026'}</span>
