@@ -14,7 +14,7 @@ const getSafeStorage = (key, fallback) => {
     }
 };
 
-export default function PMDashboard({ onNavigateTab, onSelectEmployee360, selectedWorkspace }) {
+export default function PMDashboard({ onNavigateTab, onSelectEmployee360, selectedWorkspace, initialSidebarView }) {
   const { user } = useAuth();
   const [currentUser, setCurrentUser] = useState(() => {
     try {
@@ -45,7 +45,13 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     }
   }, [user, currentUser]);
 
-  const [sidebarView, setSidebarView] = useState('overview');
+  const [sidebarView, setSidebarView] = useState(initialSidebarView || 'overview');
+
+  useEffect(() => {
+    if (initialSidebarView) {
+      setSidebarView(initialSidebarView);
+    }
+  }, [initialSidebarView]);
   const [overviewFilter, setOverviewFilter] = useState('all'); // 'all' or specific projectId
   const [workspaces, setWorkspaces] = useState([]);
   const [allWorkspacesTasks, setAllWorkspacesTasks] = useState([]);
@@ -1083,14 +1089,6 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
         >
           <Home size={24} />
         </button>
-
-        <button 
-          onClick={() => setSidebarView('workspace')}
-          className={`p-3 rounded-xl transition-colors ${sidebarView === 'workspace' ? 'bg-yellow-500/10 text-yellow-500' : 'text-slate-400 hover:bg-transparent hover:text-white'}`}
-          title="Workspace"
-        >
-          <Folder size={24} /> {/* Or your existing workspace/project icon */}
-        </button>
         {/* Keep any other existing sidebar icons below this */}
       </div>
 
@@ -1238,6 +1236,12 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
               projects={displayedContainers}
               allProjects={workspaces}
               onRefresh={fetchAllWorkspacesData}
+              onOpenWorkspace={(proj) => {
+                setSidebarView('workspace');
+                if (typeof onNavigateTab === 'function') {
+                  onNavigateTab('dashboard', proj.id, 'workspace');
+                }
+              }}
             />
 
           </div>

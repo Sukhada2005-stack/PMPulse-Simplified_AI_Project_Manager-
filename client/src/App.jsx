@@ -68,8 +68,17 @@ function MainApp() {
     }
   }, [user?.user_type, loading]);
 
-  const handleNavigateTab = (tabId, projectId = null) => {
-    if (projectId) setSelectedProjectId(projectId);
+  const [initialDashboardView, setInitialDashboardView] = useState('overview');
+
+  const handleNavigateTab = (tabId, projectId = null, view = null) => {
+    if (projectId) {
+      setSelectedProjectId(projectId);
+      const ws = workspaces.find(w => String(w.id) === String(projectId));
+      if (ws) setSelectedWorkspace(ws);
+    }
+    if (view) {
+      setInitialDashboardView(view);
+    }
     setActiveTab(tabId);
   };
 
@@ -251,6 +260,7 @@ function MainApp() {
                   onNavigateTab={handleNavigateTab}
                   onSelectEmployee360={handleSelectEmployee360}
                   selectedWorkspace={selectedWorkspace}
+                  initialSidebarView={initialDashboardView}
                 />
               )}
 

@@ -6,6 +6,8 @@ import {
   Users,
   MessageSquare,
   Trash2,
+  Layout,
+  ArrowRight,
 } from 'lucide-react';
 import { NewTaskModal } from './ProjectTaskModal';
 import ProjectChatModal from './ProjectChatModal';
@@ -22,7 +24,7 @@ function StatusBadge({ status }) {
   return <span className={cls}>{status || 'Active'}</span>;
 }
 
-export default function ActiveProjectContainers({ projects = [], allProjects = [], onRefresh }) {
+export default function ActiveProjectContainers({ projects = [], allProjects = [], onRefresh, onOpenWorkspace }) {
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const [selectedProjectIdForTask, setSelectedProjectIdForTask] = useState(null);
   const [showChatModal, setShowChatModal] = useState(false);
@@ -126,6 +128,21 @@ export default function ActiveProjectContainers({ projects = [], allProjects = [
                 >
                   <MessageSquare className="w-3.5 h-3.5" />
                   <span>Chat</span>
+                </button>
+
+                {/* Workspace → */}
+                <button
+                  onClick={() => {
+                    if (typeof onOpenWorkspace === 'function') {
+                      onOpenWorkspace(proj);
+                    }
+                  }}
+                  className="btn-primary flex-1 justify-center text-xs px-2"
+                  title="Open Workspace for this Project"
+                >
+                  <Layout className="w-3.5 h-3.5" />
+                  <span>Workspace</span>
+                  <ArrowRight className="w-3 h-3" />
                 </button>
 
                 {/* 🗑 Delete */}

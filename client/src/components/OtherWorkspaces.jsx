@@ -8,6 +8,8 @@ import {
   Trash2,
   Search,
   Loader2,
+  Layout,
+  ArrowRight,
 } from 'lucide-react';
 import { NewProjectModal, NewTaskModal } from './ProjectTaskModal';
 import ProjectChatModal from './ProjectChatModal';
@@ -235,6 +237,17 @@ export default function OtherWorkspaces({ onNavigateTab }) {
                   >
                     <MessageSquare className="w-3.5 h-3.5" />
                     <span>Chat</span>
+                  </button>
+
+                  {/* Workspace → */}
+                  <button
+                    onClick={() => onNavigateTab && onNavigateTab('dashboard', proj.id, 'workspace')}
+                    className="btn-primary flex-1 justify-center text-xs px-2"
+                    title="Open Workspace for this Project"
+                  >
+                    <Layout className="w-3.5 h-3.5" />
+                    <span>Workspace</span>
+                    <ArrowRight className="w-3 h-3" />
                   </button>
 
 
