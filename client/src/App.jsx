@@ -29,15 +29,18 @@ function MainApp() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   useEffect(() => {
+    if (user?.id) {
+      setSelectedWorkspace(null);
+      setActiveTab('dashboard');
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
     const fetchWorkspaces = async () => {
       try {
         const res = await api.projects.getAll();
         const projectList = res.projects || [];
         setWorkspaces(projectList);
-        setSelectedWorkspace(prev => {
-          if (prev) return prev;
-          return projectList.find(p => p.id === 5 || (p.title && p.title.toLowerCase().includes('vidyarthi'))) || projectList[0] || null;
-        });
       } catch (err) {
         console.error('Failed to load workspaces:', err);
       }

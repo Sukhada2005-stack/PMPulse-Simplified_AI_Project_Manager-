@@ -52,6 +52,12 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       setSidebarView(initialSidebarView);
     }
   }, [initialSidebarView]);
+
+  useEffect(() => {
+    if (!selectedWorkspace) {
+      setSidebarView('overview'); // Forces the Welcome Dashboard to mount
+    }
+  }, [selectedWorkspace]);
   const [overviewFilter, setOverviewFilter] = useState('all'); // 'all' or specific projectId
   const [workspaces, setWorkspaces] = useState([]);
   const [allWorkspacesTasks, setAllWorkspacesTasks] = useState([]);
