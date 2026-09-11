@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Layout, Upload, Loader2, Inbox, Trash2, Plus, Users, X, FileText, UploadCloud, File, UserCheck, DownloadCloud, Home, Folder, Target, AlertTriangle, SearchCheck, Bug, Clock, LayoutList, ChevronDown, Calendar, User, CornerDownLeft, MoreHorizontal, Edit2 } from 'lucide-react';
+import { Layout, Upload, Loader2, Inbox, Trash2, Plus, Users, X, FileText, UploadCloud, File, UserCheck, DownloadCloud, Home, Folder, Target, AlertTriangle, SearchCheck, Bug, Clock, LayoutList, ChevronDown, Calendar, User, CornerDownLeft, MoreHorizontal, Edit2, Grid2x2, ArrowRight } from 'lucide-react';
 const getSafeStorage = (key, fallback) => {
     if (typeof window === 'undefined') return fallback;
     try {
@@ -1253,6 +1253,17 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
                 <UserCheck size={16} />
                 Check members
               </button>
+              {(user?.user_type === 'pm' || currentUser?.user_type === 'pm') && (
+                <button
+                  onClick={() => onNavigateTab && onNavigateTab('calendar_matrix', selectedWorkspace.id)}
+                  className="flex items-center gap-2 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700 shadow-sm"
+                  title="Open Calendar Matrix for this Project"
+                >
+                  <Grid2x2 size={16} className="text-yellow-500" />
+                  <span>Matrix</span>
+                  <ArrowRight size={14} className="text-slate-400" />
+                </button>
+              )}
             </div>
           )}
         </h1>

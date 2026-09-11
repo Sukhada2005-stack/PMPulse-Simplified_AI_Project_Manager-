@@ -5,11 +5,9 @@ import {
   Plus,
   Users,
   MessageSquare,
-  ArrowRight,
   Trash2,
   Search,
   Loader2,
-  Grid2x2,
 } from 'lucide-react';
 import { NewProjectModal, NewTaskModal } from './ProjectTaskModal';
 import ProjectChatModal from './ProjectChatModal';
@@ -69,12 +67,6 @@ export default function OtherWorkspaces({ onNavigateTab }) {
     setShowNewTaskModal(true);
   };
 
-  /* ── Navigate to Calendar Matrix scoped to a project ─────────────── */
-  const handleOpenMatrix = (projectId) => {
-    if (typeof onNavigateTab === 'function') {
-      onNavigateTab('calendar_matrix', projectId);
-    }
-  };
 
   /* ── Loading spinner ──────────────────────────────────────────────── */
   if (loading) {
@@ -245,16 +237,6 @@ export default function OtherWorkspaces({ onNavigateTab }) {
                     <span>Chat</span>
                   </button>
 
-                  {/* Matrix → */}
-                  <button
-                    onClick={() => handleOpenMatrix(proj.id)}
-                    className="btn-primary flex-1 justify-center text-xs px-2"
-                    title="Open Calendar Matrix for this Project"
-                  >
-                    <Grid2x2 className="w-3.5 h-3.5" />
-                    <span>Matrix</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </button>
 
                   {/* 🗑 Delete */}
                   <button
