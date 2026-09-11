@@ -1136,13 +1136,6 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
               </div>
             </div>
 
-            {/* Active Project Containers (Dropdown-Scoped) */}
-            <ActiveProjectContainers
-              projects={displayedContainers}
-              allProjects={workspaces}
-              onRefresh={fetchAllWorkspacesData}
-            />
-
             {/* GLOBAL KPIs (Render if 'all' is selected) */}
             {overviewFilter === 'all' && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -1239,6 +1232,13 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
                 </div>
               </div>
             )}
+
+            {/* Active Project Containers (Dropdown-Scoped) */}
+            <ActiveProjectContainers
+              projects={displayedContainers}
+              allProjects={workspaces}
+              onRefresh={fetchAllWorkspacesData}
+            />
 
           </div>
         )}
