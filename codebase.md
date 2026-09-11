@@ -1,7 +1,7 @@
 # PulsePM — Complete Project Codebase
 
 > **Notice:** This document contains the full source code of all files across the PulsePM platform in a single consolidated reference file.
-> **Generated On:** 2026-09-11T07:22:07.639Z
+> **Generated On:** 2026-09-11T12:10:44.837Z
 > **Total Files:** 64
 
 ---
@@ -51,7 +51,7 @@
 - [client/src/components/LogDetailModal.jsx](#file-client-src-components-logdetailmodal-jsx) `(10.8 KB)`
 - [client/src/components/Navbar.jsx](#file-client-src-components-navbar-jsx) `(12.6 KB)`
 - [client/src/components/OtherWorkspaces.jsx](#file-client-src-components-otherworkspaces-jsx) `(12.5 KB)`
-- [client/src/components/PMDashboard.jsx](#file-client-src-components-pmdashboard-jsx) `(136.7 KB)`
+- [client/src/components/PMDashboard.jsx](#file-client-src-components-pmdashboard-jsx) `(144.3 KB)`
 - [client/src/components/ProjectChatModal.jsx](#file-client-src-components-projectchatmodal-jsx) `(28.4 KB)`
 - [client/src/components/ProjectTaskModal.jsx](#file-client-src-components-projecttaskmodal-jsx) `(21.8 KB)`
 - [client/src/components/SessionReauthModal.jsx](#file-client-src-components-sessionreauthmodal-jsx) `(4.5 KB)`
@@ -60,7 +60,7 @@
 - [client/src/components/SuperuserDashboard.jsx](#file-client-src-components-superuserdashboard-jsx) `(13.5 KB)`
 - [client/src/components/TaskDetailModal.jsx](#file-client-src-components-taskdetailmodal-jsx) `(12.9 KB)`
 - [client/src/components/WorkforceDirectory.jsx](#file-client-src-components-workforcedirectory-jsx) `(20 KB)`
-- [client/src/App.jsx](#file-client-src-app-jsx) `(14.7 KB)`
+- [client/src/App.jsx](#file-client-src-app-jsx) `(14.6 KB)`
 - [client/src/index.css](#file-client-src-index-css) `(17.2 KB)`
 - [client/src/main.jsx](#file-client-src-main-jsx) `(0.2 KB)`
 - [client/index.html](#file-client-index-html) `(1.2 KB)`
@@ -9223,7 +9223,7 @@ export default function OtherWorkspaces({ onNavigateTab }) {
 ## File: client/src/components/PMDashboard.jsx <a id="file-client-src-components-pmdashboard-jsx"></a>
 
 - **Path:** `client/src/components/PMDashboard.jsx`
-- **Size:** 136.65 KB | **Lines:** 2536 | **Language:** `jsx`
+- **Size:** 144.30 KB | **Lines:** 2759 | **Language:** `jsx`
 
 ```jsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
@@ -9242,7 +9242,7 @@ const getSafeStorage = (key, fallback) => {
     }
 };
 
-export default function PMDashboard({ onNavigateTab, onSelectEmployee360, selectedWorkspace, initialSidebarView }) {
+export default function PMDashboard({ onNavigateTab, onSelectEmployee360, selectedWorkspace, initialSidebarView, setSelectedProject, setCurrentView }) {
   const { user } = useAuth();
   const [currentUser, setCurrentUser] = useState(() => {
     try {
@@ -9280,6 +9280,12 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       setSidebarView(initialSidebarView);
     }
   }, [initialSidebarView]);
+
+  useEffect(() => {
+    if (!selectedWorkspace) {
+      setSidebarView('overview'); // Forces the Welcome Dashboard to mount
+    }
+  }, [selectedWorkspace]);
   const [overviewFilter, setOverviewFilter] = useState('all'); // 'all' or specific projectId
   const [workspaces, setWorkspaces] = useState([]);
   const [allWorkspacesTasks, setAllWorkspacesTasks] = useState([]);
@@ -9330,11 +9336,17 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     };
   }, [user?.id, overviewFilter]);
   const [activeView, setActiveView] = useState('overall');
-  const [workspaceTasks, setWorkspaceTasks] = useState(() => getSafeStorage('pmpulse_workspaceTasks', []));
+  const [workspaceTasks, setWorkspaceTasks] = useState(() => {
+    const wsId = selectedWorkspace?.id;
+    return wsId ? getSafeStorage(`pmpulse_workspaceTasks_${wsId}`, []) : [];
+  });
   const [isUploading, setIsUploading] = useState(false);
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
   const [newTaskName, setNewTaskName] = useState('');
-  const [listTasks, setListTasks] = useState(() => getSafeStorage('pmpulse_listTasks', []));
+  const [listTasks, setListTasks] = useState(() => {
+    const wsId = selectedWorkspace?.id;
+    return wsId ? getSafeStorage(`pmpulse_listTasks_${wsId}`, []) : [];
+  });
   const [isCreateListTaskOpen, setIsCreateListTaskOpen] = useState(false);
   const [listTaskForm, setListTaskForm] = useState({
     type: 'Task',
@@ -9344,10 +9356,13 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     dueDate: '',
     priority: 'Medium'
   });
-  const [boardTasks, setBoardTasks] = useState(() => getSafeStorage('pmpulse_boardTasks', []));
+  const [boardTasks, setBoardTasks] = useState(() => {
+    const wsId = selectedWorkspace?.id;
+    return wsId ? getSafeStorage(`pmpulse_boardTasks_${wsId}`, []) : [];
+  });
   const [boardBacklogTasks, setBoardBacklogTasks] = useState(() => {
-    try { return JSON.parse(window.localStorage.getItem('pmpulse_boardBacklogTasks')) || []; } 
-    catch { return []; }
+    const wsId = selectedWorkspace?.id;
+    return wsId ? getSafeStorage(`pmpulse_boardBacklogTasks_${wsId}`, []) : [];
   });
   const [draggedTaskId, setDraggedTaskId] = useState(null);
   const [dragInfo, setDragInfo] = useState(null);
@@ -9357,16 +9372,28 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
   const [pullOrigin, setPullOrigin] = useState(null);
   const [isCreationSourceModalOpen, setIsCreationSourceModalOpen] = useState(false);
   const [isPullConfirmModalOpen, setIsPullConfirmModalOpen] = useState(false);
-  const [sprintConfig, setSprintConfig] = useState(() => getSafeStorage('pmpulse_sprintConfig', null));
+  const [sprintConfig, setSprintConfig] = useState(() => {
+    const wsId = selectedWorkspace?.id;
+    return wsId ? getSafeStorage(`pmpulse_sprintConfig_${wsId}`, null) : null;
+  });
   const [isSprintSetupOpen, setIsSprintSetupOpen] = useState(false);
   const boardColumns = ['To Do', 'In Progress', 'In Review', 'Done', 'Remove'];
   const fileInputRef = useRef(null);
-  const [sprintBacklogTasks, setSprintBacklogTasks] = useState(() => getSafeStorage('pmpulse_sprintBacklogTasks', []));
+  const [sprintBacklogTasks, setSprintBacklogTasks] = useState(() => {
+    const wsId = selectedWorkspace?.id;
+    return wsId ? getSafeStorage(`pmpulse_sprintBacklogTasks_${wsId}`, []) : [];
+  });
   const [isAddMembersModalOpen, setIsAddMembersModalOpen] = useState(false);
   const [memberTab, setMemberTab] = useState('directory'); // 'directory' or 'email'
   const [emailInput, setEmailInput] = useState('');
-  const [workspaceMembers, setWorkspaceMembers] = useState(() => getSafeStorage('pmpulse_workspaceMembers', []));
-  const [workspaceDocs, setWorkspaceDocs] = useState(() => getSafeStorage('pmpulse_workspaceDocs', []));
+  const [workspaceMembers, setWorkspaceMembers] = useState(() => {
+    const wsId = selectedWorkspace?.id;
+    return wsId ? getSafeStorage(`pmpulse_workspaceMembers_${wsId}`, []) : [];
+  });
+  const [workspaceDocs, setWorkspaceDocs] = useState(() => {
+    const wsId = selectedWorkspace?.id;
+    return wsId ? getSafeStorage(`pmpulse_workspaceDocs_${wsId}`, []) : [];
+  });
   const [taskTypes, setTaskTypes] = useState(() => getSafeStorage('pmpulse_taskTypes', ['Task', 'Bug', 'Epic']));
   const [taskStatuses, setTaskStatuses] = useState(() => getSafeStorage('pmpulse_taskStatuses', ['To Do', 'In Progress', 'In Review', 'Done']));
 
@@ -9449,38 +9476,57 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
   // Push to localStorage to trigger cross-tab sync in other windows
   useEffect(() => {
     try {
-      localStorage.setItem('pmpulse_workspaceDocs', JSON.stringify(workspaceDocs));
+      if (selectedWorkspace?.id) {
+        localStorage.setItem(`pmpulse_workspaceDocs_${selectedWorkspace.id}`, JSON.stringify(workspaceDocs));
+      }
     } catch (e) {
       console.error("Failed to stringify docs", e);
     }
-  }, [workspaceDocs]);
+  }, [workspaceDocs, selectedWorkspace?.id]);
 
   // Cross-tab synchronization for live UI updates
   useEffect(() => {
     const handleStorageChange = (e) => {
-      if (e.key === 'pmpulse_workspaceTasks' && e.newValue) {
+      const wsId = selectedWorkspace?.id;
+      if (!wsId) return;
+      if (e.key === `pmpulse_workspaceTasks_${wsId}` && e.newValue) {
         try { setWorkspaceTasks(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
       }
       // Add Document Sync Listener
-      if (e.key === 'pmpulse_workspaceDocs' && e.newValue) {
+      if (e.key === `pmpulse_workspaceDocs_${wsId}` && e.newValue) {
         try { setWorkspaceDocs(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
       }
-      if (e.key === 'pmpulse_boardBacklogTasks' && e.newValue) {
+      if (e.key === `pmpulse_boardBacklogTasks_${wsId}` && e.newValue) {
         try { setBoardBacklogTasks(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
       }
-      if (e.key === 'pmpulse_listTasks' && e.newValue) {
+      if (e.key === `pmpulse_boardTasks_${wsId}` && e.newValue) {
+        try { setBoardTasks(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
+      }
+      if (e.key === `pmpulse_listTasks_${wsId}` && e.newValue) {
         try { setListTasks(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
       }
     };
 
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  }, [selectedWorkspace?.id]);
 
   useEffect(() => { try { window.localStorage.setItem('pmpulse_taskTypes', JSON.stringify(taskTypes)); } catch (e) {} }, [taskTypes]);
   useEffect(() => { try { window.localStorage.setItem('pmpulse_taskStatuses', JSON.stringify(taskStatuses)); } catch (e) {} }, [taskStatuses]);
-  useEffect(() => { try { window.localStorage.setItem('pmpulse_boardTasks', JSON.stringify(boardTasks)); } catch (e) {} }, [boardTasks]);
-  useEffect(() => { try { window.localStorage.setItem('pmpulse_boardBacklogTasks', JSON.stringify(boardBacklogTasks)); } catch (e) {} }, [boardBacklogTasks]);
+  useEffect(() => { 
+    try { 
+      if (selectedWorkspace?.id) {
+        window.localStorage.setItem(`pmpulse_boardTasks_${selectedWorkspace.id}`, JSON.stringify(boardTasks)); 
+      }
+    } catch (e) {} 
+  }, [boardTasks, selectedWorkspace?.id]);
+  useEffect(() => { 
+    try { 
+      if (selectedWorkspace?.id) {
+        window.localStorage.setItem(`pmpulse_boardBacklogTasks_${selectedWorkspace.id}`, JSON.stringify(boardBacklogTasks)); 
+      }
+    } catch (e) {} 
+  }, [boardBacklogTasks, selectedWorkspace?.id]);
 
   const handleInlineUpdate = (taskId, field, value) => {
     // Handle custom additions
@@ -9598,7 +9644,19 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
   const [isRemoveMemberMode, setIsRemoveMemberMode] = useState(false);
   const [membersToRemove, setMembersToRemove] = useState([]);
 
-  const handleRemoveSelectedMembers = () => {
+  const handleRemoveSelectedMembers = async () => {
+    if (selectedWorkspace?.id) {
+      for (const identifier of membersToRemove) {
+        const m = workspaceMembers.find(mem => (mem.id === identifier || mem.email === identifier));
+        if (m && m.id) {
+          try {
+            await api.projects.removeMember(selectedWorkspace.id, m.id);
+          } catch (e) {
+            console.error('Failed to remove member from backend:', e);
+          }
+        }
+      }
+    }
     setWorkspaceMembers(prev => prev.filter(m => !membersToRemove.includes(m.id || m.email)));
     setIsRemoveMemberMode(false);
     setMembersToRemove([]);
@@ -9617,11 +9675,15 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
   }, []);
 
   useEffect(() => {
-    try { window.localStorage.setItem('pmpulse_workspaceMembers', JSON.stringify(workspaceMembers)); } 
+    try { 
+      if (selectedWorkspace?.id) {
+        window.localStorage.setItem(`pmpulse_workspaceMembers_${selectedWorkspace.id}`, JSON.stringify(workspaceMembers)); 
+      }
+    } 
     catch (e) { console.error(e); }
-  }, [workspaceMembers]);
+  }, [workspaceMembers, selectedWorkspace?.id]);
 
-  const handleAddMembers = (e) => {
+  const handleAddMembers = async (e) => {
     e.preventDefault();
     let newMembers = [];
 
@@ -9634,10 +9696,19 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
         role: 'External' 
       }));
     } else if (memberTab === 'directory' && selectedDirectoryUsers.length > 0) {
+      if (selectedWorkspace?.id) {
+        for (const user of selectedDirectoryUsers) {
+          try {
+            await api.projects.addMember(selectedWorkspace.id, user.id);
+          } catch (err) {
+            console.error('Failed to add project member:', err);
+          }
+        }
+      }
       newMembers = selectedDirectoryUsers.map(user => ({ 
         ...user, 
         name: user.full_name || user.name,
-        id: Date.now() + Math.random(), 
+        id: user.id || (Date.now() + Math.random()), 
         role: 'Internal' 
       }));
     }
@@ -9655,27 +9726,79 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     setIsAddMembersModalOpen(false);
   };
 
+  const openAddMemberModal = async () => {
+    if (selectedWorkspace?.id) {
+      try {
+        const [projRes, empRes] = await Promise.all([
+          api.projects.getById(selectedWorkspace.id),
+          api.employees.getAll()
+        ]);
+        if (projRes?.project?.members) {
+          setWorkspaceMembers(projRes.project.members.map(m => ({ ...m, name: m.full_name || m.name })));
+        } else if (selectedWorkspace.members) {
+          setWorkspaceMembers(selectedWorkspace.members.map(m => ({ ...m, name: m.full_name || m.name })));
+        }
+        if (empRes?.employees) {
+          setWorkspaceDirectory(empRes.employees);
+        }
+      } catch (err) {
+        console.error("Failed to refresh members or directory for modal:", err);
+        if (selectedWorkspace.members) {
+          setWorkspaceMembers(selectedWorkspace.members.map(m => ({ ...m, name: m.full_name || m.name })));
+        }
+      }
+    } else {
+      setWorkspaceMembers([]);
+    }
+    setIsAddMembersModalOpen(true);
+  };
+
+  const openCheckMembersModal = async () => {
+    if (selectedWorkspace?.id) {
+      try {
+        const projRes = await api.projects.getById(selectedWorkspace.id);
+        if (projRes?.project?.members) {
+          setWorkspaceMembers(projRes.project.members.map(m => ({ ...m, name: m.full_name || m.name })));
+        } else if (selectedWorkspace.members) {
+          setWorkspaceMembers(selectedWorkspace.members.map(m => ({ ...m, name: m.full_name || m.name })));
+        }
+      } catch (err) {
+        console.error("Failed to refresh project members for modal:", err);
+        if (selectedWorkspace.members) {
+          setWorkspaceMembers(selectedWorkspace.members.map(m => ({ ...m, name: m.full_name || m.name })));
+        }
+      }
+    } else {
+      setWorkspaceMembers([]);
+    }
+    setIsCheckMembersModalOpen(true);
+  };
+
   useEffect(() => { 
     try { 
-      localStorage.setItem('pmpulse_workspaceTasks', JSON.stringify(workspaceTasks)); 
+      if (selectedWorkspace?.id) {
+        localStorage.setItem(`pmpulse_workspaceTasks_${selectedWorkspace.id}`, JSON.stringify(workspaceTasks)); 
+      }
       window.dispatchEvent(new CustomEvent('pmpulse_workspaceTasks_updated', { detail: workspaceTasks }));
     } catch (e) {} 
-  }, [workspaceTasks]);
+  }, [workspaceTasks, selectedWorkspace?.id]);
 
   useEffect(() => {
     const handleSync = () => {
       try {
-        const stored = JSON.parse(window.localStorage.getItem('pmpulse_workspaceTasks'));
+        const wsId = selectedWorkspace?.id;
+        if (!wsId) return;
+        const stored = JSON.parse(window.localStorage.getItem(`pmpulse_workspaceTasks_${wsId}`));
         if (stored) setWorkspaceTasks(stored);
-        const storedList = JSON.parse(window.localStorage.getItem('pmpulse_listTasks'));
+        const storedList = JSON.parse(window.localStorage.getItem(`pmpulse_listTasks_${wsId}`));
         if (storedList) setListTasks(storedList);
-        const storedBoard = JSON.parse(window.localStorage.getItem('pmpulse_boardTasks'));
+        const storedBoard = JSON.parse(window.localStorage.getItem(`pmpulse_boardTasks_${wsId}`));
         if (storedBoard) setBoardTasks(storedBoard);
-        const storedBoardBacklog = JSON.parse(window.localStorage.getItem('pmpulse_boardBacklogTasks'));
+        const storedBoardBacklog = JSON.parse(window.localStorage.getItem(`pmpulse_boardBacklogTasks_${wsId}`));
         if (storedBoardBacklog) setBoardBacklogTasks(storedBoardBacklog);
-        const storedSprint = JSON.parse(window.localStorage.getItem('pmpulse_sprintConfig'));
+        const storedSprint = JSON.parse(window.localStorage.getItem(`pmpulse_sprintConfig_${wsId}`));
         if (storedSprint) setSprintConfig(storedSprint);
-        const storedBacklog = JSON.parse(window.localStorage.getItem('pmpulse_sprintBacklogTasks'));
+        const storedBacklog = JSON.parse(window.localStorage.getItem(`pmpulse_sprintBacklogTasks_${wsId}`));
         if (storedBacklog) setSprintBacklogTasks(storedBacklog);
       } catch (err) {}
     };
@@ -9695,72 +9818,134 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       window.removeEventListener('pmpulse_sprintConfig_updated', handleSync);
       window.removeEventListener('pmpulse_sprintBacklogTasks_updated', handleSync);
     };
-  }, []);
+  }, [selectedWorkspace?.id]);
 
   useEffect(() => { 
     try { 
-      localStorage.setItem('pmpulse_listTasks', JSON.stringify(listTasks)); 
+      if (selectedWorkspace?.id) {
+        localStorage.setItem(`pmpulse_listTasks_${selectedWorkspace.id}`, JSON.stringify(listTasks)); 
+      }
       window.dispatchEvent(new CustomEvent('pmpulse_listTasks_updated', { detail: listTasks }));
     } catch (e) {} 
-  }, [listTasks]);
+  }, [listTasks, selectedWorkspace?.id]);
   useEffect(() => { 
     try { 
-      localStorage.setItem('pmpulse_boardTasks', JSON.stringify(boardTasks)); 
+      if (selectedWorkspace?.id) {
+        localStorage.setItem(`pmpulse_boardTasks_${selectedWorkspace.id}`, JSON.stringify(boardTasks)); 
+      }
       window.dispatchEvent(new CustomEvent('pmpulse_boardTasks_updated', { detail: boardTasks }));
     } catch (e) {} 
-  }, [boardTasks]);
+  }, [boardTasks, selectedWorkspace?.id]);
   useEffect(() => {
     try {
-      localStorage.setItem('pmpulse_boardBacklogTasks', JSON.stringify(boardBacklogTasks));
+      if (selectedWorkspace?.id) {
+        localStorage.setItem(`pmpulse_boardBacklogTasks_${selectedWorkspace.id}`, JSON.stringify(boardBacklogTasks));
+      }
       window.dispatchEvent(new CustomEvent('pmpulse_boardBacklogTasks_updated', { detail: boardBacklogTasks }));
     } catch (e) {}
-  }, [boardBacklogTasks]);
+  }, [boardBacklogTasks, selectedWorkspace?.id]);
   useEffect(() => { 
     try { 
-      localStorage.setItem('pmpulse_sprintConfig', JSON.stringify(sprintConfig)); 
+      if (selectedWorkspace?.id) {
+        localStorage.setItem(`pmpulse_sprintConfig_${selectedWorkspace.id}`, JSON.stringify(sprintConfig)); 
+      }
       window.dispatchEvent(new CustomEvent('pmpulse_sprintConfig_updated', { detail: sprintConfig }));
     } catch (e) {} 
-  }, [sprintConfig]);
+  }, [sprintConfig, selectedWorkspace?.id]);
   useEffect(() => {
     try {
-      window.localStorage.setItem('pmpulse_sprintBacklogTasks', JSON.stringify(sprintBacklogTasks));
+      if (selectedWorkspace?.id) {
+        window.localStorage.setItem(`pmpulse_sprintBacklogTasks_${selectedWorkspace.id}`, JSON.stringify(sprintBacklogTasks));
+      }
       window.dispatchEvent(new CustomEvent('pmpulse_sprintBacklogTasks_updated', { detail: sprintBacklogTasks }));
     } catch (e) {
       console.error('Failed to save sprintBacklogTasks to storage', e);
     }
-  }, [sprintBacklogTasks]);
+  }, [sprintBacklogTasks, selectedWorkspace?.id]);
 
+  // 1) Wipe & Reload Context Loader on Project Change
   useEffect(() => {
-    // Guard clause: Do not wipe state on initial mount when workspace is loading
-    if (!selectedWorkspace) return; 
+    const wsId = selectedWorkspace?.id;
+    if (!wsId) {
+      // Only wipe completely if no project is selected
+      setWorkspaceTasks([]);
+      setListTasks([]);
+      setBoardTasks([]);
+      setBoardBacklogTasks([]);
+      setWorkspaceDocs([]);
+      setWorkspaceMembers([]);
+      return;
+    }
+
+    // Actively RE-LOAD the specific project's local storage data!
+    setListTasks(getSafeStorage(`pmpulse_listTasks_${wsId}`, []));
+    setBoardTasks(getSafeStorage(`pmpulse_boardTasks_${wsId}`, []));
+    setBoardBacklogTasks(getSafeStorage(`pmpulse_boardBacklogTasks_${wsId}`, []));
+    setWorkspaceDocs(getSafeStorage(`pmpulse_workspaceDocs_${wsId}`, []));
+
+    // (workspaceTasks will be handled by the subsequent backend fetch useEffect)
+  }, [selectedWorkspace?.id]);
+
+  // 2) Strict API Overwrites for Tasks, Docs, and Members
+  useEffect(() => {
+    if (!selectedWorkspace?.id) return; 
 
     const token = localStorage.getItem('pulsepm_token');
+
+    // Fetch Tasks with strict overwrite
     fetch(`/api/workspaces/${selectedWorkspace.id}/tasks`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
     })
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then(data => {
-        if (data.tasks) {
-          setWorkspaceTasks(prev => {
-            const localAddedTasks = prev.filter(task => task.id && !data.tasks.some(dt => dt.id === task.id));
-            return [...localAddedTasks, ...data.tasks];
-          });
+        if (Array.isArray(data.tasks)) {
+          setWorkspaceTasks(data.tasks);
         }
       })
-      .catch(err => console.error("Error fetching tasks:", err));
+      .catch(err => {
+        console.error("Error fetching tasks:", err);
+      });
 
-    // Fetch Documents
+    // Fetch Documents with strict overwrite
     fetch(`/api/workspaces/${selectedWorkspace.id}/docs`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(res => res.json())
       .then(data => {
-        if (data.docs) setWorkspaceDocs(data.docs);
+        if (data.docs) {
+          setWorkspaceDocs(data.docs);
+        } else {
+          setWorkspaceDocs([]);
+        }
       })
-      .catch(err => console.error("Error fetching docs:", err));
-  }, [selectedWorkspace]);
+      .catch(err => {
+        console.error("Error fetching docs:", err);
+        setWorkspaceDocs([]);
+      });
+
+    // Fetch Members strictly from api.projects.getById
+    api.projects.getById(selectedWorkspace.id)
+      .then(res => {
+        if (res.project?.members) {
+          const membersWithNames = res.project.members.map(m => ({
+            ...m,
+            name: m.full_name || m.name
+          }));
+          setWorkspaceMembers(membersWithNames);
+        } else {
+          setWorkspaceMembers([]);
+        }
+      })
+      .catch(err => {
+        console.error("Error fetching project members:", err);
+        setWorkspaceMembers([]);
+      });
+  }, [selectedWorkspace?.id]);
 
   const handleSetSprintDuration = (weeks) => {
     const startDate = new Date();
@@ -10063,7 +10248,9 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     
     // Ensure listTasks is synchronized to localStorage to trigger cross-tab updates
     try {
-      localStorage.setItem('pmpulse_listTasks', JSON.stringify([]));
+      if (selectedWorkspace?.id) {
+        localStorage.setItem(`pmpulse_listTasks_${selectedWorkspace.id}`, JSON.stringify([]));
+      }
       window.dispatchEvent(new CustomEvent('pmpulse_listTasks_updated', { detail: [] }));
     } catch (e) {
       console.error("Failed to sync cleared list tasks", e);
@@ -10279,14 +10466,17 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     return ['Unassigned', pmLabel, ...uniqueTeam];
   }, [user, currentUser, workspaceMembers]);
 
-  const handleSaveDraftTask = () => {
+  const handleSaveDraftTask = async () => {
     if (!draftTask.title.trim()) {
       setDraftTask({ columnId: null, boardType: null, title: '', assignee: 'Unassigned', dueDate: '' });
       return;
     }
 
+    const newKey = `VVM-${workspaceTasks.length + 1}`;
+    const newId = Date.now();
+
     const newTask = {
-      id: `KAN-${Date.now()}`, // Or your standard ID generator
+      id: `KAN-${newId}`, // Or your standard ID generator
       taskName: draftTask.title,
       description: draftTask.title,
       status: draftTask.columnId,
@@ -10296,11 +10486,40 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       type: 'Task' // Default
     };
 
+    const todayDate = new Date().toLocaleDateString('en-GB');
+    const newOverallEntry = {
+      'Issue / Task / Enhancement': draftTask.title,
+      'Status': draftTask.columnId,
+      'Responsible': draftTask.assignee,
+      'Completed': draftTask.dueDate,
+      'Priority': 'Medium',
+      'Added ': todayDate,
+      'id': newId,
+      'key': newKey
+    };
+
+    if (selectedWorkspace) {
+      try {
+        const token = localStorage.getItem('pulsepm_token');
+        await fetch(`/api/workspaces/${selectedWorkspace.id}/tasks`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(newOverallEntry)
+        });
+      } catch (error) {
+        console.error('Failed to persist task to database:', error);
+      }
+    }
+
     if (draftTask.boardType === 'active') {
       setBoardTasks(prev => [...prev, newTask]);
     } else {
       setBoardBacklogTasks(prev => [...prev, newTask]);
     }
+    setWorkspaceTasks(prev => [newOverallEntry, ...prev]);
 
     // Reset Draft
     setDraftTask({ columnId: null, boardType: null, title: '', assignee: 'Unassigned', dueDate: '' });
@@ -10481,39 +10700,43 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
               <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
                 Spaces
               </span>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
-          <Layout className="w-6 h-6 text-yellow-500" />
-          {selectedWorkspace ? (selectedWorkspace.name || selectedWorkspace.title) : 'Select a Workspace'}
-          {selectedWorkspace && (
-            <div className="ml-4 flex items-center gap-2">
-              <button
-                onClick={() => setIsAddMembersModalOpen(true)}
-                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700"
-              >
-                <Users size={16} />
-                + Members
-              </button>
-              <button
-                onClick={() => setIsCheckMembersModalOpen(true)}
-                className="flex items-center gap-2 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700 shadow-sm"
-              >
-                <UserCheck size={16} />
-                Check members
-              </button>
-              {(user?.user_type === 'pm' || currentUser?.user_type === 'pm') && (
-                <button
-                  onClick={() => onNavigateTab && onNavigateTab('calendar_matrix', selectedWorkspace.id)}
-                  className="flex items-center gap-2 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700 shadow-sm"
-                  title="Open Calendar Matrix for this Project"
-                >
-                  <Grid2x2 size={16} className="text-yellow-500" />
-                  <span>Matrix</span>
-                  <ArrowRight size={14} className="text-slate-400" />
-                </button>
-              )}
-            </div>
-          )}
-        </h1>
+              <h1 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
+                <Layout className="w-6 h-6 text-yellow-500" />
+                {selectedWorkspace?.title || selectedWorkspace?.name || 'No Workspace Selected'}
+                {selectedWorkspace && (
+                  <div className="ml-4 flex items-center gap-2">
+                    <button
+                      onClick={openAddMemberModal}
+                      className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700"
+                    >
+                      <Users size={16} />
+                      + Members
+                    </button>
+                    <button
+                      onClick={openCheckMembersModal}
+                      className="flex items-center gap-2 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700 shadow-sm"
+                    >
+                      <UserCheck size={16} />
+                      Check members
+                    </button>
+                    {(user?.user_type === 'pm' || currentUser?.user_type === 'pm') && (
+                      <button
+                        onClick={() => {
+                          if (typeof setSelectedProject === 'function') setSelectedProject(selectedWorkspace);
+                          if (typeof setCurrentView === 'function') setCurrentView('matrix');
+                          if (typeof onNavigateTab === 'function' && selectedWorkspace?.id) onNavigateTab('calendar_matrix', selectedWorkspace.id);
+                        }}
+                        className="flex items-center gap-2 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700 shadow-sm"
+                        title="Open Calendar Matrix for this Project"
+                      >
+                        <Grid2x2 size={16} className="text-yellow-500" />
+                        <span>Matrix</span>
+                        <ArrowRight size={14} className="text-slate-400" />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </h1>
       </div>
 
       {selectedWorkspace && (
@@ -11481,13 +11704,13 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Suggested Colleagues</p>
                     
                     {/* Dynamic Filtering Logic */}
-                    {workspaceDirectory.filter(user => !workspaceMembers.some(member => member.email === user.email)).length === 0 ? (
+                    {workspaceDirectory.filter(user => !workspaceMembers.some(member => member.email === user.email || member.id === user.id)).length === 0 ? (
                       <div className="text-center py-8 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
                         <p className="text-sm font-medium text-slate-600 dark:text-slate-400">All directory members are already in this workspace.</p>
                       </div>
                     ) : (
                       workspaceDirectory
-                        .filter(user => !workspaceMembers.some(member => member.email === user.email))
+                        .filter(user => !workspaceMembers.some(member => member.email === user.email || member.id === user.id))
                         .map(user => (
                           <label key={user.id} className="flex items-center justify-between p-3 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors">
                             <div>
@@ -14722,7 +14945,7 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
 ## File: client/src/App.jsx <a id="file-client-src-app-jsx"></a>
 
 - **Path:** `client/src/App.jsx`
-- **Size:** 14.70 KB | **Lines:** 361 | **Language:** `jsx`
+- **Size:** 14.61 KB | **Lines:** 364 | **Language:** `jsx`
 
 ```jsx
 import React, { useState, useEffect, useRef } from 'react';
@@ -14756,15 +14979,18 @@ function MainApp() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   useEffect(() => {
+    if (user?.id) {
+      setSelectedWorkspace(null);
+      setActiveTab('dashboard');
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
     const fetchWorkspaces = async () => {
       try {
         const res = await api.projects.getAll();
         const projectList = res.projects || [];
         setWorkspaces(projectList);
-        setSelectedWorkspace(prev => {
-          if (prev) return prev;
-          return projectList.find(p => p.id === 5 || (p.title && p.title.toLowerCase().includes('vidyarthi'))) || projectList[0] || null;
-        });
       } catch (err) {
         console.error('Failed to load workspaces:', err);
       }

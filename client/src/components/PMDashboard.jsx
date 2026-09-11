@@ -635,15 +635,27 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     }
   }, [sprintBacklogTasks, selectedWorkspace?.id]);
 
-  // 1) State Wipe on Project Change
+  // 1) Wipe & Reload Context Loader on Project Change
   useEffect(() => {
-    if (!selectedWorkspace?.id) return;
-    setWorkspaceTasks([]);
-    setListTasks([]);
-    setBoardTasks([]);
-    setBoardBacklogTasks([]);
-    setWorkspaceDocs([]);
-    setWorkspaceMembers([]);
+    const wsId = selectedWorkspace?.id;
+    if (!wsId) {
+      // Only wipe completely if no project is selected
+      setWorkspaceTasks([]);
+      setListTasks([]);
+      setBoardTasks([]);
+      setBoardBacklogTasks([]);
+      setWorkspaceDocs([]);
+      setWorkspaceMembers([]);
+      return;
+    }
+
+    // Actively RE-LOAD the specific project's local storage data!
+    setListTasks(getSafeStorage(`pmpulse_listTasks_${wsId}`, []));
+    setBoardTasks(getSafeStorage(`pmpulse_boardTasks_${wsId}`, []));
+    setBoardBacklogTasks(getSafeStorage(`pmpulse_boardBacklogTasks_${wsId}`, []));
+    setWorkspaceDocs(getSafeStorage(`pmpulse_workspaceDocs_${wsId}`, []));
+
+    // (workspaceTasks will be handled by the subsequent backend fetch useEffect)
   }, [selectedWorkspace?.id]);
 
   // 2) Strict API Overwrites for Tasks, Docs, and Members
@@ -658,17 +670,17 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
         'Authorization': `Bearer ${token}`
       }
     })
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then(data => {
-        if (data.tasks) {
+        if (Array.isArray(data.tasks)) {
           setWorkspaceTasks(data.tasks);
-        } else {
-          setWorkspaceTasks([]);
         }
       })
       .catch(err => {
         console.error("Error fetching tasks:", err);
-        setWorkspaceTasks([]);
       });
 
     // Fetch Documents with strict overwrite
@@ -1226,14 +1238,17 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     return ['Unassigned', pmLabel, ...uniqueTeam];
   }, [user, currentUser, workspaceMembers]);
 
-  const handleSaveDraftTask = () => {
+  const handleSaveDraftTask = async () => {
     if (!draftTask.title.trim()) {
       setDraftTask({ columnId: null, boardType: null, title: '', assignee: 'Unassigned', dueDate: '' });
       return;
     }
 
+    const newKey = `VVM-${workspaceTasks.length + 1}`;
+    const newId = Date.now();
+
     const newTask = {
-      id: `KAN-${Date.now()}`, // Or your standard ID generator
+      id: `KAN-${newId}`, // Or your standard ID generator
       taskName: draftTask.title,
       description: draftTask.title,
       status: draftTask.columnId,
@@ -1243,11 +1258,40 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       type: 'Task' // Default
     };
 
+    const todayDate = new Date().toLocaleDateString('en-GB');
+    const newOverallEntry = {
+      'Issue / Task / Enhancement': draftTask.title,
+      'Status': draftTask.columnId,
+      'Responsible': draftTask.assignee,
+      'Completed': draftTask.dueDate,
+      'Priority': 'Medium',
+      'Added ': todayDate,
+      'id': newId,
+      'key': newKey
+    };
+
+    if (selectedWorkspace) {
+      try {
+        const token = localStorage.getItem('pulsepm_token');
+        await fetch(`/api/workspaces/${selectedWorkspace.id}/tasks`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(newOverallEntry)
+        });
+      } catch (error) {
+        console.error('Failed to persist task to database:', error);
+      }
+    }
+
     if (draftTask.boardType === 'active') {
       setBoardTasks(prev => [...prev, newTask]);
     } else {
       setBoardBacklogTasks(prev => [...prev, newTask]);
     }
+    setWorkspaceTasks(prev => [newOverallEntry, ...prev]);
 
     // Reset Draft
     setDraftTask({ columnId: null, boardType: null, title: '', assignee: 'Unassigned', dueDate: '' });
