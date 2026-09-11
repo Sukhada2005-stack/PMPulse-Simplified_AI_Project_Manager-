@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Layout, Upload, Loader2, Inbox, Trash2, Plus, Users, X, FileText, UploadCloud, File, UserCheck, DownloadCloud, Home, Folder, Target, AlertTriangle, SearchCheck, Bug, Clock, LayoutList, ChevronDown, Calendar, User, CornerDownLeft, MoreHorizontal, Edit2, Grid2x2, ArrowRight } from 'lucide-react';
+import ActiveProjectContainers from './ActiveProjectContainers';
 const getSafeStorage = (key, fallback) => {
     if (typeof window === 'undefined') return fallback;
     try {
@@ -1029,6 +1030,13 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     };
   }, [overviewFilter, workspaceTasks, workspaceDocs, allWorkspacesTasks, allWorkspacesDocs, listTasks, boardTasks, boardBacklogTasks, user, workspaceDirectory, workspaceMembers]);
 
+  const displayedContainers = useMemo(() => {
+    if (overviewFilter === 'all') {
+      return workspaces || [];
+    }
+    return (workspaces || []).filter(p => String(p.id) === String(overviewFilter));
+  }, [overviewFilter, workspaces]);
+
   const dynamicAssignees = useMemo(() => {
     const pmName = user?.full_name || user?.name || currentUser?.fullName || currentUser?.name || 'Project Manager';
     const pmLabel = `${pmName} (PM)`;
@@ -1127,6 +1135,13 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
                 <ChevronDown size={16} className="absolute right-3 top-2.5 text-slate-400 pointer-events-none" />
               </div>
             </div>
+
+            {/* Active Project Containers (Dropdown-Scoped) */}
+            <ActiveProjectContainers
+              projects={displayedContainers}
+              allProjects={workspaces}
+              onRefresh={fetchAllWorkspacesData}
+            />
 
             {/* GLOBAL KPIs (Render if 'all' is selected) */}
             {overviewFilter === 'all' && (
