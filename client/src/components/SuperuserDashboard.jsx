@@ -103,103 +103,105 @@ export default function SuperuserDashboard() {
   });
 
   return (
-    <div className="space-y-6 animate-fade-up">
-      {/* Header & Create PM Action */}
-      <div className="jira-card p-5 flex flex-wrap items-center justify-between gap-4" style={{ background: 'var(--color-surface-solid)' }}>
-        <div className="flex items-center gap-4">
-          <div className="p-3 rounded-lg bg-[var(--accent-gold)] text-[#1a1814]">
-            <ShieldAlert className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--color-text-1)' }}>
-              Superuser Administration Hub
-            </h1>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-3)' }}>
-              Provision and manage Project Managers for PMPulse
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-center gap-4">
-          <div className="relative w-full sm:w-auto">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search Project Managers..."
-              className="jira-input pr-4 py-2 text-sm w-full sm:w-72"
-              style={{ paddingLeft: '2.5rem' }}
-            />
+    <>
+      <div className="space-y-6 animate-fade-up">
+        {/* Header & Create PM Action */}
+        <div className="jira-card p-5 flex flex-wrap items-center justify-between gap-4" style={{ background: 'var(--color-surface-solid)' }}>
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-lg bg-[var(--accent-gold)] text-[#1a1814]">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--color-text-1)' }}>
+                Superuser Administration Hub
+              </h1>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-3)' }}>
+                Provision and manage Project Managers for PMPulse
+              </p>
+            </div>
           </div>
 
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="btn-primary py-2 px-4 text-sm w-full sm:w-auto"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>Create Project Manager</span>
-          </button>
-        </div>
-      </div>
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="relative w-full sm:w-auto">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search Project Managers..."
+                className="jira-input pr-4 py-2 text-sm w-full sm:w-72"
+                style={{ paddingLeft: '2.5rem' }}
+              />
+            </div>
 
-      {/* Directory Grid */}
-      {loading ? (
-        <div className="py-20 text-center jira-card" style={{ background: 'var(--color-surface-solid)' }}>
-          <RefreshCw className="w-8 h-8 animate-spin text-[var(--accent-gold)] mx-auto mb-2" />
-          <p className="text-sm" style={{ color: 'var(--color-text-3)' }}>Loading Project Managers...</p>
-        </div>
-      ) : filteredPMs.length === 0 ? (
-        <div className="jira-card p-10 text-center rounded-xl" style={{ background: 'var(--color-surface-solid)', color: 'var(--color-text-3)' }}>
-          No Project Managers found.
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredPMs.map(pm => (
-            <div
-              key={pm.id}
-              className="jira-card p-5 flex flex-col justify-between group transition-all cursor-pointer hover:border-[var(--accent-gold)]"
-              style={{ background: 'var(--color-surface-solid)' }}
-              onClick={() => setSelectedPM(pm)}
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="btn-primary py-2 px-4 text-sm w-full sm:w-auto"
             >
-              <div>
-                <div className="flex items-start justify-between gap-3 mb-3.5">
-                  <div className="flex items-center gap-3">
-                    <div>
-                      <h3 className="font-bold text-sm" style={{ color: 'var(--color-text-1)' }}>
-                        {pm.full_name}
-                      </h3>
-                      <p className="text-xs font-medium text-[var(--accent-gold)] mt-0.5">{pm.role_title}</p>
+              <UserPlus className="w-4 h-4" />
+              <span>Create Project Manager</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Directory Grid */}
+        {loading ? (
+          <div className="py-20 text-center jira-card" style={{ background: 'var(--color-surface-solid)' }}>
+            <RefreshCw className="w-8 h-8 animate-spin text-[var(--accent-gold)] mx-auto mb-2" />
+            <p className="text-sm" style={{ color: 'var(--color-text-3)' }}>Loading Project Managers...</p>
+          </div>
+        ) : filteredPMs.length === 0 ? (
+          <div className="jira-card p-10 text-center rounded-xl" style={{ background: 'var(--color-surface-solid)', color: 'var(--color-text-3)' }}>
+            No Project Managers found.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filteredPMs.map(pm => (
+              <div
+                key={pm.id}
+                className="jira-card p-5 flex flex-col justify-between group transition-all cursor-pointer hover:border-[var(--accent-gold)]"
+                style={{ background: 'var(--color-surface-solid)' }}
+                onClick={() => setSelectedPM(pm)}
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-3 mb-3.5">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <h3 className="font-bold text-sm" style={{ color: 'var(--color-text-1)' }}>
+                          {pm.full_name}
+                        </h3>
+                        <p className="text-xs font-medium text-[var(--accent-gold)] mt-0.5">{pm.role_title}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="lozenge lozenge-success">
+                        Active
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemovePM(pm.id, pm.full_name);
+                        }}
+                        className="text-gray-500 hover:text-red-400 p-1 rounded transition-colors"
+                        title="Remove Project Manager"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="lozenge lozenge-success">
-                      Active
-                    </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRemovePM(pm.id, pm.full_name);
-                      }}
-                      className="text-gray-500 hover:text-red-400 p-1 rounded transition-colors"
-                      title="Remove Project Manager"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
 
-                <div className="space-y-1.5 text-xs p-3 rounded-lg border border-gray-100 mb-3" style={{ background: 'var(--table-th-bg)' }}>
-                  <div className="flex items-center gap-2 truncate" style={{ color: 'var(--color-text-2)' }}>
-                    <Mail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                    <span className="font-mono text-[11px] truncate">{pm.email}</span>
+                  <div className="space-y-1.5 text-xs p-3 rounded-lg border border-gray-100 mb-3" style={{ background: 'var(--table-th-bg)' }}>
+                    <div className="flex items-center gap-2 truncate" style={{ color: 'var(--color-text-2)' }}>
+                      <Mail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                      <span className="font-mono text-[11px] truncate">{pm.email}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Create PM Modal */}
       {showAddModal && (
@@ -351,6 +353,6 @@ export default function SuperuserDashboard() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

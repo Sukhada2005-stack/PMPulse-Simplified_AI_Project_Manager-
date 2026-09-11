@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import Sidebar from './components/Sidebar';
@@ -12,13 +12,54 @@ import SuperuserDashboard from './components/SuperuserDashboard';
 import LandingPage from './components/LandingPage';
 import SetPassword from './components/SetPassword';
 import SessionReauthModal from './components/SessionReauthModal';
-import { Sparkles, Loader2, Sun, Moon, LogOut } from 'lucide-react';
+import OtherWorkspaces from './components/OtherWorkspaces';
+import { Sparkles, Loader2, Sun, Moon, LogOut, Search } from 'lucide-react';
+import { api } from './services/api';
 
 function MainApp() {
   const { user, isPM, loading, logout } = useAuth();
   const [activeTab, setActiveTab]             = useState('dashboard');
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [selected360EmployeeId, setSelected360EmployeeId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef(null);
+  
+  const [workspaces, setWorkspaces] = useState([]);
+  const [selectedWorkspace, setSelectedWorkspace] = useState(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    const fetchWorkspaces = async () => {
+      try {
+        const res = await api.projects.getAll();
+        const projectList = res.projects || [];
+        setWorkspaces(projectList);
+        setSelectedWorkspace(prev => {
+          if (prev) return prev;
+          return projectList.find(p => p.id === 5 || (p.title && p.title.toLowerCase().includes('vidyarthi'))) || projectList[0] || null;
+        });
+      } catch (err) {
+        console.error('Failed to load workspaces:', err);
+      }
+    };
+    if (user) {
+      fetchWorkspaces();
+    }
+  }, [user]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   useEffect(() => {
     if (!loading && user) {
@@ -66,6 +107,7 @@ function MainApp() {
   /* ── Page Title lookup ───────────────────────────────────────── */
   const pageTitles = {
     dashboard:       'Project Dashboard',
+    other_workspaces:'Other Workspaces',
     calendar_matrix: 'Calendar Matrix Tracker',
     workforce:       'Workforce Directory',
     employee_360:    'Employee 360° Analytics',
@@ -88,8 +130,10 @@ function MainApp() {
         style={{ flex: 1, minWidth: 0, paddingTop: '72px' }}
       >
         {/* Top Bar */}
-        <header className="jira-topbar no-print" style={{ height: '72px', padding: '0 24px', alignItems: 'center' }}>
-          <div className="flex flex-col flex-1 min-w-0 justify-center h-full pt-1">
+        <header className="jira-topbar no-print flex items-center justify-between relative" style={{ height: '72px', padding: '0 24px' }}>
+          
+          {/* Left: Logo */}
+          <div className="flex flex-col justify-center h-full pt-1 z-10">
             <h1
               className="text-4xl font-black tracking-tight"
               style={{ color: 'var(--color-text-1)', lineHeight: '0.9' }}
@@ -111,7 +155,58 @@ function MainApp() {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+
+          {/* Center: Search Bar */}
+          {(activeTab === 'dashboard' || activeTab === 'employee_dash') ? (
+            <div className="flex items-center gap-2 flex-1 max-w-2xl mx-4 min-w-0 hidden md:flex relative">
+              <div className="relative w-full min-w-0">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Search projects or workspaces..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => setIsDropdownOpen(true)}
+                  onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
+                  className="bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-yellow-500 dark:focus:border-yellow-500 rounded-md py-1.5 pl-10 pr-12 text-sm w-full min-w-0 transition-all text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  <kbd className="hidden sm:inline-block border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-[10px] font-mono text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-900 shadow-sm leading-none">
+                    Ctrl K
+                  </kbd>
+                </div>
+              </div>
+              <button className="px-4 py-1.5 text-sm font-medium rounded-md bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 transition-colors whitespace-nowrap flex-shrink-0">
+                Search Workspace
+              </button>
+
+              {isDropdownOpen && workspaces.length > 0 && (
+                <ul className="absolute top-full mt-2 w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl z-50 overflow-hidden left-0">
+                  {workspaces.map(workspace => (
+                    <li
+                      key={workspace.id}
+                      onMouseDown={(e) => {
+                        e.preventDefault(); // Prevent input blur
+                        setSelectedWorkspace(workspace);
+                        setSearchQuery(workspace.name || workspace.title);
+                        setIsDropdownOpen(false);
+                        if (isPM) setActiveTab('dashboard');
+                      }}
+                      className="p-3 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer text-sm text-slate-700 dark:text-slate-300"
+                    >
+                      {workspace.name || workspace.title}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : (
+            <div className="flex-1 min-w-0 max-w-2xl mx-4"></div>
+          )}
+
+          {/* Right: Actions */}
+          <div className="flex items-center gap-4 flex-shrink-0 z-10">
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
@@ -155,6 +250,13 @@ function MainApp() {
                 <PMDashboard
                   onNavigateTab={handleNavigateTab}
                   onSelectEmployee360={handleSelectEmployee360}
+                  selectedWorkspace={selectedWorkspace}
+                />
+              )}
+
+              {activeTab === 'other_workspaces' && (
+                <OtherWorkspaces
+                  onNavigateTab={handleNavigateTab}
                 />
               )}
 
@@ -208,7 +310,7 @@ function MainApp() {
           {user?.user_type === 'superuser' && <SuperuserDashboard />}
 
           {/* Employee View */}
-          {!isPM && user?.user_type !== 'superuser' && <EmployeeDashboard />}
+          {!isPM && user?.user_type !== 'superuser' && <EmployeeDashboard selectedWorkspace={selectedWorkspace} />}
         </main>
 
         {/* Footer */}

@@ -16,6 +16,8 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
-    "pulsepm-desktop": "file:.."
+    "multer": "^2.3.0",
+    "pulsepm-desktop": "file:..",
+    "xlsx": "^0.18.5"
   }
 }

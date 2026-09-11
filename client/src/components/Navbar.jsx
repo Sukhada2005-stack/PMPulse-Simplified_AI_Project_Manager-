@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard,
@@ -11,12 +11,30 @@ import {
   Layers,
   ShieldCheck,
   User,
-  LogOut
+  LogOut,
+  Search
 } from 'lucide-react';
 
-export default function Navbar({ activeTab, onSelectTab }) {
+export default function Navbar({ activeTab, onSelectTab, workspaces, setSelectedWorkspace }) {
   const { user, isPM, allUsers, switchUser, logout } = useAuth();
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const searchInputRef = useRef(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const pmTabs = [
     { id: 'dashboard', label: 'Project Dashboard', icon: LayoutDashboard },
@@ -35,10 +53,11 @@ export default function Navbar({ activeTab, onSelectTab }) {
   return (
     <header className="sticky top-0 z-40 glass-panel border-b border-white/10 backdrop-blur-xl no-print">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 gap-4">
+        <div className="flex items-center h-16 w-full">
           
-          {/* Brand Logo & Tagline */}
-          <div className="flex items-center gap-3">
+          {/* Left: Brand Logo & Tagline */}
+          <div className="flex-1 flex items-center justify-start">
+            <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-emerald-400 p-0.5 shadow-lg shadow-indigo-600/30 flex items-center justify-center">
               <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
                 <span className="text-lg font-black bg-gradient-to-r from-indigo-400 to-emerald-400 bg-clip-text text-transparent">
@@ -55,10 +74,55 @@ export default function Navbar({ activeTab, onSelectTab }) {
               </div>
               <span className="text-[10px] text-slate-400 hidden sm:block">Zero-Agile Overhead Platform</span>
             </div>
+            </div>
           </div>
 
-          {/* Navigation Tabs */}
-          <nav className="hidden md:flex items-center gap-1.5 overflow-x-auto">
+          {/* Center: Search Bar */}
+          <div className="flex-1 flex justify-center px-4">
+            <div className="relative w-full max-w-lg">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search projects or workspaces..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setIsDropdownOpen(true)}
+                onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
+                className="bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-yellow-500 dark:focus:border-yellow-500 rounded-md py-1.5 pl-10 pr-12 text-sm w-full transition-all text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+              />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <kbd className="hidden sm:inline-block border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-[10px] font-mono text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-900 shadow-sm leading-none">
+                  Ctrl K
+                </kbd>
+              </div>
+
+              {isDropdownOpen && workspaces?.length > 0 && (
+                <ul className="absolute top-full mt-2 w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl z-50 overflow-hidden left-0">
+                  {workspaces.map(workspace => (
+                    <li
+                      key={workspace.id}
+                      onMouseDown={(e) => {
+                        e.preventDefault(); // Prevent input blur
+                        if (setSelectedWorkspace) setSelectedWorkspace(workspace);
+                        setSearchQuery(workspace.name || workspace.title);
+                        setIsDropdownOpen(false);
+                        if (onSelectTab) onSelectTab('dashboard');
+                      }}
+                      className="p-3 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer text-sm text-slate-700 dark:text-slate-300"
+                    >
+                      {workspace.name || workspace.title}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          {/* Right: Actions */}
+          <div className="flex-1 flex items-center justify-end gap-2 sm:gap-4">
+            {/* Navigation Tabs */}
+            <nav className="hidden xl:flex items-center gap-1.5 overflow-x-auto">
             {currentTabs.map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -79,10 +143,10 @@ export default function Navbar({ activeTab, onSelectTab }) {
                 </button>
               );
             })}
-          </nav>
+            </nav>
 
-          <div className="flex items-center gap-2">
-            {/* User Profile & 1-Click Role Switcher */}
+            <div className="flex items-center gap-2">
+              {/* User Profile & 1-Click Role Switcher */}
             <div className="relative">
             <button
               onClick={() => setShowUserDropdown(!showUserDropdown)}
@@ -175,6 +239,7 @@ export default function Navbar({ activeTab, onSelectTab }) {
               <LogOut className="w-4 h-4" />
               <span className="hidden sm:inline">Sign Out</span>
             </button>
+            </div>
           </div>
 
         </div>

@@ -12,18 +12,20 @@ import {
   User,
   LogOut,
   Zap,
+  FolderKanban,
 } from 'lucide-react';
 
 export default function Sidebar({ activeTab, onSelectTab }) {
   const { user, isPM } = useAuth();
-  const [expanded, setExpanded]     = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   const pmNavItems = [
-    { id: 'dashboard',       label: 'Project Dashboard',       icon: LayoutDashboard },
-    { id: 'workforce',       label: 'Workforce Directory',      icon: Users },
-    { id: 'employee_360',    label: 'Employee 360° Analytics',  icon: BarChart3 },
-    { id: 'calendar_matrix', label: 'Calendar Matrix Tracker',  icon: Calendar },
-    { id: 'ai_summary',      label: 'AI Summary Hub',           icon: Sparkles, highlight: true },
+    { id: 'dashboard',        label: 'Project Dashboard',       icon: LayoutDashboard },
+    { id: 'other_workspaces', label: 'Other Workspaces',        icon: FolderKanban },
+    { id: 'workforce',        label: 'Workforce Directory',     icon: Users },
+    { id: 'employee_360',     label: 'Employee 360° Analytics', icon: BarChart3 },
+    { id: 'calendar_matrix',  label: 'Calendar Matrix Tracker', icon: Calendar },
+    { id: 'ai_summary',       label: 'AI Summary Hub',          icon: Sparkles, highlight: true },
   ];
   const empNavItems = [
     { id: 'employee_dash', label: 'My Tasks & Daily Log', icon: Briefcase },
@@ -32,7 +34,7 @@ export default function Sidebar({ activeTab, onSelectTab }) {
 
   /* Widths */
   const W_CLOSED = 56;
-  const W_OPEN   = 220;
+  const W_OPEN = 220;
   const w = expanded ? W_OPEN : W_CLOSED;
 
   /* Shared transition */

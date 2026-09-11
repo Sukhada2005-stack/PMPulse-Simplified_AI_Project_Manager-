@@ -37,18 +37,28 @@ export default function SessionReauthModal() {
     setAuthError('');
     
     try {
-      const res = await api.auth.login(email, password);
-      // We just complete the login.
-      completeLogin(res.token, res.user);
-      
-      // Close modal and let the user continue seamlessly
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        // OVERRIDE generic errors with specific credential feedback
+        if (response.status === 401 || response.status === 400 || data.error === 'session_expired') {
+          setAuthError("Invalid email or password!");
+        } else {
+          setAuthError(data.message || data.error || "An error occurred during login. Please try again.");
+        }
+        return; // Stop execution
+      }
+
+      completeLogin(data.token, data.user);
       setIsOpen(false);
     } catch (err) {
-      if (err.message !== 'session_expired') {
-        setAuthError(err.message);
-      } else {
-        setAuthError('Authentication failed');
-      }
+      console.error("Login request failed:", err);
+      setAuthError("Invalid email or password!"); // Fallback for network-level rejections during auth
     } finally {
       setAuthenticating(false);
     }

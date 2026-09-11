@@ -1,12 +1,15 @@
 import express from 'express';
 import { login, getMe, listAllUsers, checkRole, changePassword, setPermanentPassword } from '../controllers/authController.js';
 import { createEmployee, getEmployees, getEmployeeAnalytics, deleteEmployee, sendWarning, getMyWarnings } from '../controllers/employeeController.js';
-import { createProject, getProjects, getProjectById, createTask, getMyTasks, addProjectMember, updateProject, deleteProject, removeProjectMember } from '../controllers/projectController.js';
+import { createProject, getProjects, getProjectById, createTask, getMyTasks, addProjectMember, updateProject, deleteProject, removeProjectMember, getProjectTasks, getAllProjectsTasks, createWorkspaceTask, importProjectTasks, deleteProjectTasks } from '../controllers/projectController.js';
 import { submitDailyLog, getProjectMatrix, getFleetMatrix } from '../controllers/dailyLogController.js';
 import { generateSummary } from '../controllers/aiController.js';
 import { getProjectMessages, sendProjectMessage } from '../controllers/chatController.js';
 import { createPM, getPMs, deletePM } from '../controllers/superuserController.js';
 import { authenticateToken, requirePM, requireSuperuser } from '../middleware/auth.js';
+import multer from 'multer';
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 const router = express.Router();
 
@@ -34,11 +37,17 @@ router.delete('/pms/:id', authenticateToken, requireSuperuser, deletePM);
 // --- Project Operations ---
 router.post('/projects', authenticateToken, requirePM, createProject);
 router.get('/projects', authenticateToken, getProjects);
+router.get('/projects/all/tasks', authenticateToken, requirePM, getAllProjectsTasks);
 router.get('/projects/:id', authenticateToken, getProjectById);
 router.put('/projects/:id', authenticateToken, requirePM, updateProject);
 router.delete('/projects/:id', authenticateToken, requirePM, deleteProject);
 
 // --- Task Operations & Employee Feed ---
+router.get('/workspaces/:id/tasks', authenticateToken, getProjectTasks);
+router.post('/workspaces/:id/tasks', authenticateToken, createWorkspaceTask);
+router.post('/workspaces/:id/tasks/import', authenticateToken, requirePM, upload.single('file'), importProjectTasks);
+router.delete('/workspaces/:id/tasks', authenticateToken, requirePM, deleteProjectTasks);
+
 router.post('/projects/:id/tasks', authenticateToken, requirePM, createTask);
 router.get('/tasks/my', authenticateToken, getMyTasks);
 router.post('/projects/:id/members', authenticateToken, requirePM, addProjectMember);

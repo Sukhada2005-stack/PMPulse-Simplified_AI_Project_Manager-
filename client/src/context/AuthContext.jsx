@@ -76,6 +76,7 @@ export function AuthProvider({ children }) {
     try {
       const res = await api.auth.login('alex.mercer@pulsepm.internal', 'password123');
       localStorage.setItem('pulsepm_token', res.token);
+      localStorage.setItem('pulsepm_user', JSON.stringify(res.user));
       setToken(res.token);
       setUser(res.user);
     } catch (err) {
@@ -88,6 +89,7 @@ export function AuthProvider({ children }) {
     try {
       const res = await api.auth.login(targetUserEmail, 'password123');
       localStorage.setItem('pulsepm_token', res.token);
+      localStorage.setItem('pulsepm_user', JSON.stringify(res.user));
       setToken(res.token);
       setUser(res.user);
     } catch (err) {
@@ -101,6 +103,7 @@ export function AuthProvider({ children }) {
     const res = await api.auth.login(email, password);
     if (!res.requires_password_change) {
       localStorage.setItem('pulsepm_token', res.token);
+      localStorage.setItem('pulsepm_user', JSON.stringify(res.user));
       setToken(res.token);
       setUser(res.user);
     }
@@ -109,12 +112,14 @@ export function AuthProvider({ children }) {
 
   const completeLogin = (tokenData, userData) => {
     localStorage.setItem('pulsepm_token', tokenData);
+    localStorage.setItem('pulsepm_user', JSON.stringify(userData));
     setToken(tokenData);
     setUser(userData);
   };
 
   const logout = () => {
     localStorage.removeItem('pulsepm_token');
+    localStorage.removeItem('pulsepm_user');
     setToken(null);
     setUser(null);
   };

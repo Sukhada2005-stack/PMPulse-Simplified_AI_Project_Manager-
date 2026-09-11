@@ -13,7 +13,9 @@ import {
   XCircle,
   Sparkles,
   Sun,
-  Moon
+  Moon,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 export default function LandingPage() {
@@ -23,6 +25,7 @@ export default function LandingPage() {
   const [error, setError] = useState('');
   
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [isFirstLogin, setIsFirstLogin] = useState(false);
@@ -43,13 +46,32 @@ export default function LandingPage() {
         const res = await api.auth.setPermanentPassword(email, password, newPassword);
         completeLogin(res.token, res.user);
       } else {
-        const res = await login(email, password);
-        if (res.requires_password_change) {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          // OVERRIDE generic errors with specific credential feedback
+          if (response.status === 401 || response.status === 400 || data.error === 'session_expired') {
+            setAuthError("Invalid email or password!");
+          } else {
+            setAuthError(data.message || data.error || "An error occurred during login. Please try again.");
+          }
+          return; // Stop execution
+        }
+
+        if (data.requires_password_change) {
           setIsFirstLogin(true);
+        } else {
+          completeLogin(data.token, data.user);
         }
       }
     } catch (err) {
-      setAuthError(err.message);
+      console.error("Login request failed:", err);
+      setAuthError("Invalid email or password!"); // Fallback for network-level rejections during auth
     } finally {
       setAuthenticating(false);
     }
@@ -228,14 +250,24 @@ export default function LandingPage() {
                 className="w-full px-4 py-3 rounded-xl focus:outline-none focus:border-[#eeb20d] focus:ring-1 focus:ring-[#eeb20d] transition-all bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
               />
               {!isFirstLogin ? (
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Password"
-                  className="w-full px-4 py-3 rounded-xl focus:outline-none focus:border-[#eeb20d] focus:ring-1 focus:ring-[#eeb20d] transition-all bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-                />
+                <div className="relative w-full">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Password"
+                    className="w-full px-4 py-3 pr-10 rounded-xl focus:outline-none focus:border-[#eeb20d] focus:ring-1 focus:ring-[#eeb20d] transition-all bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 focus:outline-none transition-colors flex items-center justify-center"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               ) : (
                 <input
                   type="password"

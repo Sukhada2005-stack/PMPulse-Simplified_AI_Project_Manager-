@@ -15,8 +15,79 @@ import {
   Search,
   X,
   Trash2,
-  UserMinus
+  UserMinus,
+  Edit
 } from 'lucide-react';
+
+const EditContributorModal = ({ data, onClose }) => {
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm"
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-6 relative">
+        <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-slate-800 mb-4">
+          <h3 className="font-bold text-lg text-slate-900 dark:text-white">
+            Edit Contributor Details
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 rounded transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form className="space-y-4">
+          <div>
+            <label className="block text-[11px] font-bold mb-1 uppercase tracking-wider text-slate-600 dark:text-slate-400">Name</label>
+            <input
+              type="text"
+              defaultValue={data?.full_name}
+              className="jira-input w-full"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold mb-1 uppercase tracking-wider text-slate-600 dark:text-slate-400">Role</label>
+            <input
+              type="text"
+              defaultValue={data?.role_title}
+              placeholder="e.g., Frontend Developer, Backend Developer"
+              className="jira-input w-full"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold mb-1 uppercase tracking-wider text-slate-600 dark:text-slate-400">Email</label>
+            <input
+              type="email"
+              defaultValue={data?.email}
+              className="jira-input w-full"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 mt-6">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="bg-yellow-500 hover:bg-yellow-600 text-slate-900 px-4 py-2 rounded-md text-sm font-bold transition-colors"
+            >
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
 
 export default function WorkforceDirectory({ onSelectEmployee360 }) {
   const [employees, setEmployees] = useState([]);
@@ -25,6 +96,10 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [removeTarget, setRemoveTarget] = useState(null); // { id, full_name }
   const [removing, setRemoving] = useState(false);
+
+  // Edit State
+  const [editingContributor, setEditingContributor] = useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   // New employee form
   const [fullName, setFullName] = useState('');
@@ -51,7 +126,7 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
 
   // Lock body scroll whenever any modal is open
   useEffect(() => {
-    const isAnyModalOpen = showAddModal || !!removeTarget;
+    const isAnyModalOpen = showAddModal || !!removeTarget || isEditModalOpen;
     if (isAnyModalOpen) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -61,7 +136,7 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [showAddModal, removeTarget]);
+  }, [showAddModal, removeTarget, isEditModalOpen]);
 
   const handleCreateEmployee = async (e) => {
     e.preventDefault();
@@ -226,7 +301,17 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
               </div>
 
               {/* Actions */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 w-full">
+                <button
+                  onClick={() => {
+                    setEditingContributor(emp);
+                    setIsEditModalOpen(true);
+                  }}
+                  title="Edit employee"
+                  className="p-2 border border-slate-300 dark:border-slate-700 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-colors"
+                >
+                  <Edit size={18} />
+                </button>
                 <button
                   onClick={() => onSelectEmployee360(emp.id)}
                   className="btn-secondary flex-1 justify-center"
@@ -417,6 +502,10 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
             </form>
           </div>
         </div>
+      )}
+      {/* Edit Contributor Modal Shell */}
+      {isEditModalOpen && (
+        <EditContributorModal data={editingContributor} onClose={() => setIsEditModalOpen(false)} />
       )}
     </div>
   );

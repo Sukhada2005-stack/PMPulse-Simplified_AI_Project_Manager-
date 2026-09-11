@@ -8,7 +8,6 @@ import {
   Layers,
   FolderGit2,
   RefreshCw,
-  Sparkles,
   ChevronDown,
   X,
   Filter,
@@ -23,191 +22,96 @@ import LogDetailModal from './LogDetailModal';
 import TaskDetailModal from './TaskDetailModal';
 import ProjectChatModal from './ProjectChatModal';
 
-/* ── Floating AI Summary Control Panel ──────────────────────────────── */
-function AISummaryPanel({ projects, onClose, onOpenAISummary }) {
-  const [dateRange, setDateRange]    = useState('last_7');
-  const [project, setProject]        = useState('all');
-  const [role, setRole]              = useState('all');
-  const [generating, setGenerating]  = useState(false);
-  const [summary, setSummary]        = useState(null);
-
-  const handleGenerate = async () => {
-    setGenerating(true);
-    setSummary(null);
-    try {
-      const payload = {
-        dimension: 'project_based',
-        project_ids: project !== 'all' ? [Number(project)] : [],
-        date_from: dateRange === 'last_7'
-          ? new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]
-          : dateRange === 'last_14'
-          ? new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0]
-          : '2026-08-01',
-        date_to: new Date().toISOString().split('T')[0],
-      };
-      const result = await api.ai.summarize(payload);
-      
-      // Extract string to prevent React "Objects are not valid as a React child" error
-      let summaryText = 'Summary generated successfully.';
-      if (result.summary) {
-        summaryText = typeof result.summary === 'string' 
-          ? result.summary 
-          : (result.summary.executive_summary || JSON.stringify(result.summary));
-      } else if (result.text) {
-        summaryText = result.text;
-      }
-      
-      setSummary(summaryText);
-    } catch (err) {
-      setSummary('⚠️ Could not generate summary. Please check backend connection.');
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  return (
-    <div className="ai-panel w-full animate-fade-up">
-      {/* Header */}
-      <div className="ai-panel-header flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Sparkles className="w-4 h-4 text-yellow-300" />
-            <span className="text-xs font-bold text-[var(--color-text-3)] uppercase tracking-wider">AI Summary Control</span>
-          </div>
-          <h3 className="text-[var(--color-text-1)] font-bold text-sm">Generate Executive Summary</h3>
-        </div>
-        {onClose && (
-          <button
-            onClick={onClose}
-            className="text-[var(--color-text-3)] hover:text-[var(--color-text-1)] transition-colors p-1 rounded"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        )}
-      </div>
-
-      {/* Filters */}
-      <div className="p-4 space-y-3 border-b border-gray-100">
-        {/* Date Range */}
-        <div>
-          <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-            Date Range
-          </label>
-          <div className="relative">
-            <select
-              className="jira-select"
-              value={dateRange}
-              onChange={e => setDateRange(e.target.value)}
-            >
-              <option value="last_7">Last 7 Days</option>
-              <option value="last_14">Last 14 Days</option>
-              <option value="this_month">This Month</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Project */}
-        <div>
-          <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-            Project Scope
-          </label>
-          <select
-            className="jira-select"
-            value={project}
-            onChange={e => setProject(e.target.value)}
-          >
-            <option value="all">🌐 All Projects (Fleet)</option>
-            {projects.map(p => (
-              <option key={p.id} value={p.id}>📁 {p.title}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Role Filter */}
-        <div>
-          <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-            Employee Role
-          </label>
-          <select
-            className="jira-select"
-            value={role}
-            onChange={e => setRole(e.target.value)}
-          >
-            <option value="all">All Roles</option>
-            <option value="engineer">Engineers</option>
-            <option value="designer">Designers</option>
-            <option value="manager">Managers</option>
-            <option value="analyst">Analysts</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Generate Button */}
-      <div className="p-4 space-y-3">
-        <button
-          onClick={handleGenerate}
-          disabled={generating}
-          className="btn-ai-glow"
-        >
-          {generating ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Generating...
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-4 h-4 text-yellow-300" />
-              ✨ Generate AI Summary
-            </>
-          )}
-        </button>
-
-        {summary && (
-          <div
-            className="text-[12px] text-gray-700 leading-relaxed p-3 rounded-lg animate-fade-up"
-            style={{ background: 'rgba(238,178,13,0.08)', border: '1px solid rgba(238,178,13,0.12)' }}
-          >
-            <div className="flex items-center gap-1.5 mb-2">
-              <Sparkles className="w-3 h-3 text-blue-500" />
-              <span className="font-bold text-blue-700 text-[11px] uppercase tracking-wide">AI Synthesis Result</span>
-            </div>
-            <p className="whitespace-pre-wrap text-gray-600 text-[11px]">{summary}</p>
-          </div>
-        )}
-
-        <button
-          onClick={onOpenAISummary}
-          className="btn-secondary w-full justify-center text-xs"
-        >
-          Open Full AI Hub →
-        </button>
-      </div>
-    </div>
-  );
-}
-
 /* ── Main CalendarMatrix Component ──────────────────────────────────── */
 export default function CalendarMatrix({ selectedProjectId, onSelectProject, onOpenAISummary }) {
-  const [projects, setProjects]           = useState([]);
+  const [teamMembers, setTeamMembers] = useState(() => {
+    try { return JSON.parse(window.localStorage.getItem('pmpulse_workspaceMembers')) || []; }
+    catch { return []; }
+  });
+  const [matrixTasks, setMatrixTasks] = useState(() => {
+    try { return JSON.parse(window.localStorage.getItem('pmpulse_listTasks')) || []; }
+    catch { return []; }
+  });
+
+  const [projects, setProjects] = useState([]);
   const [currentProjectId, setCurrentProjectId] = useState(selectedProjectId || 'fleet');
-  const [matrixData, setMatrixData]       = useState(null);
-  const [loading, setLoading]             = useState(true);
-  const [selectedCell, setSelectedCell]   = useState(null);  
-  const [showChatModal, setShowChatModal]           = useState(false);
+  const [matrixData, setMatrixData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedCell, setSelectedCell] = useState(null);
+  const [showChatModal, setShowChatModal] = useState(false);
+
+  const [selectedCellInfo, setSelectedCellInfo] = useState(null);
+
+  const [employeeLogs] = useState(() => {
+    try { return JSON.parse(window.localStorage.getItem('pmpulse_employeeLogs')) || []; }
+    catch { return []; }
+  });
+
+  const [sprintConfig] = useState(() => {
+    try { return JSON.parse(window.localStorage.getItem('pmpulse_sprintConfig')) || null; }
+    catch { return null; }
+  });
   const [selectedTaskModal, setSelectedTaskModal] = useState(null);
-  const [showAIPanel, setShowAIPanel]     = useState(true);
 
   // Add Member modal state
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
-  const [allEmployees, setAllEmployees]             = useState([]);
-  const [loadingMembers, setLoadingMembers]         = useState(false);
-  const [memberSearch, setMemberSearch]             = useState('');
-  const [addingMember, setAddingMember]             = useState(null); // id being added
-  const [addMemberMsg, setAddMemberMsg]             = useState(null); // { type: 'success'|'error', text }
+  const [allEmployees, setAllEmployees] = useState([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [addingMember, setAddingMember] = useState(null); // id being added
+  const [addMemberMsg, setAddMemberMsg] = useState(null); // { type: 'success'|'error', text }
 
   // Date filters
   const [dateFrom, setDateFrom] = useState('2026-08-27');
-  const [dateTo, setDateTo]     = useState('2026-09-06');
+  const [dateTo, setDateTo] = useState('2026-09-06');
+
+  // Stores the computed Active Sprint bounds so the 'Full Sprint' button
+  // can reference them dynamically instead of using hardcoded strings.
+  const [sprintDateFrom, setSprintDateFrom] = useState('2026-08-27');
+  const [sprintDateTo, setSprintDateTo] = useState('2026-09-06');
+
+  // Auto-set date range to the Active Sprint when a project is selected.
+  // Derives sprint bounds from task date ranges (in_progress tasks take priority),
+  // falling back to all tasks, then to the macro project deadline.
+  useEffect(() => {
+    if (!matrixData) return;
+
+    const rows = matrixData.rows || [];
+
+    // Collect task dates — prefer in_progress tasks to represent the active sprint
+    const activeTasks = rows
+      .map(r => r.task)
+      .filter(t => t && t.status === 'in_progress' && t.start_date && t.end_date);
+
+    const candidateTasks = activeTasks.length > 0
+      ? activeTasks
+      : rows.map(r => r.task).filter(t => t && t.start_date && t.end_date);
+
+    if (candidateTasks.length > 0) {
+      const initialStart = candidateTasks
+        .map(t => t.start_date)
+        .sort()[0];                                        // earliest task start
+      const initialEnd = candidateTasks
+        .map(t => t.end_date)
+        .sort()
+        .reverse()[0];                                     // latest task end
+
+      setDateFrom(initialStart);
+      setDateTo(initialEnd);
+      setSprintDateFrom(initialStart); // keep sprint bounds in sync
+      setSprintDateTo(initialEnd);
+    } else {
+      // Last resort: fall back to the macro project deadline dates
+      const initialStart = matrixData?.project?.start_date || '';
+      const initialEnd = matrixData?.project?.end_date || '';
+      if (initialStart && initialEnd) {
+        setDateFrom(initialStart);
+        setDateTo(initialEnd);
+        setSprintDateFrom(initialStart);
+        setSprintDateTo(initialEnd);
+      }
+    }
+  }, [matrixData]); // Re-runs only when a new project's matrix data arrives
 
   // Deadline modal state
   const [showDeadlineModal, setShowDeadlineModal] = useState(false);
@@ -254,7 +158,7 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
     api.projects.getAll().then(res => {
       setProjects(res.projects || []);
       if (selectedProjectId) setCurrentProjectId(selectedProjectId);
-    }).catch(() => {});
+    }).catch(() => { });
   }, [selectedProjectId]);
 
   const fetchMatrix = useCallback(async () => {
@@ -321,7 +225,7 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
       setAllEmployees(prev => prev.filter(e => e.id !== employeeId));
       // Refresh matrix and projects list to reflect new member immediately
       fetchMatrix();
-      api.projects.getAll().then(r => setProjects(r.projects || [])).catch(() => {});
+      api.projects.getAll().then(r => setProjects(r.projects || [])).catch(() => { });
     } catch (err) {
       setAddMemberMsg({ type: 'error', text: err.message });
     } finally {
@@ -331,25 +235,36 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
 
   /* Stats */
   let totalCells = 0, loggedCount = 0, blockerCount = 0, pendingCount = 0;
-  if (matrixData?.rows) {
-    matrixData.rows.forEach(row =>
-      row.days.forEach(day => {
-        if (day.status === 'logged')                            loggedCount++;
-        else if (day.status === 'no_work')                      blockerCount++;
-        else if (day.status === 'pending' || day.status === 'missed') pendingCount++;
-        if (day.status !== 'na') totalCells++;
-      })
-    );
+  if (matrixTasks) {
+    loggedCount = matrixTasks.filter(t => t.status === 'Done').length;
+    pendingCount = matrixTasks.filter(t => t.status !== 'Done').length;
+    totalCells = matrixTasks.length;
   }
   const health = totalCells > 0 ? Math.round((loggedCount / totalCells) * 100) : 0;
 
   const fmtDate = (str) => {
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const [, m, d] = str.split('-');
     return { month: months[+m - 1], day: +d };
   };
 
   const today = new Date().toISOString().split('T')[0];
+
+  const isTaskOnDate = (taskDateStr, columnDateObj) => {
+    if (!taskDateStr || !columnDateObj) return false;
+    const tDate = new Date(taskDateStr);
+    const cDate = new Date(columnDateObj);
+    return tDate.getFullYear() === cDate.getFullYear() && tDate.getMonth() === cDate.getMonth() && tDate.getDate() === cDate.getDate();
+  };
+
+  const isTaskActiveWindow = (task, columnDateObj, sprintStartDate) => {
+    if (!task.dueDate || !columnDateObj) return false;
+    const cDate = new Date(columnDateObj).setHours(0, 0, 0, 0);
+    const dueDate = new Date(task.dueDate).setHours(0, 0, 0, 0);
+    let startDateObj = sprintStartDate ? new Date(sprintStartDate).setHours(0, 0, 0, 0) : new Date('2026-09-07').setHours(0, 0, 0, 0);
+    if (task.startDate || task.addedOn) startDateObj = new Date(task.startDate || task.addedOn).setHours(0, 0, 0, 0);
+    return cDate >= startDateObj && cDate <= dueDate;
+  };
 
   return (
     <div className="flex gap-5 items-start animate-fade-up">
@@ -423,13 +338,6 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
-            <button
-              onClick={() => setShowAIPanel(v => !v)}
-              className="btn-primary"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
-              {showAIPanel ? 'Hide AI Panel' : 'AI Summary'}
-            </button>
           </div>
         </div>
 
@@ -477,22 +385,20 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
           {/* Quick windows */}
           <div className="flex items-center gap-1.5 ml-auto">
             <button
-              onClick={() => { setDateFrom('2026-08-27'); setDateTo('2026-09-06'); }}
-              className={`text-[11px] px-2.5 py-1 rounded font-semibold border transition-colors ${
-                dateFrom === '2026-08-27' && dateTo === '2026-09-06'
+              onClick={() => { setDateFrom(sprintDateFrom); setDateTo(sprintDateTo); }}
+              className={`text-[11px] px-2.5 py-1 rounded font-semibold border transition-colors ${dateFrom === sprintDateFrom && dateTo === sprintDateTo
                   ? 'bg-blue-50 text-blue-700 border-blue-300'
                   : 'text-gray-500 border-gray-200 hover:border-blue-300 hover:text-blue-600'
-              }`}
+                }`}
             >
               Full Sprint
             </button>
             <button
               onClick={() => { setDateFrom('2026-08-30'); setDateTo('2026-09-03'); }}
-              className={`text-[11px] px-2.5 py-1 rounded font-semibold border transition-colors ${
-                dateFrom === '2026-08-30' && dateTo === '2026-09-03'
+              className={`text-[11px] px-2.5 py-1 rounded font-semibold border transition-colors ${dateFrom === '2026-08-30' && dateTo === '2026-09-03'
                   ? 'bg-blue-50 text-blue-700 border-blue-300'
                   : 'text-gray-500 border-gray-200 hover:border-blue-300 hover:text-blue-600'
-              }`}
+                }`}
             >
               5-Day Window
             </button>
@@ -589,7 +495,7 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
               <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--color-primary)' }} />
               <p className="text-sm font-medium">Rendering Calendar Heatmap Matrix…</p>
             </div>
-          ) : !matrixData?.rows?.length ? (
+          ) : !matrixData?.dates?.length ? (
             <div className="py-16 text-center" style={{ color: 'var(--color-text-3)' }}>
               <FolderGit2 className="w-12 h-12 mx-auto mb-3 text-gray-300" />
               <p className="font-semibold" style={{ color: 'var(--color-text-2)' }}>No tasks in this scope</p>
@@ -663,98 +569,110 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
                 </thead>
 
                 <tbody>
-                  {matrixData.rows.map((row, idx) => (
-                    <tr key={`${row.employee.id}-${row.task.id}-${idx}`}>
-                      {/* Sticky Label Cell */}
-                      <td
-                        className="sticky-col"
-                        style={{ padding: '10px 14px', minWidth: '280px', width: '280px' }}
-                      >
-                        <div className="flex items-start gap-2.5">
-
-                          <div className="min-w-0 flex-1">
-                            <div
-                              className="text-xs font-bold truncate"
-                              style={{ color: 'var(--color-text-1)' }}
-                            >
-                              {row.employee.full_name}
-                            </div>
-
-                            {/* Clickable Task Div to inspect full task & specifications */}
-                            <div
-                              onClick={() => setSelectedTaskModal({ task: row.task, employee: row.employee, days: row.days })}
-                              className="group cursor-pointer mt-1 p-1.5 rounded-lg bg-white/5 hover:bg-yellow-500/10 border border-white/10 hover:border-yellow-500/30 transition-all duration-150"
-                              title="Click to view complete task specifications & allocation details"
-                            >
-                              {row.task.project_title && (
-                                <div className="mb-0.5">
-                                  <span className="lozenge lozenge-blue" style={{ fontSize: '9px', padding: '1px 5px' }}>
-                                    {row.task.project_title}
-                                  </span>
-                                </div>
-                              )}
+                  {teamMembers.length === 0 ? (
+                    <tr>
+                      <td colSpan={matrixData?.dates?.length + 1 || 8} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
+                        No members added to this workspace yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    teamMembers.map((member, idx) => (
+                      <tr key={`${member.id || member.email}-${idx}`}>
+                        {/* Sticky Label Cell */}
+                        <td
+                          className="sticky-col"
+                          style={{ padding: '10px 14px', minWidth: '280px', width: '280px' }}
+                        >
+                          <div className="flex items-start gap-2.5">
+                            <div className="min-w-0 flex-1">
                               <div
-                                className="text-[11px] font-medium text-white/60 group-hover:text-yellow-400 leading-snug transition-colors line-clamp-2"
+                                className="text-xs font-bold truncate"
+                                style={{ color: 'var(--color-text-1)' }}
                               >
-                                {row.task.title}
+                                {member.name || member.full_name || member.email}
                               </div>
                             </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Day Cells */}
-                      {row.days.map(dayStatus => {
-                        const s = dayStatus.status;
-                        return (
-                          <td
-                            key={dayStatus.date}
-                            style={{
-                              padding: '8px 5px',
-                              borderLeft: '1px solid var(--color-border-soft)',
-                              minWidth: '72px',
-                            }}
-                          >
-                            {s === 'logged' && (
-                              <button
-                                className="badge-logged"
-                                onClick={() => setSelectedCell({ employee: row.employee, task: row.task, dayStatus })}
-                                title="Click to view submitted daily log"
-                              >
-                                <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
-                                <span className="hidden sm:inline">Done</span>
-                              </button>
-                            )}
-                            {s === 'no_work' && (
-                              <button
-                                className="badge-blocker"
-                                onClick={() => setSelectedCell({ employee: row.employee, task: row.task, dayStatus })}
-                                title="Click to view blocker reason"
-                              >
-                                <AlertTriangle className="w-3 h-3 flex-shrink-0" />
-                                <span className="hidden sm:inline">Stalled</span>
-                              </button>
-                            )}
-                            {(s === 'pending' || s === 'missed') && (
-                              <button
-                                className="badge-pending cursor-pointer hover:border-gray-400 hover:bg-gray-100 transition-all transform hover:scale-105"
-                                onClick={() => setSelectedCell({ employee: row.employee, task: row.task, dayStatus })}
-                                title={`Click to view pending task details (${row.task.title})`}
-                              >
-                                <Clock className="w-3 h-3 flex-shrink-0 text-gray-500" />
-                                <span className="hidden sm:inline">
-                                  {s === 'missed' ? 'Missed' : 'Pending'}
-                                </span>
-                              </button>
-                            )}
-                            {s === 'na' && (
-                              <div className="badge-na">—</div>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
+                        {/* Day Cells */}
+                        {matrixData.dates.map(dateStr => {
+                          const date = dateStr;
+                          return (
+                            <td
+                              key={dateStr}
+                              style={{
+                                padding: '8px 5px',
+                                borderLeft: '1px solid var(--color-border-soft)',
+                                minWidth: '72px',
+                                verticalAlign: 'top'
+                              }}
+                            >
+                              {(() => {
+                                const daysTasks = matrixTasks.filter(task =>
+                                  task.assignee === (member.name || member.full_name || member.email) && isTaskActiveWindow(task, date, sprintConfig?.startDate)
+                                );
+
+                                if (daysTasks.length > 0) {
+                                  return (
+                                    <div className="flex flex-col gap-1.5 w-full px-2 py-1">
+                                      {daysTasks.map(t => {
+                                        const taskLog = employeeLogs.find(log => (log.taskId === t.id || log.taskKey === t.key) && isTaskOnDate(log.date, date));
+                                        const isPastDate = new Date(date).setHours(0, 0, 0, 0) < new Date().setHours(0, 0, 0, 0);
+
+                                        let status = 'pending';
+                                        let bgColor = 'bg-transparent border-slate-800 text-slate-600';
+
+                                        if (taskLog) {
+                                          if (taskLog.status?.toLowerCase() === 'stalled' || taskLog.status?.toLowerCase() === 'blocked') {
+                                            status = 'stalled';
+                                            bgColor = 'bg-red-900/30 border-red-800 text-red-400';
+                                          } else {
+                                            status = 'logged';
+                                            bgColor = 'bg-emerald-900/30 border-emerald-800 text-emerald-400';
+                                          }
+                                        } else if (isPastDate) {
+                                          status = 'missing';
+                                          bgColor = 'bg-transparent border-zinc-700 border-dashed text-zinc-500';
+                                        }
+
+                                        let StatusIcon = Clock;
+                                        let statusText = 'Pending';
+
+                                        if (status === 'logged') {
+                                          StatusIcon = CheckCircle2;
+                                          statusText = 'Done';
+                                        } else if (status === 'stalled') {
+                                          StatusIcon = AlertTriangle;
+                                          statusText = 'Stalled';
+                                        } else if (status === 'missing') {
+                                          StatusIcon = Clock;
+                                          statusText = 'Missed';
+                                        }
+
+                                        return (
+                                          <div
+                                            key={t.id || t.key}
+                                            onClick={() => setSelectedCellInfo({ task: t, log: taskLog, status, date })}
+                                            className={`flex items-center justify-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded-full border cursor-pointer hover:opacity-80 transition-opacity shadow-sm ${bgColor}`}
+                                            title={`${t.key} - Click to inspect`}
+                                          >
+                                            <StatusIcon size={12} className="shrink-0" />
+                                            <span className="tracking-wide">{statusText}</span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                }
+                                return <div className="text-center"><span className="text-slate-700">—</span></div>;
+                              })()}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -762,19 +680,6 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
         </div>
       </div>
 
-      {/* ── RIGHT: Floating AI Panel ──────────────────────── */}
-      {showAIPanel && (
-        <div
-          className="flex-shrink-0 animate-fade-up"
-          style={{ width: '280px', position: 'sticky', top: '68px' }}
-        >
-          <AISummaryPanel
-            projects={projects}
-            onClose={() => setShowAIPanel(false)}
-            onOpenAISummary={onOpenAISummary}
-          />
-        </div>
-      )}
 
       {/* ── Log Detail Modal ──────────────────────────────── */}
       {selectedCell && (
@@ -1005,6 +910,76 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onO
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Matrix Cell Inspection Modal */}
+      {selectedCellInfo && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg bg-[#0F172A] dark:bg-slate-900 rounded-lg shadow-2xl border border-slate-700/50 flex flex-col overflow-hidden">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700/50 bg-slate-800/50">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                {selectedCellInfo.status === 'logged' && <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>}
+                {selectedCellInfo.status === 'stalled' && <span className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]"></span>}
+                {selectedCellInfo.status === 'missing' && <span className="w-2.5 h-2.5 rounded-full bg-zinc-500 shadow-[0_0_8px_rgba(161,161,170,0.5)]"></span>}
+                {selectedCellInfo.status === 'pending' && <span className="w-2.5 h-2.5 rounded-full bg-slate-500"></span>}
+                Task Inspection
+              </h3>
+              <button onClick={() => setSelectedCellInfo(null)} className="text-slate-400 hover:text-white transition-colors"><X size={20} /></button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Base Allocation Info */}
+              <div className="bg-slate-800/30 border border-slate-700/50 p-4 rounded-lg">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Allocated Task</p>
+                <p className="text-sm font-medium text-white">{selectedCellInfo.task.key}: {selectedCellInfo.task.description || selectedCellInfo.task.task}</p>
+                <div className="flex gap-4 mt-3 text-xs text-slate-400">
+                  <span className="flex items-center gap-1">Assignee: <span className="text-slate-300 font-medium">{selectedCellInfo.task.assignee}</span></span>
+                  <span className="flex items-center gap-1">Date: <span className="text-slate-300 font-medium">{new Date(selectedCellInfo.date).toLocaleDateString('en-GB')}</span></span>
+                </div>
+              </div>
+
+              {/* Universal Daily Update Space */}
+              <div className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-lg shadow-inner">
+                <p className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">Daily Update</p>
+                {selectedCellInfo.log ? (
+                  <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">
+                    {selectedCellInfo.log.dailyUpdate || selectedCellInfo.log.update || selectedCellInfo.log.details || selectedCellInfo.log.description || "Task activity recorded by the contributor."}
+                  </p>
+                ) : (
+                  <p className="text-sm text-slate-400 italic">The employee has not logged in yet for today!</p>
+                )}
+              </div>
+
+              {/* Contextual Blocks */}
+              {selectedCellInfo.status === 'stalled' && (
+                <div className="bg-red-900/10 border border-red-900/30 p-4 rounded-lg">
+                  <p className="text-xs font-semibold text-red-500 uppercase tracking-wider mb-2">Reason for Inactivity / Blocker</p>
+                  <p className="text-sm text-red-100/90 leading-relaxed">
+                    {selectedCellInfo.log?.reason || selectedCellInfo.log?.blocker || 'Inactivity reported without specific details.'}
+                  </p>
+                </div>
+              )}
+
+              {selectedCellInfo.status === 'missing' && (
+                <div className="bg-zinc-900/40 border border-zinc-800 p-4 rounded-lg flex items-start gap-3">
+                  <AlertCircle size={20} className="text-zinc-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-300 mb-1">Missed Log</p>
+                    <p className="text-sm text-zinc-400">Contributor missed to provide today's log!</p>
+                  </div>
+                </div>
+              )}
+
+              {selectedCellInfo.status === 'pending' && (
+                <div className="bg-slate-800/30 border border-slate-700/50 p-4 rounded-lg">
+                  <p className="text-sm text-slate-400">This task is scheduled for this date but the window has not closed yet.</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

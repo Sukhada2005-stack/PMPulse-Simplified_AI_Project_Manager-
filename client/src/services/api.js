@@ -83,6 +83,7 @@ export const api = {
   },
   projects: {
     getAll: () => request('/projects'),
+    getAllTasks: () => request('/projects/all/tasks'),
     getById: (id) => request(`/projects/${id}`),
     create: (data) => request('/projects', {
       method: 'POST',

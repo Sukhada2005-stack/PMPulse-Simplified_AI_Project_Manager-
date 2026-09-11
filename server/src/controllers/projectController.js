@@ -1,4 +1,5 @@
 import db from '../db/database.js';
+import * as xlsx from 'xlsx';
 
 // Create project (PM only)
 export const createProject = (req, res) => {
@@ -349,6 +350,228 @@ export const removeProjectMember = (req, res) => {
         res.json({ message: 'Member removed from project successfully' });
     } catch (err) {
         console.error('removeProjectMember error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Get all tasks for a specific project
+export const getProjectTasks = (req, res) => {
+    try {
+        const projectId = parseInt(req.params.id, 10);
+        
+        // Verify project exists
+        const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId);
+        if (!project) {
+            return res.status(404).json({ error: 'Project not found' });
+        }
+        
+        const tasks = db.prepare(`
+            SELECT t.*, u.full_name as assignee
+            FROM tasks t
+            LEFT JOIN task_assignees ta ON t.id = ta.task_id
+            LEFT JOIN users u ON ta.user_id = u.id
+            WHERE t.project_id = ?
+        `).all(projectId);
+
+        // Alias keys to match what frontend map expects
+        const mappedTasks = tasks.map(t => ({
+            ...t,
+            'Issue / Task / Enhancement': t.title,
+            'Added ': t.description
+        }));
+
+        res.json({ tasks: mappedTasks });
+    } catch (err) {
+        console.error('getProjectTasks error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Get all tasks across all projects managed by current PM
+export const getAllProjectsTasks = (req, res) => {
+    try {
+        const pmId = req.user.id;
+        const tasks = db.prepare(`
+            SELECT t.*, u.full_name as assignee, p.title as project_title, p.status as project_status
+            FROM tasks t
+            JOIN projects p ON t.project_id = p.id
+            LEFT JOIN task_assignees ta ON t.id = ta.task_id
+            LEFT JOIN users u ON ta.user_id = u.id
+            WHERE p.manager_id = ? AND (p.status IS NULL OR p.status != 'archived')
+            ORDER BY t.created_at DESC
+        `).all(pmId);
+
+        // Deduplicate tasks that have multiple assignees
+        const taskMap = new Map();
+        for (const t of tasks) {
+            if (!taskMap.has(t.id)) {
+                taskMap.set(t.id, {
+                    ...t,
+                    assignees: t.assignee ? [t.assignee] : [],
+                    'Issue / Task / Enhancement': t.title,
+                    'Added ': t.description
+                });
+            } else {
+                const existing = taskMap.get(t.id);
+                if (t.assignee && !existing.assignees.includes(t.assignee)) {
+                    existing.assignees.push(t.assignee);
+                }
+            }
+        }
+
+        const mappedTasks = Array.from(taskMap.values()).map(t => ({
+            ...t,
+            assignee: t.assignees.join(', ') || t.assignee || 'Unassigned'
+        }));
+
+        res.json({ tasks: mappedTasks });
+    } catch (err) {
+        console.error('getAllProjectsTasks error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Create a workspace task
+export const createWorkspaceTask = (req, res) => {
+    try {
+        const projectId = parseInt(req.params.id, 10);
+        const { title, description, status, priority, assignee, dueDate } = req.body;
+
+        const taskTitle = title || req.body['Issue / Task / Enhancement'] || req.body.task || 'Untitled Task';
+        const taskAdded = req.body['Added '] || description || new Date().toLocaleDateString('en-GB');
+        const taskStatus = status || req.body['Status'] || 'in_progress';
+        const startDate = new Date().toISOString().split('T')[0];
+        const endDate = dueDate || req.body['Completed'] || new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0];
+
+        // Verify project exists
+        const project = db.prepare('SELECT id, manager_id FROM projects WHERE id = ?').get(projectId);
+        if (!project) {
+            return res.status(404).json({ error: 'Project not found' });
+        }
+
+        const managerId = project.manager_id || req.user.id;
+
+        const insertTask = db.prepare(`
+            INSERT INTO tasks (project_id, manager_id, title, description, start_date, end_date, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        const result = insertTask.run(projectId, managerId, taskTitle, taskAdded, startDate, endDate, taskStatus);
+        const taskId = result.lastInsertRowid;
+
+        const createdTask = db.prepare(`
+            SELECT t.*, u.full_name as assignee
+            FROM tasks t
+            LEFT JOIN task_assignees ta ON t.id = ta.task_id
+            LEFT JOIN users u ON ta.user_id = u.id
+            WHERE t.id = ?
+        `).get(taskId);
+
+        const mappedTask = {
+            ...createdTask,
+            'Issue / Task / Enhancement': createdTask.title,
+            'Added ': createdTask.description
+        };
+
+        res.status(201).json({ message: 'Task created successfully', task: mappedTask });
+    } catch (err) {
+        console.error('createWorkspaceTask error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Import tasks from XLSX
+export const importProjectTasks = (req, res) => {
+    try {
+        const projectId = parseInt(req.params.id, 10);
+        const file = req.file;
+
+        if (!file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        const project = db.prepare('SELECT id FROM projects WHERE id = ? AND manager_id = ?').get(projectId, req.user.id);
+        if (!project) {
+            return res.status(404).json({ error: 'Project not found' });
+        }
+
+        const workbook = xlsx.read(file.buffer, { type: 'buffer' });
+        const sheetName = 'ToDoTasks';
+        const sheet = workbook.Sheets[sheetName];
+        
+        if (!sheet) {
+            return res.status(400).json({ error: "Sheet 'ToDoTasks' not found in the uploaded file." });
+        }
+        
+        const rows = xlsx.utils.sheet_to_json(sheet);
+
+        const insertTask = db.prepare(`
+            INSERT INTO tasks (project_id, manager_id, title, description, start_date, end_date, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        // Transaction for bulk insert
+        const insertMany = db.transaction((tasksToInsert) => {
+            for (const task of tasksToInsert) {
+                const title = task['Issue / Task / Enhancement'] || 'Untitled Task';
+                const description = task['Added '] || ''; // Store 'Added ' in description to preserve it
+                const startDate = new Date().toISOString().split('T')[0];
+                const endDate = new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0];
+                const status = 'in_progress';
+                
+                insertTask.run(projectId, req.user.id, title, description, startDate, endDate, status);
+            }
+        });
+
+        insertMany(rows);
+
+        const tasks = db.prepare(`
+            SELECT t.*, u.full_name as assignee
+            FROM tasks t
+            LEFT JOIN task_assignees ta ON t.id = ta.task_id
+            LEFT JOIN users u ON ta.user_id = u.id
+            WHERE t.project_id = ?
+        `).all(projectId);
+
+        const mappedTasks = tasks.map(t => ({
+            ...t,
+            'Issue / Task / Enhancement': t.title,
+            'Added ': t.description
+        }));
+
+        res.json({ message: 'Tasks imported successfully', tasks: mappedTasks });
+    } catch (err) {
+        console.error('importProjectTasks error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Delete all imported tasks for a specific project
+export const deleteProjectTasks = (req, res) => {
+    try {
+        const projectId = parseInt(req.params.id, 10);
+        
+        // Verify project belongs to PM
+        const project = db.prepare('SELECT id FROM projects WHERE id = ? AND manager_id = ?').get(projectId, req.user.id);
+        if (!project) {
+            return res.status(404).json({ error: 'Project not found' });
+        }
+        
+        // Use a transaction to safely clean up all tasks and related entries
+        const deleteTasksTransaction = db.transaction(() => {
+            // Delete daily_logs associated with these tasks
+            db.prepare('DELETE FROM daily_logs WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(projectId);
+            // Delete task_assignees associated with these tasks
+            db.prepare('DELETE FROM task_assignees WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(projectId);
+            // Finally delete the tasks themselves
+            db.prepare('DELETE FROM tasks WHERE project_id = ?').run(projectId);
+        });
+
+        deleteTasksTransaction();
+
+        res.json({ message: 'All imported tasks have been removed successfully' });
+    } catch (err) {
+        console.error('deleteProjectTasks error:', err);
         res.status(500).json({ error: err.message });
     }
 };
