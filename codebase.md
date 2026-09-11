@@ -1,7 +1,7 @@
 # PulsePM — Complete Project Codebase
 
 > **Notice:** This document contains the full source code of all files across the PulsePM platform in a single consolidated reference file.
-> **Generated On:** 2026-09-11T12:10:44.837Z
+> **Generated On:** 2026-09-11T11:14:18.249Z
 > **Total Files:** 64
 
 ---
@@ -51,7 +51,7 @@
 - [client/src/components/LogDetailModal.jsx](#file-client-src-components-logdetailmodal-jsx) `(10.8 KB)`
 - [client/src/components/Navbar.jsx](#file-client-src-components-navbar-jsx) `(12.6 KB)`
 - [client/src/components/OtherWorkspaces.jsx](#file-client-src-components-otherworkspaces-jsx) `(12.5 KB)`
-- [client/src/components/PMDashboard.jsx](#file-client-src-components-pmdashboard-jsx) `(144.3 KB)`
+- [client/src/components/PMDashboard.jsx](#file-client-src-components-pmdashboard-jsx) `(143.3 KB)`
 - [client/src/components/ProjectChatModal.jsx](#file-client-src-components-projectchatmodal-jsx) `(28.4 KB)`
 - [client/src/components/ProjectTaskModal.jsx](#file-client-src-components-projecttaskmodal-jsx) `(21.8 KB)`
 - [client/src/components/SessionReauthModal.jsx](#file-client-src-components-sessionreauthmodal-jsx) `(4.5 KB)`
@@ -9223,7 +9223,7 @@ export default function OtherWorkspaces({ onNavigateTab }) {
 ## File: client/src/components/PMDashboard.jsx <a id="file-client-src-components-pmdashboard-jsx"></a>
 
 - **Path:** `client/src/components/PMDashboard.jsx`
-- **Size:** 144.30 KB | **Lines:** 2759 | **Language:** `jsx`
+- **Size:** 143.30 KB | **Lines:** 2727 | **Language:** `jsx`
 
 ```jsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
@@ -9898,17 +9898,17 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
         'Authorization': `Bearer ${token}`
       }
     })
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
+      .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data.tasks)) {
+        if (data.tasks) {
           setWorkspaceTasks(data.tasks);
+        } else {
+          setWorkspaceTasks([]);
         }
       })
       .catch(err => {
         console.error("Error fetching tasks:", err);
+        setWorkspaceTasks([]);
       });
 
     // Fetch Documents with strict overwrite
@@ -10466,17 +10466,14 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     return ['Unassigned', pmLabel, ...uniqueTeam];
   }, [user, currentUser, workspaceMembers]);
 
-  const handleSaveDraftTask = async () => {
+  const handleSaveDraftTask = () => {
     if (!draftTask.title.trim()) {
       setDraftTask({ columnId: null, boardType: null, title: '', assignee: 'Unassigned', dueDate: '' });
       return;
     }
 
-    const newKey = `VVM-${workspaceTasks.length + 1}`;
-    const newId = Date.now();
-
     const newTask = {
-      id: `KAN-${newId}`, // Or your standard ID generator
+      id: `KAN-${Date.now()}`, // Or your standard ID generator
       taskName: draftTask.title,
       description: draftTask.title,
       status: draftTask.columnId,
@@ -10486,40 +10483,11 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       type: 'Task' // Default
     };
 
-    const todayDate = new Date().toLocaleDateString('en-GB');
-    const newOverallEntry = {
-      'Issue / Task / Enhancement': draftTask.title,
-      'Status': draftTask.columnId,
-      'Responsible': draftTask.assignee,
-      'Completed': draftTask.dueDate,
-      'Priority': 'Medium',
-      'Added ': todayDate,
-      'id': newId,
-      'key': newKey
-    };
-
-    if (selectedWorkspace) {
-      try {
-        const token = localStorage.getItem('pulsepm_token');
-        await fetch(`/api/workspaces/${selectedWorkspace.id}/tasks`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(newOverallEntry)
-        });
-      } catch (error) {
-        console.error('Failed to persist task to database:', error);
-      }
-    }
-
     if (draftTask.boardType === 'active') {
       setBoardTasks(prev => [...prev, newTask]);
     } else {
       setBoardBacklogTasks(prev => [...prev, newTask]);
     }
-    setWorkspaceTasks(prev => [newOverallEntry, ...prev]);
 
     // Reset Draft
     setDraftTask({ columnId: null, boardType: null, title: '', assignee: 'Unassigned', dueDate: '' });

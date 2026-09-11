@@ -1298,7 +1298,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
   };
 
   return (
-    <div className="flex flex-1 min-h-[calc(100vh-5rem)] -m-6">
+    <div className="flex flex-1 min-h-[calc(100vh-5rem)] -m-6 min-w-0">
       {/* Inside your Sidebar container */}
       <div className="w-16 flex flex-col items-center py-4 border-r border-slate-200 dark:border-slate-800/60 gap-2 shrink-0">
         <button 
@@ -1312,7 +1312,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 p-6">
+      <div className="flex-1 min-w-0 p-6">
         {sidebarView === 'overview' && (
           <div className="overview-container space-y-8 p-2">
             
@@ -1467,7 +1467,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
         )}
 
         {sidebarView === 'workspace' && (
-          <div className="workspace-container">
+          <div className="workspace-container w-full min-w-0 max-w-full box-border">
             <div className="flex flex-col items-start gap-1 mb-8">
               <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
                 Spaces
@@ -1663,7 +1663,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
           {activeView === 'list' && (
             <>
               {/* Active Sprint Header (List View) */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between px-5 py-3 mb-6 bg-slate-800/40 border border-slate-700/50 rounded-lg shadow-sm">
+              <div className="w-full max-w-full box-border flex flex-col md:flex-row md:items-center justify-between px-5 py-3 mb-6 bg-slate-800/40 border border-slate-700/50 rounded-lg shadow-sm">
                 <div>
                   <h2 className="text-md font-semibold text-white">Active Sprint</h2>
                   <span className="text-xs text-slate-400">{sprintConfig ? `${sprintConfig.start} — ${sprintConfig.end}` : '07 Sept 2026 — 14 Sept 2026'}</span>
@@ -1908,7 +1908,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
           {activeView === 'board' && (
             <>
               {/* Active Sprint Header */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between px-5 py-3 mb-6 bg-slate-800/40 border border-slate-700/50 rounded-lg shadow-sm">
+              <div className="w-full max-w-full box-border flex flex-col md:flex-row md:items-center justify-between px-5 py-3 mb-6 bg-slate-800/40 border border-slate-700/50 rounded-lg shadow-sm">
                 <div>
                   <h2 className="text-md font-semibold text-white">Active Sprint</h2>
                   <span className="text-xs text-slate-400">{sprintConfig ? `${sprintConfig.start} — ${sprintConfig.end}` : '07 Sept 2026 — 14 Sept 2026'}</span>
