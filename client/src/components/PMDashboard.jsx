@@ -14,7 +14,7 @@ const getSafeStorage = (key, fallback) => {
     }
 };
 
-export default function PMDashboard({ onNavigateTab, onSelectEmployee360, selectedWorkspace, initialSidebarView }) {
+export default function PMDashboard({ onNavigateTab, onSelectEmployee360, selectedWorkspace, initialSidebarView, setSelectedProject, setCurrentView }) {
   const { user } = useAuth();
   const [currentUser, setCurrentUser] = useState(() => {
     try {
@@ -499,15 +499,22 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
           api.projects.getById(selectedWorkspace.id),
           api.employees.getAll()
         ]);
-        if (projRes.project?.members) {
+        if (projRes?.project?.members) {
           setWorkspaceMembers(projRes.project.members.map(m => ({ ...m, name: m.full_name || m.name })));
+        } else if (selectedWorkspace.members) {
+          setWorkspaceMembers(selectedWorkspace.members.map(m => ({ ...m, name: m.full_name || m.name })));
         }
-        if (empRes.employees) {
+        if (empRes?.employees) {
           setWorkspaceDirectory(empRes.employees);
         }
       } catch (err) {
         console.error("Failed to refresh members or directory for modal:", err);
+        if (selectedWorkspace.members) {
+          setWorkspaceMembers(selectedWorkspace.members.map(m => ({ ...m, name: m.full_name || m.name })));
+        }
       }
+    } else {
+      setWorkspaceMembers([]);
     }
     setIsAddMembersModalOpen(true);
   };
@@ -516,12 +523,19 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     if (selectedWorkspace?.id) {
       try {
         const projRes = await api.projects.getById(selectedWorkspace.id);
-        if (projRes.project?.members) {
+        if (projRes?.project?.members) {
           setWorkspaceMembers(projRes.project.members.map(m => ({ ...m, name: m.full_name || m.name })));
+        } else if (selectedWorkspace.members) {
+          setWorkspaceMembers(selectedWorkspace.members.map(m => ({ ...m, name: m.full_name || m.name })));
         }
       } catch (err) {
         console.error("Failed to refresh project members for modal:", err);
+        if (selectedWorkspace.members) {
+          setWorkspaceMembers(selectedWorkspace.members.map(m => ({ ...m, name: m.full_name || m.name })));
+        }
       }
+    } else {
+      setWorkspaceMembers([]);
     }
     setIsCheckMembersModalOpen(true);
   };
@@ -1408,39 +1422,43 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
               <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
                 Spaces
               </span>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
-          <Layout className="w-6 h-6 text-yellow-500" />
-          {selectedWorkspace ? (selectedWorkspace.name || selectedWorkspace.title) : 'Select a Workspace'}
-          {selectedWorkspace && (
-            <div className="ml-4 flex items-center gap-2">
-              <button
-                onClick={openAddMemberModal}
-                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700"
-              >
-                <Users size={16} />
-                + Members
-              </button>
-              <button
-                onClick={openCheckMembersModal}
-                className="flex items-center gap-2 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700 shadow-sm"
-              >
-                <UserCheck size={16} />
-                Check members
-              </button>
-              {(user?.user_type === 'pm' || currentUser?.user_type === 'pm') && (
-                <button
-                  onClick={() => selectedWorkspace?.id && onNavigateTab && onNavigateTab('calendar_matrix', selectedWorkspace.id)}
-                  className="flex items-center gap-2 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700 shadow-sm"
-                  title="Open Calendar Matrix for this Project"
-                >
-                  <Grid2x2 size={16} className="text-yellow-500" />
-                  <span>Matrix</span>
-                  <ArrowRight size={14} className="text-slate-400" />
-                </button>
-              )}
-            </div>
-          )}
-        </h1>
+              <h1 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
+                <Layout className="w-6 h-6 text-yellow-500" />
+                {selectedWorkspace?.title || selectedWorkspace?.name || 'No Workspace Selected'}
+                {selectedWorkspace && (
+                  <div className="ml-4 flex items-center gap-2">
+                    <button
+                      onClick={openAddMemberModal}
+                      className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700"
+                    >
+                      <Users size={16} />
+                      + Members
+                    </button>
+                    <button
+                      onClick={openCheckMembersModal}
+                      className="flex items-center gap-2 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700 shadow-sm"
+                    >
+                      <UserCheck size={16} />
+                      Check members
+                    </button>
+                    {(user?.user_type === 'pm' || currentUser?.user_type === 'pm') && (
+                      <button
+                        onClick={() => {
+                          if (typeof setSelectedProject === 'function') setSelectedProject(selectedWorkspace);
+                          if (typeof setCurrentView === 'function') setCurrentView('matrix');
+                          if (typeof onNavigateTab === 'function' && selectedWorkspace?.id) onNavigateTab('calendar_matrix', selectedWorkspace.id);
+                        }}
+                        className="flex items-center gap-2 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700 shadow-sm"
+                        title="Open Calendar Matrix for this Project"
+                      >
+                        <Grid2x2 size={16} className="text-yellow-500" />
+                        <span>Matrix</span>
+                        <ArrowRight size={14} className="text-slate-400" />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </h1>
       </div>
 
       {selectedWorkspace && (
@@ -2408,13 +2426,13 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Suggested Colleagues</p>
                     
                     {/* Dynamic Filtering Logic */}
-                    {workspaceDirectory.filter(user => !workspaceMembers.some(member => member.email === user.email)).length === 0 ? (
+                    {workspaceDirectory.filter(user => !workspaceMembers.some(member => member.email === user.email || member.id === user.id)).length === 0 ? (
                       <div className="text-center py-8 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
                         <p className="text-sm font-medium text-slate-600 dark:text-slate-400">All directory members are already in this workspace.</p>
                       </div>
                     ) : (
                       workspaceDirectory
-                        .filter(user => !workspaceMembers.some(member => member.email === user.email))
+                        .filter(user => !workspaceMembers.some(member => member.email === user.email || member.id === user.id))
                         .map(user => (
                           <label key={user.id} className="flex items-center justify-between p-3 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors">
                             <div>
