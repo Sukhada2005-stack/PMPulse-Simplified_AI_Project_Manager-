@@ -102,11 +102,17 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     };
   }, [user?.id, overviewFilter]);
   const [activeView, setActiveView] = useState('overall');
-  const [workspaceTasks, setWorkspaceTasks] = useState(() => getSafeStorage('pmpulse_workspaceTasks', []));
+  const [workspaceTasks, setWorkspaceTasks] = useState(() => {
+    const wsId = selectedWorkspace?.id;
+    return wsId ? getSafeStorage(`pmpulse_workspaceTasks_${wsId}`, []) : [];
+  });
   const [isUploading, setIsUploading] = useState(false);
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
   const [newTaskName, setNewTaskName] = useState('');
-  const [listTasks, setListTasks] = useState(() => getSafeStorage('pmpulse_listTasks', []));
+  const [listTasks, setListTasks] = useState(() => {
+    const wsId = selectedWorkspace?.id;
+    return wsId ? getSafeStorage(`pmpulse_listTasks_${wsId}`, []) : [];
+  });
   const [isCreateListTaskOpen, setIsCreateListTaskOpen] = useState(false);
   const [listTaskForm, setListTaskForm] = useState({
     type: 'Task',
@@ -116,10 +122,13 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     dueDate: '',
     priority: 'Medium'
   });
-  const [boardTasks, setBoardTasks] = useState(() => getSafeStorage('pmpulse_boardTasks', []));
+  const [boardTasks, setBoardTasks] = useState(() => {
+    const wsId = selectedWorkspace?.id;
+    return wsId ? getSafeStorage(`pmpulse_boardTasks_${wsId}`, []) : [];
+  });
   const [boardBacklogTasks, setBoardBacklogTasks] = useState(() => {
-    try { return JSON.parse(window.localStorage.getItem('pmpulse_boardBacklogTasks')) || []; } 
-    catch { return []; }
+    const wsId = selectedWorkspace?.id;
+    return wsId ? getSafeStorage(`pmpulse_boardBacklogTasks_${wsId}`, []) : [];
   });
   const [draggedTaskId, setDraggedTaskId] = useState(null);
   const [dragInfo, setDragInfo] = useState(null);
@@ -129,16 +138,28 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
   const [pullOrigin, setPullOrigin] = useState(null);
   const [isCreationSourceModalOpen, setIsCreationSourceModalOpen] = useState(false);
   const [isPullConfirmModalOpen, setIsPullConfirmModalOpen] = useState(false);
-  const [sprintConfig, setSprintConfig] = useState(() => getSafeStorage('pmpulse_sprintConfig', null));
+  const [sprintConfig, setSprintConfig] = useState(() => {
+    const wsId = selectedWorkspace?.id;
+    return wsId ? getSafeStorage(`pmpulse_sprintConfig_${wsId}`, null) : null;
+  });
   const [isSprintSetupOpen, setIsSprintSetupOpen] = useState(false);
   const boardColumns = ['To Do', 'In Progress', 'In Review', 'Done', 'Remove'];
   const fileInputRef = useRef(null);
-  const [sprintBacklogTasks, setSprintBacklogTasks] = useState(() => getSafeStorage('pmpulse_sprintBacklogTasks', []));
+  const [sprintBacklogTasks, setSprintBacklogTasks] = useState(() => {
+    const wsId = selectedWorkspace?.id;
+    return wsId ? getSafeStorage(`pmpulse_sprintBacklogTasks_${wsId}`, []) : [];
+  });
   const [isAddMembersModalOpen, setIsAddMembersModalOpen] = useState(false);
   const [memberTab, setMemberTab] = useState('directory'); // 'directory' or 'email'
   const [emailInput, setEmailInput] = useState('');
-  const [workspaceMembers, setWorkspaceMembers] = useState(() => getSafeStorage('pmpulse_workspaceMembers', []));
-  const [workspaceDocs, setWorkspaceDocs] = useState(() => getSafeStorage('pmpulse_workspaceDocs', []));
+  const [workspaceMembers, setWorkspaceMembers] = useState(() => {
+    const wsId = selectedWorkspace?.id;
+    return wsId ? getSafeStorage(`pmpulse_workspaceMembers_${wsId}`, []) : [];
+  });
+  const [workspaceDocs, setWorkspaceDocs] = useState(() => {
+    const wsId = selectedWorkspace?.id;
+    return wsId ? getSafeStorage(`pmpulse_workspaceDocs_${wsId}`, []) : [];
+  });
   const [taskTypes, setTaskTypes] = useState(() => getSafeStorage('pmpulse_taskTypes', ['Task', 'Bug', 'Epic']));
   const [taskStatuses, setTaskStatuses] = useState(() => getSafeStorage('pmpulse_taskStatuses', ['To Do', 'In Progress', 'In Review', 'Done']));
 
@@ -221,38 +242,57 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
   // Push to localStorage to trigger cross-tab sync in other windows
   useEffect(() => {
     try {
-      localStorage.setItem('pmpulse_workspaceDocs', JSON.stringify(workspaceDocs));
+      if (selectedWorkspace?.id) {
+        localStorage.setItem(`pmpulse_workspaceDocs_${selectedWorkspace.id}`, JSON.stringify(workspaceDocs));
+      }
     } catch (e) {
       console.error("Failed to stringify docs", e);
     }
-  }, [workspaceDocs]);
+  }, [workspaceDocs, selectedWorkspace?.id]);
 
   // Cross-tab synchronization for live UI updates
   useEffect(() => {
     const handleStorageChange = (e) => {
-      if (e.key === 'pmpulse_workspaceTasks' && e.newValue) {
+      const wsId = selectedWorkspace?.id;
+      if (!wsId) return;
+      if (e.key === `pmpulse_workspaceTasks_${wsId}` && e.newValue) {
         try { setWorkspaceTasks(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
       }
       // Add Document Sync Listener
-      if (e.key === 'pmpulse_workspaceDocs' && e.newValue) {
+      if (e.key === `pmpulse_workspaceDocs_${wsId}` && e.newValue) {
         try { setWorkspaceDocs(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
       }
-      if (e.key === 'pmpulse_boardBacklogTasks' && e.newValue) {
+      if (e.key === `pmpulse_boardBacklogTasks_${wsId}` && e.newValue) {
         try { setBoardBacklogTasks(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
       }
-      if (e.key === 'pmpulse_listTasks' && e.newValue) {
+      if (e.key === `pmpulse_boardTasks_${wsId}` && e.newValue) {
+        try { setBoardTasks(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
+      }
+      if (e.key === `pmpulse_listTasks_${wsId}` && e.newValue) {
         try { setListTasks(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
       }
     };
 
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  }, [selectedWorkspace?.id]);
 
   useEffect(() => { try { window.localStorage.setItem('pmpulse_taskTypes', JSON.stringify(taskTypes)); } catch (e) {} }, [taskTypes]);
   useEffect(() => { try { window.localStorage.setItem('pmpulse_taskStatuses', JSON.stringify(taskStatuses)); } catch (e) {} }, [taskStatuses]);
-  useEffect(() => { try { window.localStorage.setItem('pmpulse_boardTasks', JSON.stringify(boardTasks)); } catch (e) {} }, [boardTasks]);
-  useEffect(() => { try { window.localStorage.setItem('pmpulse_boardBacklogTasks', JSON.stringify(boardBacklogTasks)); } catch (e) {} }, [boardBacklogTasks]);
+  useEffect(() => { 
+    try { 
+      if (selectedWorkspace?.id) {
+        window.localStorage.setItem(`pmpulse_boardTasks_${selectedWorkspace.id}`, JSON.stringify(boardTasks)); 
+      }
+    } catch (e) {} 
+  }, [boardTasks, selectedWorkspace?.id]);
+  useEffect(() => { 
+    try { 
+      if (selectedWorkspace?.id) {
+        window.localStorage.setItem(`pmpulse_boardBacklogTasks_${selectedWorkspace.id}`, JSON.stringify(boardBacklogTasks)); 
+      }
+    } catch (e) {} 
+  }, [boardBacklogTasks, selectedWorkspace?.id]);
 
   const handleInlineUpdate = (taskId, field, value) => {
     // Handle custom additions
@@ -370,7 +410,19 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
   const [isRemoveMemberMode, setIsRemoveMemberMode] = useState(false);
   const [membersToRemove, setMembersToRemove] = useState([]);
 
-  const handleRemoveSelectedMembers = () => {
+  const handleRemoveSelectedMembers = async () => {
+    if (selectedWorkspace?.id) {
+      for (const identifier of membersToRemove) {
+        const m = workspaceMembers.find(mem => (mem.id === identifier || mem.email === identifier));
+        if (m && m.id) {
+          try {
+            await api.projects.removeMember(selectedWorkspace.id, m.id);
+          } catch (e) {
+            console.error('Failed to remove member from backend:', e);
+          }
+        }
+      }
+    }
     setWorkspaceMembers(prev => prev.filter(m => !membersToRemove.includes(m.id || m.email)));
     setIsRemoveMemberMode(false);
     setMembersToRemove([]);
@@ -389,11 +441,15 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
   }, []);
 
   useEffect(() => {
-    try { window.localStorage.setItem('pmpulse_workspaceMembers', JSON.stringify(workspaceMembers)); } 
+    try { 
+      if (selectedWorkspace?.id) {
+        window.localStorage.setItem(`pmpulse_workspaceMembers_${selectedWorkspace.id}`, JSON.stringify(workspaceMembers)); 
+      }
+    } 
     catch (e) { console.error(e); }
-  }, [workspaceMembers]);
+  }, [workspaceMembers, selectedWorkspace?.id]);
 
-  const handleAddMembers = (e) => {
+  const handleAddMembers = async (e) => {
     e.preventDefault();
     let newMembers = [];
 
@@ -406,10 +462,19 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
         role: 'External' 
       }));
     } else if (memberTab === 'directory' && selectedDirectoryUsers.length > 0) {
+      if (selectedWorkspace?.id) {
+        for (const user of selectedDirectoryUsers) {
+          try {
+            await api.projects.addMember(selectedWorkspace.id, user.id);
+          } catch (err) {
+            console.error('Failed to add project member:', err);
+          }
+        }
+      }
       newMembers = selectedDirectoryUsers.map(user => ({ 
         ...user, 
         name: user.full_name || user.name,
-        id: Date.now() + Math.random(), 
+        id: user.id || (Date.now() + Math.random()), 
         role: 'Internal' 
       }));
     }
@@ -427,27 +492,65 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     setIsAddMembersModalOpen(false);
   };
 
+  const openAddMemberModal = async () => {
+    if (selectedWorkspace?.id) {
+      try {
+        const [projRes, empRes] = await Promise.all([
+          api.projects.getById(selectedWorkspace.id),
+          api.employees.getAll()
+        ]);
+        if (projRes.project?.members) {
+          setWorkspaceMembers(projRes.project.members.map(m => ({ ...m, name: m.full_name || m.name })));
+        }
+        if (empRes.employees) {
+          setWorkspaceDirectory(empRes.employees);
+        }
+      } catch (err) {
+        console.error("Failed to refresh members or directory for modal:", err);
+      }
+    }
+    setIsAddMembersModalOpen(true);
+  };
+
+  const openCheckMembersModal = async () => {
+    if (selectedWorkspace?.id) {
+      try {
+        const projRes = await api.projects.getById(selectedWorkspace.id);
+        if (projRes.project?.members) {
+          setWorkspaceMembers(projRes.project.members.map(m => ({ ...m, name: m.full_name || m.name })));
+        }
+      } catch (err) {
+        console.error("Failed to refresh project members for modal:", err);
+      }
+    }
+    setIsCheckMembersModalOpen(true);
+  };
+
   useEffect(() => { 
     try { 
-      localStorage.setItem('pmpulse_workspaceTasks', JSON.stringify(workspaceTasks)); 
+      if (selectedWorkspace?.id) {
+        localStorage.setItem(`pmpulse_workspaceTasks_${selectedWorkspace.id}`, JSON.stringify(workspaceTasks)); 
+      }
       window.dispatchEvent(new CustomEvent('pmpulse_workspaceTasks_updated', { detail: workspaceTasks }));
     } catch (e) {} 
-  }, [workspaceTasks]);
+  }, [workspaceTasks, selectedWorkspace?.id]);
 
   useEffect(() => {
     const handleSync = () => {
       try {
-        const stored = JSON.parse(window.localStorage.getItem('pmpulse_workspaceTasks'));
+        const wsId = selectedWorkspace?.id;
+        if (!wsId) return;
+        const stored = JSON.parse(window.localStorage.getItem(`pmpulse_workspaceTasks_${wsId}`));
         if (stored) setWorkspaceTasks(stored);
-        const storedList = JSON.parse(window.localStorage.getItem('pmpulse_listTasks'));
+        const storedList = JSON.parse(window.localStorage.getItem(`pmpulse_listTasks_${wsId}`));
         if (storedList) setListTasks(storedList);
-        const storedBoard = JSON.parse(window.localStorage.getItem('pmpulse_boardTasks'));
+        const storedBoard = JSON.parse(window.localStorage.getItem(`pmpulse_boardTasks_${wsId}`));
         if (storedBoard) setBoardTasks(storedBoard);
-        const storedBoardBacklog = JSON.parse(window.localStorage.getItem('pmpulse_boardBacklogTasks'));
+        const storedBoardBacklog = JSON.parse(window.localStorage.getItem(`pmpulse_boardBacklogTasks_${wsId}`));
         if (storedBoardBacklog) setBoardBacklogTasks(storedBoardBacklog);
-        const storedSprint = JSON.parse(window.localStorage.getItem('pmpulse_sprintConfig'));
+        const storedSprint = JSON.parse(window.localStorage.getItem(`pmpulse_sprintConfig_${wsId}`));
         if (storedSprint) setSprintConfig(storedSprint);
-        const storedBacklog = JSON.parse(window.localStorage.getItem('pmpulse_sprintBacklogTasks'));
+        const storedBacklog = JSON.parse(window.localStorage.getItem(`pmpulse_sprintBacklogTasks_${wsId}`));
         if (storedBacklog) setSprintBacklogTasks(storedBacklog);
       } catch (err) {}
     };
@@ -467,46 +570,69 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       window.removeEventListener('pmpulse_sprintConfig_updated', handleSync);
       window.removeEventListener('pmpulse_sprintBacklogTasks_updated', handleSync);
     };
-  }, []);
+  }, [selectedWorkspace?.id]);
 
   useEffect(() => { 
     try { 
-      localStorage.setItem('pmpulse_listTasks', JSON.stringify(listTasks)); 
+      if (selectedWorkspace?.id) {
+        localStorage.setItem(`pmpulse_listTasks_${selectedWorkspace.id}`, JSON.stringify(listTasks)); 
+      }
       window.dispatchEvent(new CustomEvent('pmpulse_listTasks_updated', { detail: listTasks }));
     } catch (e) {} 
-  }, [listTasks]);
+  }, [listTasks, selectedWorkspace?.id]);
   useEffect(() => { 
     try { 
-      localStorage.setItem('pmpulse_boardTasks', JSON.stringify(boardTasks)); 
+      if (selectedWorkspace?.id) {
+        localStorage.setItem(`pmpulse_boardTasks_${selectedWorkspace.id}`, JSON.stringify(boardTasks)); 
+      }
       window.dispatchEvent(new CustomEvent('pmpulse_boardTasks_updated', { detail: boardTasks }));
     } catch (e) {} 
-  }, [boardTasks]);
+  }, [boardTasks, selectedWorkspace?.id]);
   useEffect(() => {
     try {
-      localStorage.setItem('pmpulse_boardBacklogTasks', JSON.stringify(boardBacklogTasks));
+      if (selectedWorkspace?.id) {
+        localStorage.setItem(`pmpulse_boardBacklogTasks_${selectedWorkspace.id}`, JSON.stringify(boardBacklogTasks));
+      }
       window.dispatchEvent(new CustomEvent('pmpulse_boardBacklogTasks_updated', { detail: boardBacklogTasks }));
     } catch (e) {}
-  }, [boardBacklogTasks]);
+  }, [boardBacklogTasks, selectedWorkspace?.id]);
   useEffect(() => { 
     try { 
-      localStorage.setItem('pmpulse_sprintConfig', JSON.stringify(sprintConfig)); 
+      if (selectedWorkspace?.id) {
+        localStorage.setItem(`pmpulse_sprintConfig_${selectedWorkspace.id}`, JSON.stringify(sprintConfig)); 
+      }
       window.dispatchEvent(new CustomEvent('pmpulse_sprintConfig_updated', { detail: sprintConfig }));
     } catch (e) {} 
-  }, [sprintConfig]);
+  }, [sprintConfig, selectedWorkspace?.id]);
   useEffect(() => {
     try {
-      window.localStorage.setItem('pmpulse_sprintBacklogTasks', JSON.stringify(sprintBacklogTasks));
+      if (selectedWorkspace?.id) {
+        window.localStorage.setItem(`pmpulse_sprintBacklogTasks_${selectedWorkspace.id}`, JSON.stringify(sprintBacklogTasks));
+      }
       window.dispatchEvent(new CustomEvent('pmpulse_sprintBacklogTasks_updated', { detail: sprintBacklogTasks }));
     } catch (e) {
       console.error('Failed to save sprintBacklogTasks to storage', e);
     }
-  }, [sprintBacklogTasks]);
+  }, [sprintBacklogTasks, selectedWorkspace?.id]);
 
+  // 1) State Wipe on Project Change
   useEffect(() => {
-    // Guard clause: Do not wipe state on initial mount when workspace is loading
-    if (!selectedWorkspace) return; 
+    if (!selectedWorkspace?.id) return;
+    setWorkspaceTasks([]);
+    setListTasks([]);
+    setBoardTasks([]);
+    setBoardBacklogTasks([]);
+    setWorkspaceDocs([]);
+    setWorkspaceMembers([]);
+  }, [selectedWorkspace?.id]);
+
+  // 2) Strict API Overwrites for Tasks, Docs, and Members
+  useEffect(() => {
+    if (!selectedWorkspace?.id) return; 
 
     const token = localStorage.getItem('pulsepm_token');
+
+    // Fetch Tasks with strict overwrite
     fetch(`/api/workspaces/${selectedWorkspace.id}/tasks`, {
       headers: {
         'Authorization': `Bearer ${token}`
@@ -515,24 +641,51 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       .then(res => res.json())
       .then(data => {
         if (data.tasks) {
-          setWorkspaceTasks(prev => {
-            const localAddedTasks = prev.filter(task => task.id && !data.tasks.some(dt => dt.id === task.id));
-            return [...localAddedTasks, ...data.tasks];
-          });
+          setWorkspaceTasks(data.tasks);
+        } else {
+          setWorkspaceTasks([]);
         }
       })
-      .catch(err => console.error("Error fetching tasks:", err));
+      .catch(err => {
+        console.error("Error fetching tasks:", err);
+        setWorkspaceTasks([]);
+      });
 
-    // Fetch Documents
+    // Fetch Documents with strict overwrite
     fetch(`/api/workspaces/${selectedWorkspace.id}/docs`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(res => res.json())
       .then(data => {
-        if (data.docs) setWorkspaceDocs(data.docs);
+        if (data.docs) {
+          setWorkspaceDocs(data.docs);
+        } else {
+          setWorkspaceDocs([]);
+        }
       })
-      .catch(err => console.error("Error fetching docs:", err));
-  }, [selectedWorkspace]);
+      .catch(err => {
+        console.error("Error fetching docs:", err);
+        setWorkspaceDocs([]);
+      });
+
+    // Fetch Members strictly from api.projects.getById
+    api.projects.getById(selectedWorkspace.id)
+      .then(res => {
+        if (res.project?.members) {
+          const membersWithNames = res.project.members.map(m => ({
+            ...m,
+            name: m.full_name || m.name
+          }));
+          setWorkspaceMembers(membersWithNames);
+        } else {
+          setWorkspaceMembers([]);
+        }
+      })
+      .catch(err => {
+        console.error("Error fetching project members:", err);
+        setWorkspaceMembers([]);
+      });
+  }, [selectedWorkspace?.id]);
 
   const handleSetSprintDuration = (weeks) => {
     const startDate = new Date();
@@ -835,7 +988,9 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     
     // Ensure listTasks is synchronized to localStorage to trigger cross-tab updates
     try {
-      localStorage.setItem('pmpulse_listTasks', JSON.stringify([]));
+      if (selectedWorkspace?.id) {
+        localStorage.setItem(`pmpulse_listTasks_${selectedWorkspace.id}`, JSON.stringify([]));
+      }
       window.dispatchEvent(new CustomEvent('pmpulse_listTasks_updated', { detail: [] }));
     } catch (e) {
       console.error("Failed to sync cleared list tasks", e);
@@ -1259,14 +1414,14 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
           {selectedWorkspace && (
             <div className="ml-4 flex items-center gap-2">
               <button
-                onClick={() => setIsAddMembersModalOpen(true)}
+                onClick={openAddMemberModal}
                 className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700"
               >
                 <Users size={16} />
                 + Members
               </button>
               <button
-                onClick={() => setIsCheckMembersModalOpen(true)}
+                onClick={openCheckMembersModal}
                 className="flex items-center gap-2 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700 shadow-sm"
               >
                 <UserCheck size={16} />
@@ -1274,7 +1429,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
               </button>
               {(user?.user_type === 'pm' || currentUser?.user_type === 'pm') && (
                 <button
-                  onClick={() => onNavigateTab && onNavigateTab('calendar_matrix', selectedWorkspace.id)}
+                  onClick={() => selectedWorkspace?.id && onNavigateTab && onNavigateTab('calendar_matrix', selectedWorkspace.id)}
                   className="flex items-center gap-2 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700 shadow-sm"
                   title="Open Calendar Matrix for this Project"
                 >
