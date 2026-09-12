@@ -1,6 +1,17 @@
 import db from '../db/database.js';
 import * as xlsx from 'xlsx';
 
+const normalizeTaskTitle = (str) => {
+    if (!str) return '';
+    return String(str)
+        .trim()
+        .replace(/[\u2010-\u2015]/g, '-')
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/\s+/g, ' ')
+        .toLowerCase();
+};
+
 // Create project (PM only)
 export const createProject = (req, res) => {
     try {
@@ -175,23 +186,49 @@ export const createTask = (req, res) => {
 export const getMyTasks = (req, res) => {
     try {
         const userId = req.user.id;
+        const isPM = req.user.user_type === 'pm' || req.user.user_type === 'superuser';
         const todayStr = new Date().toISOString().split('T')[0];
 
-        const tasks = db.prepare(`
-            SELECT 
-                t.*,
-                p.title as project_title,
-                p.status as project_status,
-                (SELECT COUNT(*) FROM daily_logs dl WHERE dl.task_id = t.id AND dl.user_id = ?) as total_logged_by_me,
-                (SELECT dl.has_worked FROM daily_logs dl WHERE dl.task_id = t.id AND dl.user_id = ? AND dl.log_date = ?) as today_submission_status,
-                (SELECT dl.work_text FROM daily_logs dl WHERE dl.task_id = t.id AND dl.user_id = ? AND dl.log_date = ?) as today_work_text,
-                (SELECT dl.no_work_reason FROM daily_logs dl WHERE dl.task_id = t.id AND dl.user_id = ? AND dl.log_date = ?) as today_no_work_reason
-            FROM task_assignees ta
-            JOIN tasks t ON ta.task_id = t.id
-            JOIN projects p ON t.project_id = p.id
-            WHERE ta.user_id = ?
-            ORDER BY t.end_date ASC
-        `).all(userId, userId, todayStr, userId, todayStr, userId, todayStr, userId);
+        let query;
+        let params;
+
+        if (isPM) {
+            query = `
+                SELECT DISTINCT
+                    t.*,
+                    p.title as project_title,
+                    p.status as project_status,
+                    (SELECT COUNT(*) FROM daily_logs dl WHERE dl.task_id = t.id AND dl.user_id = ?) as total_logged_by_me,
+                    (SELECT dl.has_worked FROM daily_logs dl WHERE dl.task_id = t.id AND dl.user_id = ? AND dl.log_date = ?) as today_submission_status,
+                    (SELECT dl.work_text FROM daily_logs dl WHERE dl.task_id = t.id AND dl.user_id = ? AND dl.log_date = ?) as today_work_text,
+                    (SELECT dl.no_work_reason FROM daily_logs dl WHERE dl.task_id = t.id AND dl.user_id = ? AND dl.log_date = ?) as today_no_work_reason
+                FROM tasks t
+                JOIN projects p ON t.project_id = p.id
+                LEFT JOIN task_assignees ta ON ta.task_id = t.id
+                WHERE ta.user_id = ? OR p.manager_id = ?
+                ORDER BY t.end_date ASC
+            `;
+            params = [userId, userId, todayStr, userId, todayStr, userId, todayStr, userId, userId];
+        } else {
+            query = `
+                SELECT 
+                    t.*,
+                    p.title as project_title,
+                    p.status as project_status,
+                    (SELECT COUNT(*) FROM daily_logs dl WHERE dl.task_id = t.id AND dl.user_id = ?) as total_logged_by_me,
+                    (SELECT dl.has_worked FROM daily_logs dl WHERE dl.task_id = t.id AND dl.user_id = ? AND dl.log_date = ?) as today_submission_status,
+                    (SELECT dl.work_text FROM daily_logs dl WHERE dl.task_id = t.id AND dl.user_id = ? AND dl.log_date = ?) as today_work_text,
+                    (SELECT dl.no_work_reason FROM daily_logs dl WHERE dl.task_id = t.id AND dl.user_id = ? AND dl.log_date = ?) as today_no_work_reason
+                FROM task_assignees ta
+                JOIN tasks t ON ta.task_id = t.id
+                JOIN projects p ON t.project_id = p.id
+                WHERE ta.user_id = ?
+                ORDER BY t.end_date ASC
+            `;
+            params = [userId, userId, todayStr, userId, todayStr, userId, todayStr, userId];
+        }
+
+        const tasks = db.prepare(query).all(...params);
 
         // Compute active window & countdown tags
         const enhancedTasks = tasks.map(task => {
@@ -377,7 +414,13 @@ export const getProjectTasks = (req, res) => {
         const mappedTasks = tasks.map(t => ({
             ...t,
             'Issue / Task / Enhancement': t.title,
-            'Added ': t.description
+            'Added ': t.description,
+            'Status': t.status || 'To Do',
+            'status': t.status || 'To Do',
+            'Responsible': t.assignee || 'Unassigned',
+            'assignee': t.assignee || 'Unassigned',
+            'Completed': t.end_date || '—',
+            'dueDate': t.end_date || ''
         }));
 
         res.json({ tasks: mappedTasks });
@@ -459,6 +502,26 @@ export const createWorkspaceTask = (req, res) => {
         const result = insertTask.run(projectId, managerId, taskTitle, taskAdded, startDate, endDate, taskStatus);
         const taskId = result.lastInsertRowid;
 
+        // Automatically associate task with assignee if provided
+        const assigneeName = assignee || req.body['Responsible'];
+        if (assigneeName && assigneeName !== 'Unassigned' && assigneeName !== 'unassigned') {
+            const cleanName = String(assigneeName).replace(/\s*\(pm\)$/i, '').trim();
+            const user = db.prepare(`
+                SELECT id FROM users 
+                WHERE TRIM(full_name) = ? COLLATE NOCASE OR email = ? COLLATE NOCASE OR id = ?
+            `).get(cleanName, cleanName, cleanName);
+            
+            if (user) {
+                db.prepare(`
+                    INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)
+                `).run(taskId, user.id);
+                
+                db.prepare(`
+                    INSERT OR IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)
+                `).run(projectId, user.id);
+            }
+        }
+
         const createdTask = db.prepare(`
             SELECT t.*, u.full_name as assignee
             FROM tasks t
@@ -470,12 +533,245 @@ export const createWorkspaceTask = (req, res) => {
         const mappedTask = {
             ...createdTask,
             'Issue / Task / Enhancement': createdTask.title,
-            'Added ': createdTask.description
+            'Added ': createdTask.description,
+            'Status': createdTask.status || 'To Do',
+            'status': createdTask.status || 'To Do',
+            'Responsible': createdTask.assignee || 'Unassigned',
+            'assignee': createdTask.assignee || 'Unassigned',
+            'Completed': createdTask.end_date || '—',
+            'dueDate': createdTask.end_date || ''
         };
 
         res.status(201).json({ message: 'Task created successfully', task: mappedTask });
     } catch (err) {
         console.error('createWorkspaceTask error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Update a workspace task (assignee, status, dates, etc.)
+export const updateWorkspaceTask = (req, res) => {
+    try {
+        const projectId = parseInt(req.params.id, 10);
+        const taskIdParam = req.params.taskId;
+        const { assignee, status, dueDate, title, description, priority } = req.body;
+
+        // Find task by ID or by title (whitespace-tolerant)
+        let task = null;
+        if (taskIdParam && !isNaN(Number(taskIdParam))) {
+            task = db.prepare('SELECT * FROM tasks WHERE id = ? AND project_id = ?').get(taskIdParam, projectId);
+        }
+        if (!task) {
+            const rawTitle = (title || req.body['Issue / Task / Enhancement'] || req.body.task || '').trim();
+            if (rawTitle) {
+                task = db.prepare('SELECT * FROM tasks WHERE project_id = ? AND TRIM(title) = ?').get(projectId, rawTitle);
+                if (!task) {
+                    const normalized = normalizeTaskTitle(rawTitle);
+                    const allProjectTasks = db.prepare('SELECT * FROM tasks WHERE project_id = ?').all(projectId);
+                    task = allProjectTasks.find(pt => normalizeTaskTitle(pt.title) === normalized);
+                }
+            }
+        }
+
+        if (!task) {
+            // Create if it doesn't exist yet in the database
+            const taskTitle = title || req.body['Issue / Task / Enhancement'] || req.body.task || 'Untitled Task';
+            const taskDesc = description || req.body['Added '] || '';
+            const startDate = new Date().toISOString().split('T')[0];
+            const endDate = dueDate || req.body['Completed'] || new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0];
+            const taskStatus = status || req.body['Status'] || 'in_progress';
+
+            const project = db.prepare('SELECT id, manager_id FROM projects WHERE id = ?').get(projectId);
+            const managerId = project?.manager_id || req.user.id;
+
+            const insert = db.prepare(`
+                INSERT INTO tasks (project_id, manager_id, title, description, start_date, end_date, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            `).run(projectId, managerId, taskTitle, taskDesc, startDate, endDate, taskStatus);
+
+            task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(insert.lastInsertRowid);
+        } else {
+            // Update fields if provided
+            const updates = [];
+            const values = [];
+
+            if (title || req.body['Issue / Task / Enhancement']) {
+                updates.push('title = ?');
+                values.push(title || req.body['Issue / Task / Enhancement']);
+            }
+            if (description !== undefined || req.body['Added '] !== undefined) {
+                updates.push('description = ?');
+                values.push(description !== undefined ? description : req.body['Added ']);
+            }
+            if (status || req.body['Status']) {
+                updates.push('status = ?');
+                values.push(status || req.body['Status']);
+            }
+            if (dueDate || req.body['Completed']) {
+                updates.push('end_date = ?');
+                values.push(dueDate || req.body['Completed']);
+            }
+
+            // Synchronize start_date to allocation date / today if allocated and start_date is not valid
+            const targetAssignee = assignee !== undefined ? assignee : req.body['Responsible'];
+            if (targetAssignee && targetAssignee !== 'Unassigned' && targetAssignee !== 'unassigned') {
+                const todayStr = new Date().toISOString().split('T')[0];
+                let effectiveStart = task.start_date;
+                if (!effectiveStart || effectiveStart > todayStr) {
+                    effectiveStart = todayStr;
+                }
+                updates.push('start_date = ?');
+                values.push(effectiveStart);
+            }
+
+            if (updates.length > 0) {
+                values.push(task.id);
+                db.prepare(`UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+            }
+        }
+
+        // Handle assignee
+        const assigneeName = assignee !== undefined ? assignee : req.body['Responsible'];
+        if (assigneeName !== undefined) {
+            if (!assigneeName || assigneeName === 'Unassigned' || assigneeName === 'unassigned') {
+                db.prepare('DELETE FROM task_assignees WHERE task_id = ?').run(task.id);
+            } else {
+                const cleanName = String(assigneeName).replace(/\s*\(pm\)$/i, '').trim();
+                const user = db.prepare(`
+                    SELECT id FROM users 
+                    WHERE TRIM(full_name) = ? COLLATE NOCASE OR email = ? COLLATE NOCASE OR id = ?
+                `).get(cleanName, cleanName, cleanName);
+
+                if (user) {
+                    db.prepare('DELETE FROM task_assignees WHERE task_id = ?').run(task.id);
+                    db.prepare('INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)').run(task.id, user.id);
+                    db.prepare('INSERT OR IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)').run(projectId, user.id);
+                }
+            }
+        }
+
+        const updatedTask = db.prepare(`
+            SELECT t.*, u.full_name as assignee
+            FROM tasks t
+            LEFT JOIN task_assignees ta ON t.id = ta.task_id
+            LEFT JOIN users u ON ta.user_id = u.id
+            WHERE t.id = ?
+        `).get(task.id);
+
+        const mappedTask = {
+            ...updatedTask,
+            'Issue / Task / Enhancement': updatedTask.title,
+            'Added ': updatedTask.description,
+            'Status': updatedTask.status || 'To Do',
+            'status': updatedTask.status || 'To Do',
+            'Responsible': updatedTask.assignee || 'Unassigned',
+            'assignee': updatedTask.assignee || 'Unassigned',
+            'Completed': updatedTask.end_date || '—',
+            'dueDate': updatedTask.end_date || ''
+        };
+
+        res.json({ message: 'Task updated successfully', task: mappedTask });
+    } catch (err) {
+        console.error('updateWorkspaceTask error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Batch sync tasks from PMDashboard to SQLite
+export const syncWorkspaceTasks = (req, res) => {
+    try {
+        const projectId = parseInt(req.params.id, 10);
+        const { tasks } = req.body;
+
+        if (!Array.isArray(tasks)) {
+            return res.status(400).json({ error: 'Expected tasks array' });
+        }
+
+        const project = db.prepare('SELECT id, manager_id FROM projects WHERE id = ?').get(projectId);
+        if (!project) {
+            return res.status(404).json({ error: 'Project not found' });
+        }
+
+        const managerId = project.manager_id || req.user.id;
+
+        // Process each task in transaction
+        const syncTx = db.transaction((taskList) => {
+            for (const t of taskList) {
+                const title = t.title || t['Issue / Task / Enhancement'] || t.task || t.taskName || t.description;
+                if (!title) continue;
+
+                const assigneeName = t.assignee || t['Responsible'];
+                const dueDate = t.dueDate || t['Completed'] || new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0];
+                const status = t.status || t['Status'] || 'in_progress';
+                const description = t.description || t['Added '] || '';
+                const startDate = new Date().toISOString().split('T')[0];
+
+                let dbTask = null;
+                if (t.id && !isNaN(Number(t.id))) {
+                    dbTask = db.prepare('SELECT id, start_date, end_date FROM tasks WHERE id = ? AND project_id = ?').get(t.id, projectId);
+                }
+                if (!dbTask) {
+                    const rawTitle = title.trim();
+                    dbTask = db.prepare('SELECT id, start_date, end_date FROM tasks WHERE project_id = ? AND TRIM(title) = ?').get(projectId, rawTitle);
+                    if (!dbTask) {
+                        const normalized = normalizeTaskTitle(rawTitle);
+                        const allProjectTasks = db.prepare('SELECT id, title, start_date, end_date FROM tasks WHERE project_id = ?').all(projectId);
+                        dbTask = allProjectTasks.find(pt => normalizeTaskTitle(pt.title) === normalized);
+                    }
+                }
+
+                let taskId;
+                const todayStr = new Date().toISOString().split('T')[0];
+                const isAllocated = assigneeName && assigneeName !== 'Unassigned' && assigneeName !== 'unassigned';
+
+                if (dbTask) {
+                    taskId = dbTask.id;
+                    // When task is allocated to an assignee, ensure start_date begins from allocation date or sprint window
+                    let effectiveStart = dbTask.start_date;
+                    if (isAllocated && (!effectiveStart || effectiveStart > todayStr)) {
+                        effectiveStart = todayStr;
+                    } else if (!effectiveStart) {
+                        effectiveStart = todayStr;
+                    }
+
+                    let effectiveEnd = (dueDate && dueDate !== '—') ? dueDate : dbTask.end_date;
+                    if (!effectiveEnd || effectiveEnd < effectiveStart) {
+                        effectiveEnd = effectiveStart;
+                    }
+
+                    db.prepare('UPDATE tasks SET start_date = ?, end_date = ?, status = ? WHERE id = ?').run(effectiveStart, effectiveEnd, status, taskId);
+                } else {
+                    const effectiveStart = todayStr;
+                    const effectiveEnd = (dueDate && dueDate !== '—' && dueDate >= effectiveStart) ? dueDate : effectiveStart;
+                    const ins = db.prepare(`
+                        INSERT INTO tasks (project_id, manager_id, title, description, start_date, end_date, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    `).run(projectId, managerId, title, description, effectiveStart, effectiveEnd, status);
+                    taskId = ins.lastInsertRowid;
+                }
+
+                if (assigneeName && assigneeName !== 'Unassigned' && assigneeName !== 'unassigned') {
+                    const cleanName = String(assigneeName).replace(/\s*\(pm\)$/i, '').trim();
+                    const user = db.prepare(`
+                        SELECT id FROM users 
+                        WHERE TRIM(full_name) = ? COLLATE NOCASE OR email = ? COLLATE NOCASE OR id = ?
+                    `).get(cleanName, cleanName, cleanName);
+                    if (user) {
+                        db.prepare('DELETE FROM task_assignees WHERE task_id = ?').run(taskId);
+                        db.prepare('INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)').run(taskId, user.id);
+                        db.prepare('INSERT OR IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)').run(projectId, user.id);
+                    }
+                } else {
+                    db.prepare('DELETE FROM task_assignees WHERE task_id = ?').run(taskId);
+                }
+            }
+        });
+
+        syncTx(tasks);
+
+        res.json({ message: 'Tasks synchronized successfully' });
+    } catch (err) {
+        console.error('syncWorkspaceTasks error:', err);
         res.status(500).json({ error: err.message });
     }
 };
@@ -572,6 +868,91 @@ export const deleteProjectTasks = (req, res) => {
         res.json({ message: 'All imported tasks have been removed successfully' });
     } catch (err) {
         console.error('deleteProjectTasks error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Document Operations for Projects
+export const getProjectDocs = (req, res) => {
+    try {
+        const projectId = parseInt(req.params.id, 10);
+        const docs = db.prepare(`
+            SELECT id, project_id, name, extension, size, upload_date as uploadDate, data_url as dataUrl, created_at
+            FROM project_documents
+            WHERE project_id = ?
+            ORDER BY created_at DESC
+        `).all(projectId);
+
+        res.json({ docs: docs || [] });
+    } catch (err) {
+        console.error('getProjectDocs error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+export const createProjectDoc = (req, res) => {
+    try {
+        const projectId = parseInt(req.params.id, 10);
+        const userId = req.user ? req.user.id : null;
+        const { id, name, extension, size, uploadDate, dataUrl } = req.body;
+
+        if (!name) {
+            return res.status(400).json({ error: 'Document name is required' });
+        }
+
+        const ext = extension || name.split('.').pop().toLowerCase();
+        const dateStr = uploadDate || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+        let newDocId;
+        if (Number.isInteger(Number(id)) && Number(id) > 0) {
+            const stmt = db.prepare(`
+                INSERT OR REPLACE INTO project_documents (id, project_id, user_id, name, extension, size, upload_date, data_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+            stmt.run(Number(id), projectId, userId, name, ext, size || '', dateStr, dataUrl || '');
+            newDocId = Number(id);
+        } else {
+            const stmt = db.prepare(`
+                INSERT INTO project_documents (project_id, user_id, name, extension, size, upload_date, data_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            `);
+            const info = stmt.run(projectId, userId, name, ext, size || '', dateStr, dataUrl || '');
+            newDocId = info.lastInsertRowid;
+        }
+
+        res.json({
+            success: true,
+            doc: {
+                id: newDocId,
+                projectId,
+                userId,
+                name,
+                extension: ext,
+                size: size || '',
+                uploadDate: dateStr,
+                dataUrl: dataUrl || ''
+            }
+        });
+    } catch (err) {
+        console.error('createProjectDoc error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+export const deleteProjectDoc = (req, res) => {
+    try {
+        const projectId = parseInt(req.params.id, 10);
+        const docId = parseInt(req.params.docId, 10);
+
+        const stmt = db.prepare(`
+            DELETE FROM project_documents
+            WHERE id = ? AND project_id = ?
+        `);
+        stmt.run(docId, projectId);
+
+        res.json({ success: true, message: 'Document deleted successfully' });
+    } catch (err) {
+        console.error('deleteProjectDoc error:', err);
         res.status(500).json({ error: err.message });
     }
 };

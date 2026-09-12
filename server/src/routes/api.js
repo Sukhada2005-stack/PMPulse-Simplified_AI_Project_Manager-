@@ -1,8 +1,8 @@
 import express from 'express';
 import { login, getMe, listAllUsers, checkRole, changePassword, setPermanentPassword } from '../controllers/authController.js';
 import { createEmployee, getEmployees, getEmployeeAnalytics, deleteEmployee, sendWarning, getMyWarnings } from '../controllers/employeeController.js';
-import { createProject, getProjects, getProjectById, createTask, getMyTasks, addProjectMember, updateProject, deleteProject, removeProjectMember, getProjectTasks, getAllProjectsTasks, createWorkspaceTask, importProjectTasks, deleteProjectTasks } from '../controllers/projectController.js';
-import { submitDailyLog, getProjectMatrix, getFleetMatrix } from '../controllers/dailyLogController.js';
+import { createProject, getProjects, getProjectById, createTask, getMyTasks, addProjectMember, updateProject, deleteProject, removeProjectMember, getProjectTasks, getAllProjectsTasks, createWorkspaceTask, updateWorkspaceTask, syncWorkspaceTasks, importProjectTasks, deleteProjectTasks, getProjectDocs, createProjectDoc, deleteProjectDoc } from '../controllers/projectController.js';
+import { submitDailyLog, getMyDailyLogs, getProjectMatrix, getFleetMatrix } from '../controllers/dailyLogController.js';
 import { generateSummary } from '../controllers/aiController.js';
 import { getProjectMessages, sendProjectMessage } from '../controllers/chatController.js';
 import { createPM, getPMs, deletePM } from '../controllers/superuserController.js';
@@ -45,8 +45,15 @@ router.delete('/projects/:id', authenticateToken, requirePM, deleteProject);
 // --- Task Operations & Employee Feed ---
 router.get('/workspaces/:id/tasks', authenticateToken, getProjectTasks);
 router.post('/workspaces/:id/tasks', authenticateToken, createWorkspaceTask);
+router.put('/workspaces/:id/tasks/:taskId', authenticateToken, updateWorkspaceTask);
+router.post('/workspaces/:id/tasks/sync', authenticateToken, syncWorkspaceTasks);
 router.post('/workspaces/:id/tasks/import', authenticateToken, requirePM, upload.single('file'), importProjectTasks);
 router.delete('/workspaces/:id/tasks', authenticateToken, requirePM, deleteProjectTasks);
+
+// --- Document Operations ---
+router.get('/workspaces/:id/docs', authenticateToken, getProjectDocs);
+router.post('/workspaces/:id/docs', authenticateToken, createProjectDoc);
+router.delete('/workspaces/:id/docs/:docId', authenticateToken, deleteProjectDoc);
 
 router.post('/projects/:id/tasks', authenticateToken, requirePM, createTask);
 router.get('/tasks/my', authenticateToken, getMyTasks);
@@ -58,6 +65,7 @@ router.post('/projects/:id/messages', authenticateToken, sendProjectMessage);
 
 // --- Daily Submissions & Interactive Calendar Matrix ---
 router.post('/tasks/:id/daily-log', authenticateToken, submitDailyLog);
+router.get('/daily-logs/my', authenticateToken, getMyDailyLogs);
 router.get('/projects/:id/matrix', authenticateToken, requirePM, getProjectMatrix);
 router.get('/matrix/fleet', authenticateToken, requirePM, getFleetMatrix);
 

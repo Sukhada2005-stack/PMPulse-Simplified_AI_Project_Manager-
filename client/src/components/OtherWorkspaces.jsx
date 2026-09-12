@@ -199,7 +199,7 @@ export default function OtherWorkspaces({ onNavigateTab }) {
                   </p>
 
                   {/* Members count */}
-                  <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-end">
+                  <div className="mt-4 pt-3 border-t border-slate-200 dark:border-white/10 flex items-center justify-end">
                     <span
                       className="text-xs font-semibold flex items-center gap-1"
                       style={{ color: '#eeb20d' }}
@@ -211,7 +211,7 @@ export default function OtherWorkspaces({ onNavigateTab }) {
                 </div>
 
                 {/* Quick-action footer */}
-                <div className="mt-4 pt-3 border-t border-white/10 flex items-center gap-2">
+                <div className="mt-4 pt-3 border-t border-slate-200 dark:border-white/10 flex items-center gap-2">
 
                   {/* + Task */}
                   <button

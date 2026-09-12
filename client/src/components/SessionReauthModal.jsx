@@ -10,7 +10,19 @@ export default function SessionReauthModal() {
   const [authError, setAuthError] = useState('');
   const [authenticating, setAuthenticating] = useState(false);
   
-  const { user, completeLogin } = useAuth();
+  const { user, completeLogin, sessionExpired, logout } = useAuth();
+
+  const populateEmail = () => {
+    const stored = localStorage.getItem('pulsepm_user');
+    let storedEmail = '';
+    try {
+      if (stored) storedEmail = JSON.parse(stored)?.email;
+    } catch {}
+    const finalEmail = user?.email || storedEmail || '';
+    if (finalEmail) {
+      setEmail(finalEmail);
+    }
+  };
 
   useEffect(() => {
     const handleSessionExpired = () => {
@@ -20,9 +32,7 @@ export default function SessionReauthModal() {
       setIsOpen(true);
       setAuthError('');
       setPassword('');
-      if (user?.email) {
-        setEmail(user.email);
-      }
+      populateEmail();
     };
 
     window.addEventListener('session_expired', handleSessionExpired);
@@ -30,6 +40,15 @@ export default function SessionReauthModal() {
       window.removeEventListener('session_expired', handleSessionExpired);
     };
   }, [user]);
+
+  useEffect(() => {
+    if (sessionExpired) {
+      setIsOpen(true);
+      setAuthError('');
+      setPassword('');
+      populateEmail();
+    }
+  }, [sessionExpired, user]);
 
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
@@ -64,7 +83,8 @@ export default function SessionReauthModal() {
     }
   };
 
-  if (!isOpen) return null;
+  const isModalOpen = isOpen || sessionExpired;
+  if (!isModalOpen) return null;
 
   return (
     <div
@@ -114,6 +134,19 @@ export default function SessionReauthModal() {
           >
             {authenticating ? 'Authenticating...' : 'Resume Session'}
           </button>
+
+          <div className="text-center pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                logout();
+              }}
+              className="text-xs text-slate-400 hover:text-slate-200 transition-colors underline"
+            >
+              Sign in with a different account
+            </button>
+          </div>
         </form>
       </div>
     </div>

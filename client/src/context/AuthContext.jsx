@@ -4,10 +4,18 @@ import { api } from '../services/api';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('pulsepm_token') || null);
+  const [token, setToken] = useState(() => localStorage.getItem('pulsepm_token') || null);
+  const [user, setUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem('pulsepm_user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
   const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   // Load all users for quick demo role switcher
   const fetchAllUsers = async () => {
@@ -19,22 +27,40 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Initialize session or default to PM (Alex Mercer)
+  // Initialize session or validate existing session
   useEffect(() => {
     const initAuth = async () => {
       await fetchAllUsers();
-      // TEMPORARILY DISABLED: Forcing the Landing Page to be the entry point
-      // const savedToken = localStorage.getItem('pulsepm_token');
-      // if (savedToken) {
-      //   try {
-      //     const res = await api.auth.getMe();
-      //     setUser(res.user);
-      //   } catch (err) {
-      //     console.warn('Session expired, removing token');
-      //     localStorage.removeItem('pulsepm_token');
-      //     setToken(null);
-      //   }
-      // }
+      const savedToken = localStorage.getItem('pulsepm_token');
+      const savedUser = localStorage.getItem('pulsepm_user');
+
+      if (savedToken) {
+        try {
+          const res = await api.auth.getMe();
+          if (res?.user) {
+            setUser(res.user);
+            setToken(savedToken);
+            setSessionExpired(false);
+            localStorage.setItem('pulsepm_user', JSON.stringify(res.user));
+          }
+        } catch (err) {
+          console.warn('Session expired or inactive on refresh:', err);
+          localStorage.removeItem('pulsepm_token');
+          setToken(null);
+          setSessionExpired(true);
+          if (savedUser) {
+            try {
+              setUser(JSON.parse(savedUser));
+            } catch {}
+          }
+          window.dispatchEvent(new CustomEvent('session_expired'));
+        }
+      } else if (savedUser) {
+        // User was previously logged in, but token has expired/cleared
+        setToken(null);
+        setSessionExpired(true);
+        window.dispatchEvent(new CustomEvent('session_expired'));
+      }
 
       setLoading(false);
     };
@@ -52,6 +78,8 @@ export function AuthProvider({ children }) {
         timeoutId = setTimeout(() => {
           console.warn('Session expired due to inactivity');
           localStorage.removeItem('pulsepm_token');
+          setToken(null);
+          setSessionExpired(true);
           window.dispatchEvent(new CustomEvent('session_expired'));
         }, 3600000);
       }
@@ -79,6 +107,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem('pulsepm_user', JSON.stringify(res.user));
       setToken(res.token);
       setUser(res.user);
+      setSessionExpired(false);
     } catch (err) {
       console.error('Failed to login as default PM:', err);
     }
@@ -90,8 +119,11 @@ export function AuthProvider({ children }) {
       const res = await api.auth.login(targetUserEmail, 'password123');
       localStorage.setItem('pulsepm_token', res.token);
       localStorage.setItem('pulsepm_user', JSON.stringify(res.user));
+      localStorage.removeItem('pmpulse_active_workspace');
+      localStorage.setItem('pmpulse_active_tab', 'dashboard');
       setToken(res.token);
       setUser(res.user);
+      setSessionExpired(false);
     } catch (err) {
       alert(`Could not switch user: ${err.message}`);
     } finally {
@@ -106,6 +138,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem('pulsepm_user', JSON.stringify(res.user));
       setToken(res.token);
       setUser(res.user);
+      setSessionExpired(false);
     }
     return res;
   };
@@ -115,13 +148,20 @@ export function AuthProvider({ children }) {
     localStorage.setItem('pulsepm_user', JSON.stringify(userData));
     setToken(tokenData);
     setUser(userData);
+    setSessionExpired(false);
   };
 
   const logout = () => {
     localStorage.removeItem('pulsepm_token');
     localStorage.removeItem('pulsepm_user');
+    localStorage.removeItem('pmpulse_active_workspace');
+    localStorage.removeItem('pmpulse_active_tab');
+    localStorage.removeItem('pmpulse_active_view');
+    localStorage.removeItem('pmpulse_selected_project_id');
+    localStorage.removeItem('pmpulse_selected_360_employee_id');
     setToken(null);
     setUser(null);
+    setSessionExpired(false);
   };
 
   const updateUser = (newData) => {
@@ -134,6 +174,8 @@ export function AuthProvider({ children }) {
       token,
       allUsers,
       loading,
+      sessionExpired,
+      setSessionExpired,
       login,
       completeLogin,
       logout,

@@ -21,8 +21,16 @@ export const submitDailyLog = (req, res) => {
             return res.status(404).json({ error: 'Task not found' });
         }
 
-        if (!task.is_assigned && req.user.user_type !== 'pm') {
-            return res.status(403).json({ error: 'You are not assigned to this task' });
+        const isMember = db.prepare(`
+            SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?
+        `).get(task.project_id, userId);
+
+        if (!task.is_assigned && !isMember && req.user.user_type !== 'pm' && req.user.user_type !== 'superuser') {
+            return res.status(403).json({ error: 'You are not assigned to or a member of this task/project' });
+        }
+
+        if (!task.is_assigned && (isMember || req.user.user_type === 'pm' || req.user.user_type === 'superuser')) {
+            db.prepare(`INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)`).run(taskId, userId);
         }
 
         const isWorked = has_worked === true || has_worked === 1 || has_worked === '1';
@@ -73,6 +81,69 @@ export const submitDailyLog = (req, res) => {
     }
 };
 
+// Retrieve Daily Logs history for the authenticated employee (strictly scoped to req.user.id)
+export const getMyDailyLogs = (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { projectId } = req.query;
+
+        let query = `
+            SELECT 
+                dl.*,
+                t.title as task_title,
+                t.status as task_status,
+                t.start_date as task_start_date,
+                t.end_date as task_end_date,
+                p.id as project_id,
+                p.title as project_title,
+                u.full_name,
+                u.role_title
+            FROM daily_logs dl
+            JOIN tasks t ON dl.task_id = t.id
+            JOIN projects p ON t.project_id = p.id
+            JOIN users u ON dl.user_id = u.id
+            WHERE dl.user_id = ?
+        `;
+        const params = [userId];
+
+        if (projectId && projectId !== 'all') {
+            query += ` AND p.id = ?`;
+            params.push(projectId);
+        }
+
+        query += ` ORDER BY dl.log_date DESC, dl.created_at DESC`;
+
+        const logs = db.prepare(query).all(...params);
+
+        // Calculate employee-specific summary metrics
+        let totalLogged = 0;
+        let totalProductive = 0;
+        let totalBlockers = 0;
+
+        logs.forEach(l => {
+            totalLogged++;
+            if (l.has_worked === 1) {
+                totalProductive++;
+            } else {
+                totalBlockers++;
+            }
+        });
+
+        res.json({
+            logs,
+            metrics: {
+                totalLogged,
+                totalProductive,
+                totalBlockers,
+                productivityRate: totalLogged > 0 ? Math.round((totalProductive / totalLogged) * 100) : 100
+            }
+        });
+    } catch (err) {
+        console.error('Get my daily logs error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
 // Retrieve Date Grid Matrix (Calendar Heatmap) for PM Dashboard
 export const getProjectMatrix = (req, res) => {
     try {
@@ -80,7 +151,10 @@ export const getProjectMatrix = (req, res) => {
         const { date_from, date_to } = req.query;
 
         // Fetch project and its tasks
-        const project = db.prepare('SELECT * FROM projects WHERE id = ? AND manager_id = ?').get(projectId, req.user.id);
+        let project = db.prepare('SELECT * FROM projects WHERE id = ? AND manager_id = ?').get(projectId, req.user.id);
+        if (!project && (req.user.user_type === 'superuser' || req.user.user_type === 'pm')) {
+            project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId);
+        }
         if (!project) {
             return res.status(404).json({ error: 'Project not found' });
         }
@@ -103,9 +177,15 @@ export const getProjectMatrix = (req, res) => {
                 startDate = startDate || dates[0] || '2026-08-27';
                 endDate = endDate || dates[dates.length - 1] || '2026-09-06';
             } else {
-                startDate = '2026-08-27';
-                endDate = '2026-09-06';
+                startDate = startDate || '2026-08-27';
+                endDate = endDate || '2026-09-06';
             }
+        }
+
+        if (startDate > endDate) {
+            const temp = startDate;
+            startDate = endDate;
+            endDate = temp;
         }
 
         // Generate full array of calendar days between startDate and endDate
@@ -117,137 +197,160 @@ export const getProjectMatrix = (req, res) => {
             curr.setDate(curr.getDate() + 1);
         }
 
-        // Build matrix rows: each row represents a combination of (Employee + Task)
-        const rows = [];
-
-        tasks.forEach(task => {
-            const assignees = db.prepare(`
-                SELECT u.id, u.full_name, u.role_title, u.avatar_url, u.email
-                FROM task_assignees ta
-                JOIN users u ON ta.user_id = u.id
-                WHERE ta.task_id = ?
-            `).all(task.id);
-
-            assignees.forEach(emp => {
-                // Fetch all daily logs for this employee and task
-                const logs = db.prepare(`
-                    SELECT log_date, work_text, has_worked, no_work_reason, created_at
-                    FROM daily_logs
-                    WHERE task_id = ? AND user_id = ?
-                `).all(task.id, emp.id);
-
-                const logMap = {};
-                logs.forEach(l => {
-                    logMap[l.log_date] = l;
-                });
-
-                const dayStatuses = dayList.map(dateStr => {
-                    const isWithinTaskWindow = dateStr >= task.start_date && dateStr <= task.end_date;
-                    const log = logMap[dateStr];
-
-                    if (!isWithinTaskWindow) {
-                        return {
-                            date: dateStr,
-                            status: 'na', // Not applicable / outside task dates
-                            label: 'N/A',
-                            log: null
-                        };
-                    }
-
-                    if (log) {
-                        if (log.has_worked === 1) {
-                            return {
-                                date: dateStr,
-                                status: 'logged', // 🟢 Green
-                                label: 'Logged',
-                                text: log.work_text,
-                                log: log
-                            };
-                        } else {
-                            return {
-                                date: dateStr,
-                                status: 'no_work', // 🔴 Amber/Red
-                                label: 'No Work',
-                                reason: log.no_work_reason,
-                                log: log
-                            };
-                        }
-                    } else {
-                        // Pending or missed
-                        const todayStr = new Date().toISOString().split('T')[0];
-                        if (dateStr > todayStr) {
-                            return {
-                                date: dateStr,
-                                status: 'pending', // ⚪ Future pending
-                                label: 'Pending',
-                                log: null
-                            };
-                        } else {
-                            return {
-                                date: dateStr,
-                                status: 'missed', // ⚪ Past missed
-                                label: 'Missed',
-                                log: null
-                            };
-                        }
-                    }
-                });
-
-                rows.push({
-                    employee: emp,
-                    task: {
-                        id: task.id,
-                        project_id: project.id,
-                        project_title: project.title,
-                        title: task.title,
-                        description: task.description,
-                        start_date: task.start_date,
-                        end_date: task.end_date,
-                        status: task.status
-                    },
-                    days: dayStatuses
-                });
-            });
-        });
-
-        // Also include project members who are part of the project team but don't have task assignments yet
-        const memberIdsWithTasks = new Set();
-        rows.forEach(r => {
-            if (r.employee?.id) memberIdsWithTasks.add(r.employee.id);
-        });
-
+        // Build matrix rows: each row represents a unique Contributor added in the workspace of this project
         const projectMembers = db.prepare(`
             SELECT u.id, u.full_name, u.role_title, u.avatar_url, u.email
             FROM project_members pm
             JOIN users u ON pm.user_id = u.id
             WHERE pm.project_id = ?
-            ORDER BY u.full_name ASC
         `).all(projectId);
 
-        projectMembers.forEach(emp => {
-            if (!memberIdsWithTasks.has(emp.id)) {
-                const dayStatuses = dayList.map(dateStr => ({
-                    date: dateStr,
-                    status: 'na',
-                    label: 'N/A',
-                    log: null
-                }));
+        const taskAssignees = db.prepare(`
+            SELECT DISTINCT u.id, u.full_name, u.role_title, u.avatar_url, u.email
+            FROM task_assignees ta
+            JOIN tasks t ON ta.task_id = t.id
+            JOIN users u ON ta.user_id = u.id
+            WHERE t.project_id = ?
+        `).all(projectId);
 
-                rows.push({
-                    employee: emp,
-                    task: {
-                        id: `unallocated-${emp.id}`,
+        const memberMap = new Map();
+        [...projectMembers, ...taskAssignees].forEach(emp => {
+            if (emp && emp.id && !memberMap.has(emp.id)) {
+                memberMap.set(emp.id, emp);
+            }
+        });
+
+        const contributors = Array.from(memberMap.values()).sort((a, b) => 
+            (a.full_name || '').localeCompare(b.full_name || '')
+        );
+
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+        const rows = contributors.map(emp => {
+            // All tasks allocated to this contributor in this project
+            const empTasks = db.prepare(`
+                SELECT t.*
+                FROM tasks t
+                JOIN task_assignees ta ON ta.task_id = t.id
+                WHERE t.project_id = ? AND ta.user_id = ?
+                ORDER BY t.start_date ASC, t.id ASC
+            `).all(projectId, emp.id);
+
+            // All daily logs submitted by this contributor for tasks in this project
+            const empLogs = db.prepare(`
+                SELECT dl.*, t.title as task_title, t.description as task_description,
+                       t.start_date as task_start_date, t.end_date as task_end_date, t.status as task_status
+                FROM daily_logs dl
+                JOIN tasks t ON dl.task_id = t.id
+                WHERE t.project_id = ? AND dl.user_id = ?
+                ORDER BY dl.created_at DESC
+            `).all(projectId, emp.id);
+
+            const logByDate = new Map();
+            empLogs.forEach(l => {
+                const existing = logByDate.get(l.log_date);
+                if (!existing || (existing.has_worked === 0 && l.has_worked === 1)) {
+                    logByDate.set(l.log_date, l);
+                }
+            });
+
+            const primaryTask = empTasks[0] || {
+                id: `unallocated-${emp.id}`,
+                project_id: project.id,
+                project_title: project.title,
+                title: 'Team Member (Ready for Deliverable Assignment)',
+                description: `${emp.full_name} is an active contributor on ${project.title}. Provision a specific deliverable in Project Dashboard to schedule daily logs.`,
+                start_date: startDate,
+                end_date: endDate,
+                status: 'in_progress'
+            };
+
+            const dayStatuses = dayList.map(dateStr => {
+                const log = logByDate.get(dateStr);
+
+                if (log) {
+                    const taskInfo = {
+                        id: log.task_id,
                         project_id: project.id,
                         project_title: project.title,
-                        title: 'Team Member (Ready for Deliverable Assignment)',
-                        description: `${emp.full_name} is an active contributor on ${project.title}. Provision a specific deliverable in Project Dashboard to schedule daily logs.`,
-                        start_date: startDate,
-                        end_date: endDate,
-                        status: 'in_progress'
-                    },
-                    days: dayStatuses
-                });
-            }
+                        title: log.task_title,
+                        description: log.task_description,
+                        start_date: log.task_start_date,
+                        end_date: log.task_end_date,
+                        status: log.task_status
+                    };
+
+                    if (log.has_worked === 1) {
+                        return {
+                            date: dateStr,
+                            status: 'logged',
+                            label: 'Logged',
+                            text: log.work_text,
+                            task: taskInfo,
+                            log: log
+                        };
+                    } else {
+                        return {
+                            date: dateStr,
+                            status: 'no_work',
+                            label: 'No Work',
+                            reason: log.no_work_reason,
+                            task: taskInfo,
+                            log: log
+                        };
+                    }
+                } else {
+                    // Check if contributor has any assigned active deliverable for this date
+                    const activeTask = empTasks.find(t => dateStr >= t.start_date && dateStr <= t.end_date) || (empTasks.length > 0 ? empTasks[0] : null);
+
+                    if (activeTask) {
+                        const taskInfo = {
+                            id: activeTask.id,
+                            project_id: project.id,
+                            project_title: project.title,
+                            title: activeTask.title,
+                            description: activeTask.description,
+                            start_date: activeTask.start_date,
+                            end_date: activeTask.end_date,
+                            status: activeTask.status
+                        };
+
+                        if (dateStr >= todayStr) {
+                            return {
+                                date: dateStr,
+                                status: 'pending',
+                                label: 'Pending',
+                                task: taskInfo,
+                                log: null
+                            };
+                        } else {
+                            return {
+                                date: dateStr,
+                                status: 'missed',
+                                label: 'Missed',
+                                task: taskInfo,
+                                log: null
+                            };
+                        }
+                    } else {
+                        return {
+                            date: dateStr,
+                            status: 'na',
+                            label: 'N/A',
+                            task: primaryTask,
+                            log: null
+                        };
+                    }
+                }
+            });
+
+            return {
+                employee: emp,
+                task: primaryTask,
+                tasks: empTasks,
+                days: dayStatuses
+            };
         });
 
         res.json({
@@ -264,24 +367,37 @@ export const getProjectMatrix = (req, res) => {
 // Global Fleet Matrix for all projects combined
 export const getFleetMatrix = (req, res) => {
     try {
-        const { date_from = '2026-08-27', date_to = '2026-09-06' } = req.query;
+        let startDate = req.query.date_from || '2026-08-27';
+        let endDate = req.query.date_to || '2026-09-06';
+
+        if (startDate > endDate) {
+            const temp = startDate;
+            startDate = endDate;
+            endDate = temp;
+        }
 
         // Generate full array of calendar days
         const dayList = [];
-        const curr = new Date(date_from);
-        const end = new Date(date_to);
+        const curr = new Date(startDate);
+        const end = new Date(endDate);
         while (curr <= end) {
             dayList.push(curr.toISOString().split('T')[0]);
             curr.setDate(curr.getDate() + 1);
         }
 
-        const tasks = db.prepare(`
+        let tasksQuery = `
             SELECT t.*, p.title as project_title, p.id as project_id
             FROM tasks t
             JOIN projects p ON t.project_id = p.id
-            WHERE p.manager_id = ?
-            ORDER BY p.title ASC, t.start_date ASC
-        `).all(req.user.id);
+        `;
+        const queryParams = [];
+        if (req.user.user_type !== 'superuser') {
+            tasksQuery += ' WHERE p.manager_id = ?';
+            queryParams.push(req.user.id);
+        }
+        tasksQuery += ' ORDER BY p.title ASC, t.start_date ASC';
+
+        const tasks = db.prepare(tasksQuery).all(...queryParams);
 
         const rows = [];
 
@@ -313,11 +429,12 @@ export const getFleetMatrix = (req, res) => {
                             ? { date: dateStr, status: 'logged', label: 'Logged', text: log.work_text, log }
                             : { date: dateStr, status: 'no_work', label: 'No Work', reason: log.no_work_reason, log };
                     }
-                    const todayStr = new Date().toISOString().split('T')[0];
+                    const now = new Date();
+                    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
                     return {
                         date: dateStr,
-                        status: dateStr > todayStr ? 'pending' : 'missed',
-                        label: dateStr > todayStr ? 'Pending' : 'Missed',
+                        status: dateStr >= todayStr ? 'pending' : 'missed',
+                        label: dateStr >= todayStr ? 'Pending' : 'Missed',
                         log: null
                     };
                 });

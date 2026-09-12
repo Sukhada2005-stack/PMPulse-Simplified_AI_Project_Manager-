@@ -8,6 +8,7 @@ import WorkforceDirectory from './components/WorkforceDirectory';
 import Employee360View from './components/Employee360View';
 import AISummaryHub from './components/AISummaryHub';
 import EmployeeDashboard from './components/EmployeeDashboard';
+import EmployeeDailyLogs from './components/EmployeeDailyLogs';
 import SuperuserDashboard from './components/SuperuserDashboard';
 import LandingPage from './components/LandingPage';
 import SetPassword from './components/SetPassword';
@@ -17,23 +18,68 @@ import { Sparkles, Loader2, Sun, Moon, LogOut, Search } from 'lucide-react';
 import { api } from './services/api';
 
 function MainApp() {
-  const { user, isPM, loading, logout } = useAuth();
-  const [activeTab, setActiveTab]             = useState('dashboard');
-  const [selectedProjectId, setSelectedProjectId] = useState(null);
-  const [selected360EmployeeId, setSelected360EmployeeId] = useState(null);
+  const { user, isPM, loading, logout, sessionExpired } = useAuth();
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      return localStorage.getItem('pmpulse_active_tab') || 'dashboard';
+    } catch {
+      return 'dashboard';
+    }
+  });
+
+  useEffect(() => {
+    if (activeTab) {
+      localStorage.setItem('pmpulse_active_tab', activeTab);
+    }
+  }, [activeTab]);
+
+  const [selectedProjectId, setSelectedProjectId] = useState(() => {
+    try {
+      return localStorage.getItem('pmpulse_selected_project_id') || null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    if (selectedProjectId) {
+      localStorage.setItem('pmpulse_selected_project_id', String(selectedProjectId));
+    } else {
+      localStorage.removeItem('pmpulse_selected_project_id');
+    }
+  }, [selectedProjectId]);
+
+  const [selected360EmployeeId, setSelected360EmployeeId] = useState(() => {
+    try {
+      return localStorage.getItem('pmpulse_selected_360_employee_id') || null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    if (selected360EmployeeId) {
+      localStorage.setItem('pmpulse_selected_360_employee_id', String(selected360EmployeeId));
+    } else {
+      localStorage.removeItem('pmpulse_selected_360_employee_id');
+    }
+  }, [selected360EmployeeId]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef(null);
   
   const [workspaces, setWorkspaces] = useState([]);
-  const [selectedWorkspace, setSelectedWorkspace] = useState(null);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [selectedWorkspace, setSelectedWorkspace] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('pmpulse_active_workspace')) || null; }
+    catch { return null; }
+  });
 
   useEffect(() => {
-    if (user?.id) {
-      setSelectedWorkspace(null);
-      setActiveTab('dashboard');
-    }
-  }, [user?.id]);
+    if (selectedWorkspace) localStorage.setItem('pmpulse_active_workspace', JSON.stringify(selectedWorkspace));
+    else localStorage.removeItem('pmpulse_active_workspace');
+  }, [selectedWorkspace]);
+
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   useEffect(() => {
     const fetchWorkspaces = async () => {
@@ -41,16 +87,22 @@ function MainApp() {
         const res = await api.projects.getAll();
         const projectList = res.projects || [];
         setWorkspaces(projectList);
+        setSelectedWorkspace(prev => {
+          if (!prev) return projectList[0] || null;
+          const match = projectList.find(p => String(p.id) === String(prev.id));
+          return match || projectList[0] || prev;
+        });
       } catch (err) {
         console.error('Failed to load workspaces:', err);
       }
     };
-    if (user) {
+    if (user && !sessionExpired) {
       fetchWorkspaces();
     }
-  }, [user]);
+  }, [user?.id, sessionExpired]);
 
   useEffect(() => {
+    if (activeTab !== 'employee_dash' && activeTab !== 'employee_daily_logs' && activeTab !== 'pm_daily_logs') return;
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
@@ -62,12 +114,12 @@ function MainApp() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [activeTab]);
 
   useEffect(() => {
     if (!loading && user) {
       if (isPM && activeTab === 'employee_dash') setActiveTab('dashboard');
-      if (!isPM && user.user_type !== 'superuser') setActiveTab('employee_dash');
+      if (!isPM && user.user_type !== 'superuser' && activeTab !== 'employee_dash' && activeTab !== 'employee_daily_logs') setActiveTab('employee_dash');
     }
   }, [user?.user_type, loading]);
 
@@ -77,7 +129,15 @@ function MainApp() {
     if (projectId) {
       setSelectedProjectId(projectId);
       const ws = workspaces.find(w => String(w.id) === String(projectId));
-      if (ws) setSelectedWorkspace(ws);
+      if (ws) {
+        setSelectedWorkspace(ws);
+      } else {
+        api.projects.getById(projectId)
+          .then(res => {
+            if (res.project) setSelectedWorkspace(res.project);
+          })
+          .catch(err => console.error("Failed to load navigated workspace:", err));
+      }
     }
     if (view) {
       setInitialDashboardView(view);
@@ -108,7 +168,12 @@ function MainApp() {
   }
 
   if (!user) {
-    return <LandingPage />;
+    return (
+      <>
+        <LandingPage />
+        <SessionReauthModal />
+      </>
+    );
   }
 
   if (user.is_first_login === 1) {
@@ -121,10 +186,12 @@ function MainApp() {
     dashboard:       'Project Dashboard',
     other_workspaces:'Other Workspaces',
     calendar_matrix: 'Calendar Matrix Tracker',
+    pm_daily_logs:   'Daily Logs',
     workforce:       'Workforce Directory',
     employee_360:    'Employee 360° Analytics',
     ai_summary:      'AI Executive Summary Hub',
     employee_dash:   'My Tasks & Daily Log',
+    employee_daily_logs: 'Daily Logs',
   };
   const pageTitle = user.user_type === 'superuser' ? 'Superuser Hub' : (pageTitles[activeTab] || 'PulsePM');
 
@@ -169,7 +236,8 @@ function MainApp() {
           </div>
 
           {/* Center: Search Bar */}
-          {(activeTab === 'dashboard' || activeTab === 'employee_dash') ? (
+          {/* Center: Search Bar (Only shown on employee specific dashboard & Daily Logs; removed from project dashboard) */}
+          {(activeTab === 'employee_dash' || activeTab === 'employee_daily_logs') ? (
             <div className="flex items-center gap-2 flex-1 max-w-2xl mx-4 min-w-0 hidden md:flex relative">
               <div className="relative w-full min-w-0">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -189,13 +257,21 @@ function MainApp() {
                   </kbd>
                 </div>
               </div>
-              <button className="px-4 py-1.5 text-sm font-medium rounded-md bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 transition-colors whitespace-nowrap flex-shrink-0">
+              <button 
+                onClick={() => {
+                  setIsDropdownOpen(prev => !prev);
+                  searchInputRef.current?.focus();
+                }}
+                className="px-4 py-1.5 text-sm font-medium rounded-md bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 transition-colors whitespace-nowrap flex-shrink-0"
+              >
                 Search Workspace
               </button>
 
               {isDropdownOpen && workspaces.length > 0 && (
                 <ul className="absolute top-full mt-2 w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl z-50 overflow-hidden left-0">
-                  {workspaces.map(workspace => (
+                  {workspaces
+                    .filter(workspace => !searchQuery || (workspace.name || workspace.title || '').toLowerCase().includes(searchQuery.toLowerCase()))
+                    .map(workspace => (
                     <li
                       key={workspace.id}
                       onMouseDown={(e) => {
@@ -203,7 +279,6 @@ function MainApp() {
                         setSelectedWorkspace(workspace);
                         setSearchQuery(workspace.name || workspace.title);
                         setIsDropdownOpen(false);
-                        if (isPM) setActiveTab('dashboard');
                       }}
                       className="p-3 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer text-sm text-slate-700 dark:text-slate-300"
                     >
@@ -273,10 +348,21 @@ function MainApp() {
                 />
               )}
 
+              {activeTab === 'pm_daily_logs' && (
+                <EmployeeDailyLogs selectedWorkspace={selectedWorkspace} />
+              )}
+
               {activeTab === 'calendar_matrix' && (
                 <CalendarMatrix
-                  selectedProjectId={selectedProjectId}
-                  onSelectProject={setSelectedProjectId}
+                  selectedProjectId={selectedProjectId || selectedWorkspace?.id}
+                  onSelectProject={(id) => {
+                    setSelectedProjectId(id);
+                    if (id && id !== 'fleet') {
+                      const ws = workspaces.find(w => String(w.id) === String(id));
+                      if (ws) setSelectedWorkspace(ws);
+                    }
+                  }}
+                  onNavigateTab={handleNavigateTab}
                   onOpenAISummary={() => setActiveTab('ai_summary')}
                 />
               )}
@@ -323,7 +409,12 @@ function MainApp() {
           {user?.user_type === 'superuser' && <SuperuserDashboard />}
 
           {/* Employee View */}
-          {!isPM && user?.user_type !== 'superuser' && <EmployeeDashboard selectedWorkspace={selectedWorkspace} />}
+          {!isPM && user?.user_type !== 'superuser' && (
+            <>
+              {activeTab === 'employee_dash' && <EmployeeDashboard selectedWorkspace={selectedWorkspace} />}
+              {activeTab === 'employee_daily_logs' && <EmployeeDailyLogs selectedWorkspace={selectedWorkspace} />}
+            </>
+          )}
         </main>
 
         {/* Footer */}

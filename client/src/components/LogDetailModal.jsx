@@ -21,257 +21,350 @@ export default function LogDetailModal({ logData, onClose }) {
 
   if (!logData) return null;
 
-  const { employee, task, dayStatus } = logData;
-  const isWorked = dayStatus?.status === 'logged';
-  const isNoWork = dayStatus?.status === 'no_work';
-  const rawLog   = dayStatus?.log;
+  const { employee, task, dayStatus, status, date, log } = logData;
+  const rawStatus = dayStatus?.status || status;
+  const isWorked = rawStatus === 'logged';
+  const isNoWork = rawStatus === 'no_work' || rawStatus === 'stalled';
+  const isMissed = rawStatus === 'missed' || rawStatus === 'missing';
+  const isPending = rawStatus === 'pending';
+  const isNA = rawStatus === 'na';
+  const rawLog = dayStatus?.log || log;
+  const displayDate = dayStatus?.date || date || (rawLog?.log_date) || 'Today';
+
+  const statusLabel = isWorked
+    ? 'DONE'
+    : isNoWork
+    ? 'STALLED'
+    : isMissed
+    ? 'MISSED'
+    : isPending
+    ? 'PENDING'
+    : 'N/A';
 
   return createPortal(
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto"
       style={{
-        background: 'rgba(9,30,66,0.54)',
-        backdropFilter: 'blur(3px)',
+        background: 'rgba(9, 14, 26, 0.65)',
+        backdropFilter: 'blur(4px)',
         position: 'fixed',
-        top: 0, left: 0, right: 0, bottom: 0,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
       }}
-      onClick={e => e.target === e.currentTarget && onClose()}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
-        className="relative w-full max-w-lg rounded-xl shadow-2xl border border-gray-800 overflow-hidden flex flex-col max-h-[90vh] z-[10000]"
+        className="relative w-full max-w-lg rounded-2xl shadow-2xl border overflow-hidden flex flex-col max-h-[92vh] z-[10000] animate-fade-up"
         style={{
-          background: 'var(--color-surface-solid)',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+          background: 'var(--color-surface-solid, #1a1814)',
+          borderColor: 'var(--color-border, rgba(255,255,255,0.1))',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
           margin: 'auto',
         }}
       >
         {/* Header Bar */}
         <div
-          className="flex items-center justify-between px-5 py-4"
+          className="flex items-center justify-between px-6 py-4 border-b"
           style={{
-            background: isWorked ? 'rgba(56,221,159,0.12)' : isNoWork ? 'rgba(255,107,107,0.12)' : 'var(--table-th-bg)',
-            borderBottom: '1px solid var(--color-border)',
+            borderColor: 'var(--color-border, rgba(255,255,255,0.1))',
+            background: 'var(--table-th-bg, rgba(255,255,255,0.03))'
           }}
         >
           <div className="flex items-center gap-3">
             <div
-              className="p-2 rounded-lg"
+              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border"
               style={{
-                background: isWorked ? '#38dd9f' : isNoWork ? '#ff6b6b' : 'var(--color-text-3)',
+                background: isWorked
+                  ? 'rgba(56, 221, 159, 0.12)'
+                  : isNoWork
+                  ? 'rgba(255, 107, 107, 0.12)'
+                  : isMissed
+                  ? 'rgba(245, 158, 11, 0.12)'
+                  : 'rgba(255, 255, 255, 0.05)',
+                borderColor: isWorked
+                  ? 'rgba(56, 221, 159, 0.25)'
+                  : isNoWork
+                  ? 'rgba(255, 107, 107, 0.25)'
+                  : isMissed
+                  ? 'rgba(245, 158, 11, 0.25)'
+                  : 'var(--color-border, rgba(255,255,255,0.1))',
+                color: isWorked
+                  ? '#38dd9f'
+                  : isNoWork
+                  ? '#ff6b6b'
+                  : isMissed
+                  ? '#f59e0b'
+                  : 'var(--color-text-3, #94a3b8)'
               }}
             >
-              {isWorked
-                ? <CheckCircle2 className="w-4 h-4 text-white" />
-                : isNoWork
-                ? <AlertTriangle className="w-4 h-4 text-white" />
-                : <Clock className="w-4 h-4 text-white" />
-              }
+              {isWorked ? (
+                <CheckCircle2 className="w-5 h-5" />
+              ) : isNoWork ? (
+                <AlertTriangle className="w-5 h-5" />
+              ) : (
+                <Clock className="w-5 h-5" />
+              )}
             </div>
             <div>
-              <h3 className="font-bold text-sm" style={{ color: 'var(--color-text-1)' }}>
+              <h3 className="font-bold text-base tracking-tight" style={{ color: 'var(--color-text-1, #f0ede8)' }}>
                 Daily Log Inspection
               </h3>
-              <p className="flex items-center gap-1.5 text-[11px] mt-0.5" style={{ color: 'var(--color-text-3)' }}>
-                <Calendar className="w-3 h-3" />
-                {dayStatus?.date}
+              <p className="flex items-center gap-1.5 text-xs mt-0.5" style={{ color: 'var(--color-text-3, #94a3b8)' }}>
+                <Calendar className="w-3.5 h-3.5" />
+                <span>{displayDate}</span>
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg transition-colors hover:bg-gray-200"
-            style={{ color: 'var(--color-text-3)' }}
+            className="p-1.5 rounded-lg transition-colors hover:opacity-75"
+            style={{ color: 'var(--color-text-3, #94a3b8)' }}
+            title="Close modal"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Metadata */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-5 pb-0">
-          {/* Contributor Card */}
-          <div
-            className="rounded-lg p-3"
-            style={{ background: 'var(--table-th-bg)', border: '1px solid var(--color-border-soft)' }}
-          >
+        {/* Modal Body */}
+        <div className="p-6 space-y-4 overflow-y-auto">
+          {/* Metadata: Contributor & Task Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Contributor Card */}
             <div
-              className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider mb-1.5"
-              style={{ color: 'var(--color-text-3)' }}
+              className="rounded-xl p-3.5 border transition-all"
+              style={{
+                background: 'var(--table-th-bg, rgba(255,255,255,0.03))',
+                borderColor: 'var(--color-border-soft, rgba(255,255,255,0.08))'
+              }}
             >
-              <User className="w-3.5 h-3.5" style={{ color: 'var(--color-primary)' }} />
-              Contributor
-            </div>
-            <div className="font-bold text-sm" style={{ color: 'var(--color-text-1)' }}>
-              {employee?.full_name || 'Team Member'}
-            </div>
-            <div className="text-xs mt-0.5" style={{ color: 'var(--color-text-3)' }}>
-              {employee?.role_title || 'Assignee'}
-            </div>
-          </div>
-
-          {/* Task Card - Fully visible without truncation */}
-          <div
-            className="rounded-lg p-3 transition-colors"
-            style={{
-              background: 'var(--table-th-bg)',
-              border: '1px solid var(--color-border-soft)',
-            }}
-          >
-            <div className="flex items-center justify-between gap-1 mb-1.5">
               <div
-                className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider"
-                style={{ color: 'var(--color-text-3)' }}
+                className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider mb-1.5"
+                style={{ color: 'var(--color-text-3, #94a3b8)' }}
               >
-                <Briefcase className="w-3.5 h-3.5" style={{ color: 'var(--color-primary)' }} />
-                Allocated Task
+                <User className="w-3.5 h-3.5 text-blue-500" />
+                <span>CONTRIBUTOR</span>
               </div>
-              {task?.project_title && (
-                <span className="lozenge lozenge-blue" style={{ fontSize: '9px', padding: '0 4px' }}>
-                  {task.project_title}
-                </span>
-              )}
+              <div className="font-bold text-sm leading-snug" style={{ color: 'var(--color-text-1, #f0ede8)' }}>
+                {employee?.full_name || employee?.name || 'Team Member'}
+              </div>
+              <div className="text-xs mt-0.5" style={{ color: 'var(--color-text-3, #94a3b8)' }}>
+                {employee?.role_title || 'Assignee'}
+              </div>
             </div>
-            <div className="font-bold text-sm leading-snug break-words" style={{ color: 'var(--color-text-1)' }}>
-              {task?.title || 'Assigned Task'}
-            </div>
-            <div className="text-xs mt-1 font-medium" style={{ color: 'var(--color-text-3)' }}>
-              {task?.start_date} → {task?.end_date}
+
+            {/* Task Card */}
+            <div
+              className="rounded-xl p-3.5 border transition-all"
+              style={{
+                background: 'var(--table-th-bg, rgba(255,255,255,0.03))',
+                borderColor: 'var(--color-border-soft, rgba(255,255,255,0.08))'
+              }}
+            >
+              <div className="flex items-center justify-between gap-1 mb-1.5">
+                <div
+                  className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider"
+                  style={{ color: 'var(--color-text-3, #94a3b8)' }}
+                >
+                  <Briefcase className="w-3.5 h-3.5 text-blue-500" />
+                  <span>TASK</span>
+                </div>
+                {task?.project_title && (
+                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">
+                    {task.project_title}
+                  </span>
+                )}
+              </div>
+              <div
+                className="font-bold text-sm leading-snug truncate"
+                title={task?.title || task?.task || 'Assigned Task'}
+                style={{ color: 'var(--color-text-1, #f0ede8)' }}
+              >
+                {task?.title || task?.task || task?.description || 'Assigned Task'}
+              </div>
+              <div className="text-xs mt-0.5" style={{ color: 'var(--color-text-3, #94a3b8)' }}>
+                {task?.start_date && task?.end_date
+                  ? `${task.start_date} → ${task.end_date}`
+                  : task?.dueDate
+                  ? `Due: ${task.dueDate}`
+                  : 'Active Window'}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Status Content */}
-        <div className="p-5 space-y-3.5">
-          {/* Status Lozenge */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold" style={{ color: 'var(--color-text-3)' }}>Status:</span>
-            <span className={`lozenge ${
-              isWorked ? 'lozenge-success' : isNoWork ? 'lozenge-danger' : 'lozenge-default'
-            }`}>
-              {isWorked ? '✓ LOGGED' : isNoWork ? '⚠ STALLED' : dayStatus?.label || 'PENDING'}
+          {/* Status Row */}
+          <div className="flex items-center gap-2 pt-1">
+            <span className="text-xs font-semibold" style={{ color: 'var(--color-text-3, #94a3b8)' }}>
+              Status:
+            </span>
+            <span
+              className="text-xs font-extrabold uppercase px-2.5 py-0.5 rounded tracking-wide inline-flex items-center gap-1"
+              style={{
+                background: isWorked
+                  ? 'rgba(56, 221, 159, 0.15)'
+                  : isNoWork
+                  ? 'rgba(255, 107, 107, 0.15)'
+                  : isMissed
+                  ? 'rgba(245, 158, 11, 0.15)'
+                  : 'rgba(148, 163, 184, 0.15)',
+                color: isWorked
+                  ? '#38dd9f'
+                  : isNoWork
+                  ? '#ff6b6b'
+                  : isMissed
+                  ? '#f59e0b'
+                  : 'var(--color-text-2, #cbd5e1)',
+                border: isWorked
+                  ? '1px solid rgba(56, 221, 159, 0.3)'
+                  : isNoWork
+                  ? '1px solid rgba(255, 107, 107, 0.3)'
+                  : isMissed
+                  ? '1px solid rgba(245, 158, 11, 0.3)'
+                  : '1px solid rgba(148, 163, 184, 0.2)'
+              }}
+            >
+              {statusLabel}
             </span>
           </div>
 
-          {/* Deliverable Scope & Specifications - ALWAYS VISIBLE */}
+          {/* Deliverable Scope & Specifications */}
           <div>
             <div
               className="text-[11px] font-bold uppercase tracking-wider mb-1.5"
-              style={{ color: 'var(--color-text-3)' }}
+              style={{ color: 'var(--color-text-3, #94a3b8)' }}
             >
-              Deliverable Scope &amp; Specifications
+              DELIVERABLE SCOPE &amp; SPECIFICATIONS
             </div>
             <div
-              className="text-sm leading-relaxed p-3.5 rounded-lg border"
+              className="p-3.5 rounded-xl border text-sm leading-relaxed"
               style={{
-                background: 'var(--table-th-bg)',
-                borderColor: 'rgba(255,255,255,0.10)',
-                color: 'var(--color-text-1)',
+                background: 'var(--table-th-bg, rgba(255,255,255,0.03))',
+                borderColor: 'var(--color-border-soft, rgba(255,255,255,0.08))'
               }}
             >
               <p className="font-semibold text-xs text-blue-400 mb-1 flex items-center gap-1.5">
                 <span>📌</span>
-                <span>{task?.title}</span>
+                <span className="truncate">{task?.title || task?.task || 'Deliverable Task'}</span>
               </p>
-              <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--color-text-3)' }}>
+              <p
+                className="text-xs leading-relaxed whitespace-pre-wrap"
+                style={{ color: 'var(--color-text-3, #94a3b8)' }}
+              >
                 {task?.description || 'No detailed specifications provided for this deliverable.'}
               </p>
             </div>
           </div>
 
-          {/* Work Log Content */}
-          {isWorked && (
-            <div>
-              <div
-                className="text-[11px] font-semibold uppercase tracking-wider mb-1.5"
-                style={{ color: 'var(--color-text-3)' }}
-              >
-                Submitted Work Log
-              </div>
-              <div
-                className="text-sm leading-relaxed p-3.5 rounded-lg whitespace-pre-wrap"
-                style={{
-                  background: 'rgba(56,221,159,0.12)',
-                  border: '1px solid rgba(0,135,90,0.2)',
-                  color: '#38dd9f',
-                  fontFamily: 'inherit',
-                }}
-              >
-                {dayStatus?.text || rawLog?.work_text || 'No description entered.'}
-              </div>
-            </div>
-          )}
-
-          {/* No Work / Blocker Reason */}
-          {isNoWork && (
-            <div>
-              <div
-                className="text-[11px] font-semibold uppercase tracking-wider mb-1.5"
-                style={{ color: 'var(--color-danger)' }}
-              >
-                Blocker / Inactivity Reason
-              </div>
-              <div
-                className="text-sm leading-relaxed p-3.5 rounded-lg"
-                style={{
-                  background: 'rgba(255,107,107,0.12)',
-                  border: '1px solid rgba(255,107,107,0.2)',
-                  color: '#ff6b6b',
-                  fontStyle: 'italic',
-                }}
-              >
-                "{dayStatus?.reason || rawLog?.no_work_reason || 'No specific blocker logged.'}"
-              </div>
-            </div>
-          )}
-
-          {/* Pending / Missed Notice */}
-          {(dayStatus?.status === 'pending' || dayStatus?.status === 'missed') && (
-            dayStatus?.status === 'missed' ? (
-              <div className="p-3.5 rounded-lg border text-xs leading-relaxed bg-red-950 border-red-700 text-white font-bold">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>Submission Awaited / Past Due</span>
-                </div>
-                <p className="text-xs">
-                  {`No daily log was submitted by ${employee?.full_name || 'contributor'} for this workday.`}
-                </p>
-              </div>
-            ) : (
-              <div
-                className="p-3.5 rounded-lg border text-xs leading-relaxed"
-                style={{
-                  background: 'rgba(238,178,13,0.08)',
-                  borderColor: 'rgba(238,178,13,0.12)',
-                  color: '#eeb20d',
-                }}
-              >
-                <div className="font-bold flex items-center gap-1.5 mb-1">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>Scheduled Workday</span>
-                </div>
-                <p className="text-xs" style={{ color: 'var(--color-text-2)' }}>
-                  {`This task is scheduled within the active window (${task?.start_date} → ${task?.end_date}). Daily log entry will be submitted by ${employee?.full_name || 'the assignee'} upon progress completion.`}
-                </p>
-              </div>
-            )
-          )}
-
-          {/* N/A state */}
-          {dayStatus?.status === 'na' && (
+          {/* Contextual Workday Card (Missed / Logged / Stalled / Pending) */}
+          {isMissed && (
             <div
-              className="text-sm p-3.5 rounded-lg text-center"
-              style={{ background: 'var(--table-th-bg)', color: 'var(--color-text-3)' }}
+              className="p-4 rounded-xl border"
+              style={{
+                background: 'rgba(245, 158, 11, 0.10)',
+                borderColor: 'rgba(245, 158, 11, 0.25)',
+                color: '#f59e0b'
+              }}
             >
-              This date is outside the task's scheduled active window.
+              <div className="flex items-center gap-1.5 font-bold text-xs mb-1">
+                <Clock className="w-4 h-4" />
+                <span>Submission Awaited / Past Due</span>
+              </div>
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-2, #e2e8f0)' }}>
+                No daily log was submitted by {employee?.full_name || employee?.name || 'the contributor'} for this workday.
+              </p>
+            </div>
+          )}
+
+          {isWorked && (
+            <div
+              className="p-4 rounded-xl border"
+              style={{
+                background: 'rgba(56, 221, 159, 0.10)',
+                borderColor: 'rgba(56, 221, 159, 0.25)',
+                color: '#38dd9f'
+              }}
+            >
+              <div className="flex items-center gap-1.5 font-bold text-xs mb-1">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Daily Log Submitted</span>
+              </div>
+              <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--color-text-1, #f0ede8)' }}>
+                {dayStatus?.text || rawLog?.work_text || rawLog?.dailyUpdate || 'Successfully completed scheduled tasks for this day.'}
+              </p>
+            </div>
+          )}
+
+          {isNoWork && (
+            <div
+              className="p-4 rounded-xl border"
+              style={{
+                background: 'rgba(255, 107, 107, 0.10)',
+                borderColor: 'rgba(255, 107, 107, 0.25)',
+                color: '#ff6b6b'
+              }}
+            >
+              <div className="flex items-center gap-1.5 font-bold text-xs mb-1">
+                <AlertTriangle className="w-4 h-4" />
+                <span>Impediment / Blocker Reported</span>
+              </div>
+              <p className="text-xs leading-relaxed italic" style={{ color: 'var(--color-text-1, #f0ede8)' }}>
+                "{dayStatus?.reason || rawLog?.no_work_reason || rawLog?.blocker || 'Blocker encountered during workday.'}"
+              </p>
+            </div>
+          )}
+
+          {isPending && (
+            <div
+              className="p-4 rounded-xl border"
+              style={{
+                background: 'rgba(255, 255, 255, 0.04)',
+                borderColor: 'var(--color-border-soft, rgba(255,255,255,0.08))',
+                color: 'var(--color-text-3, #94a3b8)'
+              }}
+            >
+              <div className="flex items-center gap-1.5 font-bold text-xs mb-1 text-slate-300">
+                <Clock className="w-4 h-4 text-blue-400" />
+                <span>Scheduled Workday / In Progress</span>
+              </div>
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-3, #94a3b8)' }}>
+                This task is scheduled within the active window. Daily log will be submitted by {employee?.full_name || employee?.name || 'the assignee'} upon progress completion.
+              </p>
+            </div>
+          )}
+
+          {isNA && (
+            <div
+              className="p-4 rounded-xl border text-center text-xs"
+              style={{
+                background: 'var(--table-th-bg, rgba(255,255,255,0.03))',
+                borderColor: 'var(--color-border-soft, rgba(255,255,255,0.08))',
+                color: 'var(--color-text-3, #94a3b8)'
+              }}
+            >
+              This date is outside the deliverable's active scheduled window.
             </div>
           )}
         </div>
 
         {/* Footer */}
         <div
-          className="flex justify-end gap-2 px-5 py-3"
-          style={{ borderTop: '1px solid var(--color-border)', background: 'var(--table-th-bg)' }}
+          className="flex justify-end px-6 py-3.5 border-t"
+          style={{
+            borderColor: 'var(--color-border, rgba(255,255,255,0.1))',
+            background: 'var(--table-th-bg, rgba(255,255,255,0.02))'
+          }}
         >
-          <button onClick={onClose} className="btn-secondary">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2 rounded-xl text-sm font-medium border shadow-sm transition-all hover:opacity-90"
+            style={{
+              background: 'var(--btn-secondary-bg, rgba(255,255,255,0.08))',
+              borderColor: 'var(--color-border, rgba(255,255,255,0.15))',
+              color: 'var(--color-text-1, #f0ede8)'
+            }}
+          >
             Close
           </button>
         </div>

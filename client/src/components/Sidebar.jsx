@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard,
-  Calendar,
   Users,
   BarChart3,
   Sparkles,
@@ -13,6 +12,7 @@ import {
   LogOut,
   Zap,
   FolderKanban,
+  FileText,
 } from 'lucide-react';
 
 export default function Sidebar({ activeTab, onSelectTab }) {
@@ -22,13 +22,14 @@ export default function Sidebar({ activeTab, onSelectTab }) {
   const pmNavItems = [
     { id: 'dashboard',        label: 'Project Dashboard',       icon: LayoutDashboard },
     { id: 'other_workspaces', label: 'Other Workspaces',        icon: FolderKanban },
+    { id: 'pm_daily_logs',    label: 'Daily Logs',              icon: FileText },
     { id: 'workforce',        label: 'Workforce Directory',     icon: Users },
     { id: 'employee_360',     label: 'Employee 360° Analytics', icon: BarChart3 },
-    { id: 'calendar_matrix',  label: 'Calendar Matrix Tracker', icon: Calendar },
     { id: 'ai_summary',       label: 'AI Summary Hub',          icon: Sparkles, highlight: true },
   ];
   const empNavItems = [
-    { id: 'employee_dash', label: 'My Tasks & Daily Log', icon: Briefcase },
+    { id: 'employee_dash',       label: 'My Tasks & Daily Log', icon: Briefcase },
+    { id: 'employee_daily_logs', label: 'Daily Logs',           icon: FileText },
   ];
   const navItems = isPM ? pmNavItems : empNavItems;
 

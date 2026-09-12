@@ -85,6 +85,7 @@ export const api = {
     getAll: () => request('/projects'),
     getAllTasks: () => request('/projects/all/tasks'),
     getById: (id) => request(`/projects/${id}`),
+    getWorkspaceTasks: (projectId) => request(`/workspaces/${projectId}/tasks`),
     create: (data) => request('/projects', {
       method: 'POST',
       body: JSON.stringify(data)
@@ -111,6 +112,14 @@ export const api = {
     sendMessage: (projectId, data) => request(`/projects/${projectId}/messages`, {
       method: 'POST',
       body: JSON.stringify(data)
+    }),
+    updateWorkspaceTask: (projectId, taskId, data) => request(`/workspaces/${projectId}/tasks/${taskId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+    syncWorkspaceTasks: (projectId, tasks) => request(`/workspaces/${projectId}/tasks/sync`, {
+      method: 'POST',
+      body: JSON.stringify({ tasks })
     })
   },
   tasks: {
@@ -121,14 +130,24 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     }),
+    getMyLogs: (projectId) => {
+      const params = new URLSearchParams();
+      if (projectId && projectId !== 'all') params.append('projectId', projectId);
+      const query = params.toString() ? `?${params.toString()}` : '';
+      return request(`/daily-logs/my${query}`);
+    },
     getProjectMatrix: (projectId, dateFrom, dateTo) => {
-      let query = '';
-      if (dateFrom && dateTo) query = `?date_from=${dateFrom}&date_to=${dateTo}`;
+      const params = new URLSearchParams();
+      if (dateFrom) params.append('date_from', dateFrom);
+      if (dateTo) params.append('date_to', dateTo);
+      const query = params.toString() ? `?${params.toString()}` : '';
       return request(`/projects/${projectId}/matrix${query}`);
     },
     getFleetMatrix: (dateFrom, dateTo) => {
-      let query = '';
-      if (dateFrom && dateTo) query = `?date_from=${dateFrom}&date_to=${dateTo}`;
+      const params = new URLSearchParams();
+      if (dateFrom) params.append('date_from', dateFrom);
+      if (dateTo) params.append('date_to', dateTo);
+      const query = params.toString() ? `?${params.toString()}` : '';
       return request(`/matrix/fleet${query}`);
     }
   },

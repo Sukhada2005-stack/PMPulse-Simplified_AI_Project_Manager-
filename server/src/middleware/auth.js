@@ -28,7 +28,7 @@ export function authenticateToken(req, res, next) {
 }
 
 export function requirePM(req, res, next) {
-    if (!req.user || req.user.user_type !== 'pm') {
+    if (!req.user || (req.user.user_type !== 'pm' && req.user.user_type !== 'superuser')) {
         return res.status(403).json({ error: 'Administrative PM authorization required for this resource' });
     }
     next();

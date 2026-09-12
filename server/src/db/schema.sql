@@ -108,3 +108,19 @@ CREATE TABLE IF NOT EXISTS employee_warnings (
 );
 
 CREATE INDEX IF NOT EXISTS idx_employee_warnings_user ON employee_warnings(user_id, created_at);
+
+CREATE TABLE IF NOT EXISTS project_documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    user_id INTEGER,
+    name TEXT NOT NULL,
+    extension TEXT,
+    size TEXT,
+    upload_date TEXT,
+    data_url TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_project_documents_project ON project_documents(project_id, created_at DESC);

@@ -29,9 +29,50 @@ import {
   User,
   CornerDownLeft,
   MoreHorizontal,
-  Edit2
+  Edit2,
+  List,
+  LayoutGrid,
+  CheckSquare,
+  Layers
 } from 'lucide-react';
 import ProjectChatModal from './ProjectChatModal';
+
+const parseSprintEndDate = (dateStr) => {
+  if (!dateStr) return null;
+  const direct = new Date(String(dateStr).replace(/Sept/i, 'Sep'));
+  if (!isNaN(direct.getTime())) {
+    direct.setHours(23, 59, 59, 999);
+    return direct;
+  }
+  const months = { jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, sept:8, oct:9, nov:10, dec:11 };
+  const parts = String(dateStr).trim().split(/\s+/);
+  if (parts.length === 3) {
+    const day = parseInt(parts[0], 10);
+    const mStr = parts[1].toLowerCase().slice(0, 4);
+    const month = months[mStr] !== undefined ? months[mStr] : months[mStr.slice(0, 3)];
+    const year = parseInt(parts[2], 10);
+    if (!isNaN(day) && month !== undefined && !isNaN(year)) {
+      return new Date(year, month, day, 23, 59, 59, 999);
+    }
+  }
+  return null;
+};
+
+const isSprintExpired = (config) => {
+  if (!config) return true;
+  if (config.isCompleted) return true;
+  if (config.endTimestamp) {
+    return Date.now() > config.endTimestamp;
+  }
+  if (config.endDateISO) {
+    return new Date() > new Date(config.endDateISO);
+  }
+  if (config.end) {
+    const parsed = parseSprintEndDate(config.end);
+    if (parsed) return Date.now() > parsed.getTime();
+  }
+  return false;
+};
 
 export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) {
   const { user } = useAuth();
@@ -49,7 +90,21 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
   const [submissionFeedback, setSubmissionFeedback] = useState(null);
   const [showChatModal, setShowChatModal] = useState(false);
   const [selectedChatProjectId, setSelectedChatProjectId] = useState(null);
-  const [activeView, setActiveView] = useState('list');
+  const [activeView, setActiveView] = useState(() => {
+    try {
+      return localStorage.getItem('pmpulse_employee_active_view') || 'list';
+    } catch {
+      return 'list';
+    }
+  });
+
+  useEffect(() => {
+    if (activeView) {
+      try {
+        localStorage.setItem('pmpulse_employee_active_view', activeView);
+      } catch (e) {}
+    }
+  }, [activeView]);
 
   // Single source of truth for navigation tabs
   const NAVIGATION_TABS = [
@@ -59,26 +114,32 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
     { id: 'docs', label: 'Docs' }
   ];
 
+  const activeWsIdRef = useRef(selectedWorkspace?.id);
   const [workspaceTasks, setWorkspaceTasks] = useState(() => {
-    try { return JSON.parse(window.localStorage.getItem('pmpulse_workspaceTasks')) || []; } 
+    const wsId = selectedWorkspace?.id;
+    try { return (wsId ? JSON.parse(window.localStorage.getItem(`pmpulse_workspaceTasks_${wsId}`)) : null) || []; } 
     catch { return []; }
   });
   const [listTasks, setListTasks] = useState(() => {
-    try { return JSON.parse(window.localStorage.getItem('pmpulse_listTasks')) || []; } 
+    const wsId = selectedWorkspace?.id;
+    try { return (wsId ? JSON.parse(window.localStorage.getItem(`pmpulse_listTasks_${wsId}`)) : null) || []; } 
     catch { return []; }
   });
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
   const [newTaskName, setNewTaskName] = useState('');
   const [boardTasks, setBoardTasks] = useState(() => {
-    try { return JSON.parse(window.localStorage.getItem('pmpulse_boardTasks')) || []; } 
+    const wsId = selectedWorkspace?.id;
+    try { return (wsId ? JSON.parse(window.localStorage.getItem(`pmpulse_boardTasks_${wsId}`)) : null) || []; } 
     catch { return []; }
   });
   const [boardBacklogTasks, setBoardBacklogTasks] = useState(() => {
-    try { return JSON.parse(window.localStorage.getItem('pmpulse_boardBacklogTasks')) || []; } 
+    const wsId = selectedWorkspace?.id;
+    try { return (wsId ? JSON.parse(window.localStorage.getItem(`pmpulse_boardBacklogTasks_${wsId}`)) : null) || []; } 
     catch { return []; }
   });
   const [workspaceDocs, setWorkspaceDocs] = useState(() => {
-    try { return JSON.parse(window.localStorage.getItem('pmpulse_workspaceDocs')) || []; } 
+    const wsId = selectedWorkspace?.id;
+    try { return (wsId ? JSON.parse(window.localStorage.getItem(`pmpulse_workspaceDocs_${wsId}`)) : null) || []; } 
     catch { return []; }
   });
   const [isCreateListTaskOpen, setIsCreateListTaskOpen] = useState(false);
@@ -95,7 +156,8 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
   const [actionModalTasks, setActionModalTasks] = useState(null);
   const [isPullConfirmModalOpen, setIsPullConfirmModalOpen] = useState(false);
   const [sprintBacklogTasks, setSprintBacklogTasks] = useState(() => {
-    try { return JSON.parse(window.localStorage.getItem('pmpulse_sprintBacklogTasks')) || []; } 
+    const wsId = selectedWorkspace?.id;
+    try { return (wsId ? JSON.parse(window.localStorage.getItem(`pmpulse_sprintBacklogTasks_${wsId}`)) : null) || []; } 
     catch { return []; }
   });
   const [workspaceMembers, setWorkspaceMembers] = useState(() => {
@@ -190,129 +252,143 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
   // Push to localStorage to trigger cross-tab sync in other windows
   useEffect(() => {
     try {
-      localStorage.setItem('pmpulse_workspaceDocs', JSON.stringify(workspaceDocs));
+      if (selectedWorkspace?.id && activeWsIdRef.current === selectedWorkspace.id) {
+        localStorage.setItem(`pmpulse_workspaceDocs_${selectedWorkspace.id}`, JSON.stringify(workspaceDocs));
+      }
     } catch (e) {
-      console.error("Failed to stringify docs", e);
+      console.warn("Failed to stringify docs", e);
     }
-  }, [workspaceDocs]);
+  }, [workspaceDocs, selectedWorkspace?.id]);
 
   // Cross-tab synchronization for live UI updates
   useEffect(() => {
     const handleStorageChange = (e) => {
-      if (e.key === 'pmpulse_workspaceTasks' && e.newValue) {
+      const wsId = selectedWorkspace?.id;
+      if (!wsId) return;
+      if (e.key === `pmpulse_workspaceTasks_${wsId}` && e.newValue) {
         try { setWorkspaceTasks(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
       }
-      // Add Document Sync Listener
-      if (e.key === 'pmpulse_workspaceDocs' && e.newValue) {
+      if (e.key === `pmpulse_workspaceDocs_${wsId}` && e.newValue) {
         try { setWorkspaceDocs(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
       }
-      if (e.key === 'pmpulse_boardBacklogTasks' && e.newValue) {
+      if (e.key === `pmpulse_boardBacklogTasks_${wsId}` && e.newValue) {
         try { setBoardBacklogTasks(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
       }
-      if (e.key === 'pmpulse_listTasks' && e.newValue) {
+      if (e.key === `pmpulse_boardTasks_${wsId}` && e.newValue) {
+        try { setBoardTasks(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
+      }
+      if (e.key === `pmpulse_listTasks_${wsId}` && e.newValue) {
         try { setListTasks(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
+      }
+      if (e.key === `pmpulse_sprintBacklogTasks_${wsId}` && e.newValue) {
+        try { setSprintBacklogTasks(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
       }
     };
 
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  }, [selectedWorkspace?.id]);
 
-  // Sync to localStorage and broadcast events
+  // 1) Wipe & Reload Context Loader on Project Change
   useEffect(() => {
+    const id = selectedWorkspace?.id;
+    if (!id) {
+      activeWsIdRef.current = null;
+      setWorkspaceTasks([]);
+      setListTasks([]);
+      setBoardTasks([]);
+      setBoardBacklogTasks([]);
+      setWorkspaceDocs([]);
+      setSprintBacklogTasks([]);
+      setSprintConfig(null);
+      return;
+    }
     try {
-      window.localStorage.setItem('pmpulse_workspaceTasks', JSON.stringify(workspaceTasks));
-      window.dispatchEvent(new CustomEvent('pmpulse_workspaceTasks_updated', { detail: workspaceTasks }));
+      setWorkspaceTasks(JSON.parse(localStorage.getItem(`pmpulse_workspaceTasks_${id}`)) || []);
+      setListTasks(JSON.parse(localStorage.getItem(`pmpulse_listTasks_${id}`)) || []);
+      setBoardTasks(JSON.parse(localStorage.getItem(`pmpulse_boardTasks_${id}`)) || []);
+      setBoardBacklogTasks(JSON.parse(localStorage.getItem(`pmpulse_boardBacklogTasks_${id}`)) || []);
+      setWorkspaceDocs(JSON.parse(localStorage.getItem(`pmpulse_workspaceDocs_${id}`)) || []);
+      setSprintBacklogTasks(JSON.parse(localStorage.getItem(`pmpulse_sprintBacklogTasks_${id}`)) || []);
+      setSprintConfig(JSON.parse(localStorage.getItem(`pmpulse_sprintConfig_${id}`)) || null);
     } catch (e) {}
-  }, [workspaceTasks]);
+    activeWsIdRef.current = id;
+  }, [selectedWorkspace?.id]);
+
+  // Project-Scoped Storage Writers
+  useEffect(() => {
+    if (!selectedWorkspace?.id || activeWsIdRef.current !== selectedWorkspace.id) return;
+    try { window.localStorage.setItem(`pmpulse_boardTasks_${selectedWorkspace.id}`, JSON.stringify(boardTasks)); } catch (e) {}
+  }, [boardTasks, selectedWorkspace?.id]);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem('pmpulse_listTasks', JSON.stringify(listTasks));
-      window.dispatchEvent(new CustomEvent('pmpulse_listTasks_updated', { detail: listTasks }));
-    } catch (e) {}
-  }, [listTasks]);
+    if (!selectedWorkspace?.id || activeWsIdRef.current !== selectedWorkspace.id) return;
+    try { window.localStorage.setItem(`pmpulse_listTasks_${selectedWorkspace.id}`, JSON.stringify(listTasks)); } catch (e) {}
+  }, [listTasks, selectedWorkspace?.id]);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem('pmpulse_boardTasks', JSON.stringify(boardTasks));
-      window.dispatchEvent(new CustomEvent('pmpulse_boardTasks_updated', { detail: boardTasks }));
-    } catch (e) {}
-  }, [boardTasks]);
+    if (!selectedWorkspace?.id || activeWsIdRef.current !== selectedWorkspace.id) return;
+    try { window.localStorage.setItem(`pmpulse_boardBacklogTasks_${selectedWorkspace.id}`, JSON.stringify(boardBacklogTasks)); } catch (e) {}
+  }, [boardBacklogTasks, selectedWorkspace?.id]);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem('pmpulse_boardBacklogTasks', JSON.stringify(boardBacklogTasks));
-      window.dispatchEvent(new CustomEvent('pmpulse_boardBacklogTasks_updated', { detail: boardBacklogTasks }));
-    } catch (e) {}
-  }, [boardBacklogTasks]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('pmpulse_sprintBacklogTasks', JSON.stringify(sprintBacklogTasks));
-      window.dispatchEvent(new CustomEvent('pmpulse_sprintBacklogTasks_updated', { detail: sprintBacklogTasks }));
-    } catch (e) {}
-  }, [sprintBacklogTasks]);
-
-  // Real-time synchronization listeners (cross-tab via storage and same-tab via custom events)
-  useEffect(() => {
-    const handleSync = () => {
-      try {
-        const stored = JSON.parse(window.localStorage.getItem('pmpulse_workspaceTasks'));
-        if (stored) setWorkspaceTasks(stored);
-        const storedList = JSON.parse(window.localStorage.getItem('pmpulse_listTasks'));
-        if (storedList) setListTasks(storedList);
-        const storedBoard = JSON.parse(window.localStorage.getItem('pmpulse_boardTasks'));
-        if (storedBoard) setBoardTasks(storedBoard);
-        const storedBoardBacklog = JSON.parse(window.localStorage.getItem('pmpulse_boardBacklogTasks'));
-        if (storedBoardBacklog) setBoardBacklogTasks(storedBoardBacklog);
-        const storedSprint = JSON.parse(window.localStorage.getItem('pmpulse_sprintConfig'));
-        if (storedSprint) setSprintConfig(storedSprint);
-        const storedBacklog = JSON.parse(window.localStorage.getItem('pmpulse_sprintBacklogTasks'));
-        if (storedBacklog) setSprintBacklogTasks(storedBacklog);
-        const storedMembers = JSON.parse(window.localStorage.getItem('pmpulse_workspaceMembers'));
-        if (storedMembers) setWorkspaceMembers(storedMembers);
-      } catch (err) {}
-    };
-    window.addEventListener('storage', handleSync);
-    window.addEventListener('pmpulse_workspaceTasks_updated', handleSync);
-    window.addEventListener('pmpulse_listTasks_updated', handleSync);
-    window.addEventListener('pmpulse_boardTasks_updated', handleSync);
-    window.addEventListener('pmpulse_boardBacklogTasks_updated', handleSync);
-    window.addEventListener('pmpulse_sprintConfig_updated', handleSync);
-    window.addEventListener('pmpulse_sprintBacklogTasks_updated', handleSync);
-    return () => {
-      window.removeEventListener('storage', handleSync);
-      window.removeEventListener('pmpulse_workspaceTasks_updated', handleSync);
-      window.removeEventListener('pmpulse_listTasks_updated', handleSync);
-      window.removeEventListener('pmpulse_boardTasks_updated', handleSync);
-      window.removeEventListener('pmpulse_boardBacklogTasks_updated', handleSync);
-      window.removeEventListener('pmpulse_sprintConfig_updated', handleSync);
-      window.removeEventListener('pmpulse_sprintBacklogTasks_updated', handleSync);
-    };
-  }, []);
+    if (!selectedWorkspace?.id || activeWsIdRef.current !== selectedWorkspace.id) return;
+    try { window.localStorage.setItem(`pmpulse_sprintBacklogTasks_${selectedWorkspace.id}`, JSON.stringify(sprintBacklogTasks)); } catch (e) {}
+  }, [sprintBacklogTasks, selectedWorkspace?.id]);
 
   // Fetch overall workspace tasks from backend database
   useEffect(() => {
-    if (!selectedWorkspace) return;
+    const targetWsId = selectedWorkspace?.id;
+    if (!targetWsId) return;
     
     const token = localStorage.getItem('pulsepm_token');
-    fetch(`/api/workspaces/${selectedWorkspace.id}/tasks`, {
+    fetch(`/api/workspaces/${targetWsId}/tasks`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(res => res.json())
       .then(data => {
-        if (data.tasks) {
-          setWorkspaceTasks(prev => {
-            const localAddedTasks = prev.filter(task => task.id && !data.tasks.some(dt => dt.id === task.id));
-            const merged = [...localAddedTasks, ...data.tasks];
-            try { window.localStorage.setItem('pmpulse_workspaceTasks', JSON.stringify(merged)); } catch (e) {}
-            return merged;
+        if (selectedWorkspace?.id === targetWsId && Array.isArray(data.tasks)) {
+          const currentList = JSON.parse(window.localStorage.getItem(`pmpulse_listTasks_${targetWsId}`)) || [];
+          const currentBoard = JSON.parse(window.localStorage.getItem(`pmpulse_boardTasks_${targetWsId}`)) || [];
+          const activeTasks = [...currentList, ...currentBoard];
+          const normalizeTitle = (str) => !str ? '' : str.trim().replace(/[\u2010-\u2015]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/\s+/g, ' ').toLowerCase();
+
+          const reconciled = data.tasks.map(t => {
+            const tTitle = normalizeTitle(t['Issue / Task / Enhancement'] || t.title || t.description || '');
+            const activeMatch = activeTasks.find(at => 
+              (at.id && String(at.id) === String(t.id)) ||
+              (at.key && t.key && at.key === t.key) ||
+              (tTitle && normalizeTitle(at.task || at.title || at.description || at.taskName || '') === tTitle)
+            );
+            const activeAssignee = activeMatch?.assignee || activeMatch?.['Responsible'];
+            const activeStatus = activeMatch?.status || activeMatch?.['Status'];
+            const activeDueDate = activeMatch?.dueDate || activeMatch?.['Completed'];
+            const activePriority = activeMatch?.priority || activeMatch?.['Priority'];
+
+            const effectiveAssignee = (activeAssignee && activeAssignee !== 'Unassigned') ? activeAssignee : (t['Responsible'] || t.assignee || 'Unassigned');
+            const effectiveStatus = activeStatus || t['Status'] || (t.status === 'in_progress' ? 'In Progress' : (t.status || 'To Do'));
+            const effectiveDueDate = (activeDueDate && activeDueDate !== '—') ? activeDueDate : (t['Completed'] || t.dueDate || '—');
+            const effectivePriority = activePriority || t['Priority'] || t.priority || 'Medium';
+
+            return {
+              ...t,
+              'Responsible': effectiveAssignee,
+              assignee: effectiveAssignee,
+              'Status': effectiveStatus,
+              status: effectiveStatus,
+              'Completed': effectiveDueDate,
+              dueDate: effectiveDueDate,
+              'Priority': effectivePriority,
+              priority: effectivePriority
+            };
           });
+
+          setWorkspaceTasks(reconciled);
+          try { window.localStorage.setItem(`pmpulse_workspaceTasks_${targetWsId}`, JSON.stringify(reconciled)); } catch (e) {}
         }
       })
       .catch(err => console.error("Error fetching tasks for employee:", err));
-  }, [selectedWorkspace, activeView]);
+  }, [selectedWorkspace?.id]);
 
   const handleAddTask = async (e) => {
     e.preventDefault();
@@ -366,21 +442,25 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
   };
 
   useEffect(() => {
-    if (!selectedWorkspace) return;
+    if (!selectedWorkspace?.id) return;
     
     const token = localStorage.getItem('pulsepm_token');
     fetch(`/api/workspaces/${selectedWorkspace.id}/docs`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then(data => {
-        if (data.docs) setWorkspaceDocs(data.docs);
+        if (Array.isArray(data.docs)) setWorkspaceDocs(data.docs);
       })
       .catch(err => console.error("Error fetching docs for employee:", err));
-  }, [selectedWorkspace]);
+  }, [selectedWorkspace?.id]);
 
   const [sprintConfig, setSprintConfig] = useState(() => {
-    try { return JSON.parse(window.localStorage.getItem('pmpulse_sprintConfig')) || null; }
+    const wsId = selectedWorkspace?.id;
+    try { return (wsId ? JSON.parse(window.localStorage.getItem(`pmpulse_sprintConfig_${wsId}`)) : null) || null; }
     catch { return null; }
   });
   const boardColumns = ['To Do', 'In Progress', 'In Review', 'Done', 'Remove'];
@@ -388,45 +468,31 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
   const [dragInfo, setDragInfo] = useState(null);
   const [isSprintSetupOpen, setIsSprintSetupOpen] = useState(false);
   const [isCreationSourceModalOpen, setIsCreationSourceModalOpen] = useState(false);
+  const [isBacklogPickerOpen, setIsBacklogPickerOpen] = useState(false);
+  const [targetBoardColumn, setTargetBoardColumn] = useState('To Do');
   const [pullOrigin, setPullOrigin] = useState(null);
   const fileInputRef = useRef(null);
-
-  const handleSetSprintDuration = (weeks) => {
-    const startDate = new Date();
-    const endDate = new Date();
-    endDate.setDate(startDate.getDate() + (weeks * 7));
-
-    const formatDate = (date) => date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-
-    const newConfig = { start: formatDate(startDate), end: formatDate(endDate) };
-    setSprintConfig(newConfig);
-    try {
-      window.localStorage.setItem('pmpulse_sprintConfig', JSON.stringify(newConfig));
-      window.dispatchEvent(new CustomEvent('pmpulse_sprintConfig_updated', { detail: newConfig }));
-    } catch (e) {}
-    setIsSprintSetupOpen(false);
-    setIsCreationSourceModalOpen(true);
-  };
 
   const routeTasksToView = (tasksToRoute, destination) => {
     const formattedTasks = tasksToRoute.map((t, index) => {
         return {
-            id: Date.now() + index,
-            key: `VVM-${listTasks.length + boardTasks.length + boardBacklogTasks.length + index + 1}`,
-            type: 'Task',
-            description: t['Issue / Task / Enhancement'] || 'Untitled Task',
-            status: destination === 'board' || destination === 'boardBacklog' ? 'To Do' : (t['Status'] || 'To Do'),
-            assignee: t['Responsible'] || t['Added by'] || 'Unassigned',
-            dueDate: t['Completed'] || '',
-            priority: t['Priority'] || 'Medium'
+            id: t.id || (Date.now() + index),
+            key: t.key || `VVM-${listTasks.length + boardTasks.length + boardBacklogTasks.length + index + 1}`,
+            type: t.type || 'Task',
+            description: t['Issue / Task / Enhancement'] || t.description || t.title || 'Untitled Task',
+            status: destination === 'board' || destination === 'boardBacklog' ? 'To Do' : (t['Status'] || t.status || 'To Do'),
+            assignee: t['Responsible'] || t.assignee || t['Added by'] || 'Unassigned',
+            dueDate: t['Completed'] || t.dueDate || '',
+            priority: t['Priority'] || t.priority || 'Medium'
         };
     });
     if (destination === 'list') {
       setListTasks(prev => {
         const updated = [...prev, ...formattedTasks];
         try {
-          window.localStorage.setItem('pmpulse_listTasks', JSON.stringify(updated));
-          window.dispatchEvent(new CustomEvent('pmpulse_listTasks_updated', { detail: updated }));
+          if (selectedWorkspace?.id) {
+            window.localStorage.setItem(`pmpulse_listTasks_${selectedWorkspace.id}`, JSON.stringify(updated));
+          }
         } catch (e) {}
         return updated;
       });
@@ -435,8 +501,9 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
       setBoardTasks(prev => {
         const updated = [...prev, ...formattedTasks];
         try {
-          window.localStorage.setItem('pmpulse_boardTasks', JSON.stringify(updated));
-          window.dispatchEvent(new CustomEvent('pmpulse_boardTasks_updated', { detail: updated }));
+          if (selectedWorkspace?.id) {
+            window.localStorage.setItem(`pmpulse_boardTasks_${selectedWorkspace.id}`, JSON.stringify(updated));
+          }
         } catch (e) {}
         return updated;
       });
@@ -445,8 +512,9 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
       setBoardBacklogTasks(prev => {
         const updated = [...prev, ...formattedTasks];
         try {
-          window.localStorage.setItem('pmpulse_boardBacklogTasks', JSON.stringify(updated));
-          window.dispatchEvent(new CustomEvent('pmpulse_boardBacklogTasks_updated', { detail: updated }));
+          if (selectedWorkspace?.id) {
+            window.localStorage.setItem(`pmpulse_boardBacklogTasks_${selectedWorkspace.id}`, JSON.stringify(updated));
+          }
         } catch (e) {}
         return updated;
       });
@@ -480,8 +548,9 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
     setListTasks(prev => {
       const updated = prev.map(t => t.id === taskId ? { ...t, [field]: value } : t);
       try {
-        window.localStorage.setItem('pmpulse_listTasks', JSON.stringify(updated));
-        window.dispatchEvent(new CustomEvent('pmpulse_listTasks_updated', { detail: updated }));
+        if (selectedWorkspace?.id) {
+          window.localStorage.setItem(`pmpulse_listTasks_${selectedWorkspace.id}`, JSON.stringify(updated));
+        }
       } catch (e) {}
       return updated;
     });
@@ -489,7 +558,7 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
     setWorkspaceTasks(prev => {
       const updated = prev.map(t => {
         if (t.id === taskId) {
-          const updatedTask = { ...t, [field]: value };
+          const updatedTask = { ...t };
           if (field === 'description') updatedTask['Issue / Task / Enhancement'] = value;
           if (field === 'status') updatedTask['Status'] = value;
           if (field === 'assignee') updatedTask['Responsible'] = value;
@@ -500,8 +569,9 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
         return t;
       });
       try {
-        window.localStorage.setItem('pmpulse_workspaceTasks', JSON.stringify(updated));
-        window.dispatchEvent(new CustomEvent('pmpulse_workspaceTasks_updated', { detail: updated }));
+        if (selectedWorkspace?.id) {
+          window.localStorage.setItem(`pmpulse_workspaceTasks_${selectedWorkspace.id}`, JSON.stringify(updated));
+        }
       } catch (e) {}
       return updated;
     });
@@ -528,7 +598,7 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
     if (selectedWorkspace) {
       try {
         const token = localStorage.getItem('pulsepm_token');
-        await fetch(`/api/workspaces/${selectedWorkspace.id}/tasks`, {
+        const res = await fetch(`/api/workspaces/${selectedWorkspace.id}/tasks`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -536,6 +606,11 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
           },
           body: JSON.stringify(backlogTask)
         });
+        const data = await res.json();
+        if (data && data.task && data.task.id) {
+          sprintTask.id = data.task.id;
+          backlogTask.id = data.task.id;
+        }
       } catch (error) {
         console.error('Failed to persist task to database:', error);
       }
@@ -545,17 +620,20 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
       setBoardBacklogTasks(prev => {
         const updated = [...prev, sprintTask];
         try {
-          window.localStorage.setItem('pmpulse_boardBacklogTasks', JSON.stringify(updated));
-          window.dispatchEvent(new CustomEvent('pmpulse_boardBacklogTasks_updated', { detail: updated }));
+          if (selectedWorkspace?.id) {
+            window.localStorage.setItem(`pmpulse_boardBacklogTasks_${selectedWorkspace.id}`, JSON.stringify(updated));
+          }
         } catch (e) {}
         return updated;
       });
     } else if (activeView === 'board' || pullOrigin === 'board') { 
+      const boardItem = { ...sprintTask, status: targetBoardColumn || sprintTask.status || 'To Do' };
       setBoardTasks(prev => {
-        const updated = [...prev, sprintTask];
+        const updated = [...prev, boardItem];
         try {
-          window.localStorage.setItem('pmpulse_boardTasks', JSON.stringify(updated));
-          window.dispatchEvent(new CustomEvent('pmpulse_boardTasks_updated', { detail: updated }));
+          if (selectedWorkspace?.id) {
+            window.localStorage.setItem(`pmpulse_boardTasks_${selectedWorkspace.id}`, JSON.stringify(updated));
+          }
         } catch (e) {}
         return updated;
       }); 
@@ -563,8 +641,9 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
       setListTasks(prev => {
         const updated = [...prev, sprintTask];
         try {
-          window.localStorage.setItem('pmpulse_listTasks', JSON.stringify(updated));
-          window.dispatchEvent(new CustomEvent('pmpulse_listTasks_updated', { detail: updated }));
+          if (selectedWorkspace?.id) {
+            window.localStorage.setItem(`pmpulse_listTasks_${selectedWorkspace.id}`, JSON.stringify(updated));
+          }
         } catch (e) {}
         return updated;
       }); 
@@ -572,14 +651,163 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
     setWorkspaceTasks(prev => {
       const updated = [backlogTask, ...prev];
       try {
-        window.localStorage.setItem('pmpulse_workspaceTasks', JSON.stringify(updated));
-        window.dispatchEvent(new CustomEvent('pmpulse_workspaceTasks_updated', { detail: updated }));
+        if (selectedWorkspace?.id) {
+          window.localStorage.setItem(`pmpulse_workspaceTasks_${selectedWorkspace.id}`, JSON.stringify(updated));
+        }
       } catch (e) {}
       return updated;
     });
 
     setListTaskForm({ type: 'Task', description: '', status: 'To Do', assignee: '', dueDate: '', priority: 'Medium' }); 
     setIsCreateListTaskOpen(false);
+  };
+
+  const allBacklogTasks = useMemo(() => {
+    const listItems = (sprintBacklogTasks || []).map(t => ({ ...t, backlogSource: 'list' }));
+    const boardItems = (boardBacklogTasks || []).map(t => ({ ...t, backlogSource: 'board' }));
+    const combined = [...listItems];
+    boardItems.forEach(item => {
+      if (!combined.some(c => String(c.id) === String(item.id) || (c.key && c.key === item.key))) {
+        combined.push(item);
+      }
+    });
+    return combined;
+  }, [sprintBacklogTasks, boardBacklogTasks]);
+
+  const autoCompleteSprintInternal = () => {
+    const wsId = selectedWorkspace?.id;
+    if (!wsId) return;
+
+    let nextSprintBacklog = [...sprintBacklogTasks];
+    if (listTasks.length > 0) {
+      listTasks.forEach(task => {
+        if (!nextSprintBacklog.some(t => String(t.id) === String(task.id) || (t.key && t.key === task.key))) {
+          nextSprintBacklog.push({
+            ...task,
+            status: (task.status === 'Done' || task.status === 'Completed') ? 'Done' : 'To Do',
+            sprintNumber: sprintConfig ? `${sprintConfig.start} — ${sprintConfig.end}` : (task.sprintNumber || 'Sprint 1')
+          });
+        }
+      });
+      setSprintBacklogTasks(nextSprintBacklog);
+    }
+
+    let nextBoardBacklog = [...boardBacklogTasks];
+    if (boardTasks.length > 0) {
+      boardTasks.forEach(task => {
+        if (!nextBoardBacklog.some(t => String(t.id) === String(task.id) || (t.key && t.key === task.key))) {
+          nextBoardBacklog.push({
+            ...task,
+            status: (task.status === 'Done' || task.status === 'Completed') ? 'Done' : 'To Do'
+          });
+        }
+      });
+      setBoardBacklogTasks(nextBoardBacklog);
+    }
+
+    setListTasks([]);
+    setBoardTasks([]);
+
+    const updatedConfig = sprintConfig ? { ...sprintConfig, isCompleted: true } : { isCompleted: true };
+    setSprintConfig(updatedConfig);
+
+    try {
+      window.localStorage.setItem(`pmpulse_listTasks_${wsId}`, JSON.stringify([]));
+      window.localStorage.setItem(`pmpulse_boardTasks_${wsId}`, JSON.stringify([]));
+      window.localStorage.setItem(`pmpulse_sprintBacklogTasks_${wsId}`, JSON.stringify(nextSprintBacklog));
+      window.localStorage.setItem(`pmpulse_boardBacklogTasks_${wsId}`, JSON.stringify(nextBoardBacklog));
+      window.localStorage.setItem(`pmpulse_sprintConfig_${wsId}`, JSON.stringify(updatedConfig));
+    } catch (e) {
+      console.error("Failed to auto-complete expired sprint:", e);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedWorkspace?.id || !sprintConfig) return;
+    if (isSprintExpired(sprintConfig) && !sprintConfig.isCompleted) {
+      autoCompleteSprintInternal();
+    }
+    const interval = setInterval(() => {
+      if (isSprintExpired(sprintConfig) && !sprintConfig.isCompleted) {
+        autoCompleteSprintInternal();
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [selectedWorkspace?.id, sprintConfig]);
+
+  const handleSetSprintDuration = (weeks) => {
+    const startDate = new Date();
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + (weeks * 7));
+
+    const formatDate = (date) => date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    const config = {
+      start: formatDate(startDate),
+      end: formatDate(endDate),
+      endTimestamp: endDate.getTime(),
+      isCompleted: false
+    };
+    setSprintConfig(config);
+    try {
+      if (selectedWorkspace?.id) {
+        window.localStorage.setItem(`pmpulse_sprintConfig_${selectedWorkspace.id}`, JSON.stringify(config));
+      }
+    } catch (e) {}
+    setIsSprintSetupOpen(false);
+    setIsCreationSourceModalOpen(true);
+  };
+
+  const handleInitiateTaskCreation = (origin = 'list', targetCol = 'To Do') => {
+    setPullOrigin(origin);
+    setTargetBoardColumn(targetCol);
+
+    const expired = isSprintExpired(sprintConfig);
+    if (!sprintConfig || sprintConfig.isCompleted || expired) {
+      if (expired && sprintConfig && !sprintConfig.isCompleted) {
+        autoCompleteSprintInternal();
+      }
+      setIsSprintSetupOpen(true);
+    } else {
+      setIsCreationSourceModalOpen(true);
+    }
+  };
+
+  const handleAddBacklogTaskToActive = (task) => {
+    const wsId = selectedWorkspace?.id;
+    if (!wsId || !task) return;
+
+    const isBoard = (pullOrigin === 'board' || activeView === 'board');
+
+    if (isBoard) {
+      let nextBoard = [...boardTasks];
+      if (!nextBoard.some(t => String(t.id) === String(task.id) || (t.key && t.key === task.key))) {
+        nextBoard.push({ ...task, status: targetBoardColumn || task.status || 'To Do' });
+        setBoardTasks(nextBoard);
+        try { window.localStorage.setItem(`pmpulse_boardTasks_${wsId}`, JSON.stringify(nextBoard)); } catch (e) {}
+      }
+      const nextBoardBacklog = boardBacklogTasks.filter(t => String(t.id) !== String(task.id) && (!task.key || t.key !== task.key));
+      setBoardBacklogTasks(nextBoardBacklog);
+      try { window.localStorage.setItem(`pmpulse_boardBacklogTasks_${wsId}`, JSON.stringify(nextBoardBacklog)); } catch (e) {}
+
+      const nextSprintBacklog = sprintBacklogTasks.filter(t => String(t.id) !== String(task.id) && (!task.key || t.key !== task.key));
+      setSprintBacklogTasks(nextSprintBacklog);
+      try { window.localStorage.setItem(`pmpulse_sprintBacklogTasks_${wsId}`, JSON.stringify(nextSprintBacklog)); } catch (e) {}
+    } else {
+      let nextList = [...listTasks];
+      if (!nextList.some(t => String(t.id) === String(task.id) || (t.key && t.key === task.key))) {
+        nextList.push({ ...task });
+        setListTasks(nextList);
+        try { window.localStorage.setItem(`pmpulse_listTasks_${wsId}`, JSON.stringify(nextList)); } catch (e) {}
+      }
+      const nextSprintBacklog = sprintBacklogTasks.filter(t => String(t.id) !== String(task.id) && (!task.key || t.key !== task.key));
+      setSprintBacklogTasks(nextSprintBacklog);
+      try { window.localStorage.setItem(`pmpulse_sprintBacklogTasks_${wsId}`, JSON.stringify(nextSprintBacklog)); } catch (e) {}
+
+      const nextBoardBacklog = boardBacklogTasks.filter(t => String(t.id) !== String(task.id) && (!task.key || t.key !== task.key));
+      setBoardBacklogTasks(nextBoardBacklog);
+      try { window.localStorage.setItem(`pmpulse_boardBacklogTasks_${wsId}`, JSON.stringify(nextBoardBacklog)); } catch (e) {}
+    }
   };
 
   const handleDragStart = (e, id, sourceDroppableId = 'active') => {
@@ -658,11 +886,16 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
 
   const handleDeleteDoc = (e, id) => {
     e.stopPropagation();
-    setWorkspaceDocs(prev => {
-      const updated = prev.filter(doc => doc.id !== id);
-      try { window.localStorage.setItem('pmpulse_workspaceDocs', JSON.stringify(updated)); } catch (err) {}
-      return updated;
-    });
+    setWorkspaceDocs(prev => prev.filter(doc => String(doc.id) !== String(id)));
+    if (selectedWorkspace?.id) {
+      const token = localStorage.getItem('pulsepm_token');
+      fetch(`/api/workspaces/${selectedWorkspace.id}/docs/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      }).catch(err => console.error('Failed to delete document from database:', err));
+    }
   };
 
   const fetchTasksAndWarnings = async () => {
@@ -806,10 +1039,10 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
         const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
         
         const newDoc = {
-          id: Date.now() + Math.random(),
+          id: `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           name: file.name,
           extension: ext,
-          size: sizeMB > 1 ? `${sizeMB} MB` : `${(file.size / 1024).toFixed(0)} KB`,
+          size: Number(sizeMB) > 1 ? `${sizeMB} MB` : `${(file.size / 1024).toFixed(0)} KB`,
           uploadDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
           dataUrl: event.target.result // Base64 encoded string
         };
@@ -817,7 +1050,7 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
         setWorkspaceDocs(prev => [newDoc, ...prev]);
 
         // Persist to backend database
-        if (selectedWorkspace) {
+        if (selectedWorkspace?.id) {
           const token = localStorage.getItem('pulsepm_token');
           fetch(`/api/workspaces/${selectedWorkspace.id}/docs`, {
             method: 'POST',
@@ -826,7 +1059,14 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
               'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify(newDoc)
-          }).catch(err => console.error('Failed to save document to database:', err));
+          })
+            .then(res => res.json())
+            .then(data => {
+              if (data?.doc?.id) {
+                setWorkspaceDocs(prev => prev.map(d => d.id === newDoc.id ? { ...d, id: data.doc.id } : d));
+              }
+            })
+            .catch(err => console.error('Failed to save document to database:', err));
         }
       };
       reader.readAsDataURL(file); // Trigger the read
@@ -835,70 +1075,74 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleCompleteSprint = () => {
-    if (!window.confirm("Are you sure you want to complete this sprint? Incomplete tasks will be moved to the backlog.")) return;
+  const handleCompleteListSprint = () => {
+    if (!window.confirm("Are you sure you want to complete this list sprint? Active list tasks will be moved to the backlog list.")) return;
+    const wsId = selectedWorkspace?.id;
+    if (!wsId) return;
 
-    // 1. Identify tasks that are NOT completed
-    const incompleteTasks = boardTasks.filter(task => 
-      task.status !== 'Done' && task.status !== 'Remove'
-    );
-
-    // 2. Automatically roll incomplete tasks into the Backlog
-    if (incompleteTasks.length > 0) {
-      setBoardBacklogTasks(prev => {
-        const updatedBacklog = [...prev];
-        incompleteTasks.forEach(task => {
-          // Prevent duplicates, reset status to 'To Do' for the backlog
-          if (!updatedBacklog.some(t => t.id === task.id)) {
-            updatedBacklog.push({ ...task, status: 'To Do' });
-          }
-        });
-        return updatedBacklog;
+    // Move all tasks from active listTasks to sprintBacklogTasks (List Backlog)
+    let nextSprintBacklog = [...sprintBacklogTasks];
+    if (listTasks.length > 0) {
+      listTasks.forEach(task => {
+        if (!nextSprintBacklog.some(t => String(t.id) === String(task.id) || (t.key && t.key === task.key))) {
+          nextSprintBacklog.push({
+            ...task,
+            status: (task.status === 'Done' || task.status === 'Completed') ? 'Done' : 'To Do',
+            sprintNumber: sprintConfig ? `${sprintConfig.start} — ${sprintConfig.end}` : (task.sprintNumber || 'Sprint 1')
+          });
+        }
       });
+      setSprintBacklogTasks(nextSprintBacklog);
     }
 
-    // 3. Clear the Active Sprint board
-    setBoardTasks([]);
-    
-    // Note: Your existing useEffects will automatically catch these state changes 
-    // and push them to localStorage, triggering the cross-tab sync instantly!
+    // Clear Active Sprint List table
+    setListTasks([]);
+
+    const updatedConfig = sprintConfig ? { ...sprintConfig, isCompleted: true } : { isCompleted: true };
+    setSprintConfig(updatedConfig);
+
+    // Persist only list-related collections to project-scoped localStorage
+    try {
+      window.localStorage.setItem(`pmpulse_listTasks_${wsId}`, JSON.stringify([]));
+      window.localStorage.setItem(`pmpulse_sprintBacklogTasks_${wsId}`, JSON.stringify(nextSprintBacklog));
+      window.localStorage.setItem(`pmpulse_sprintConfig_${wsId}`, JSON.stringify(updatedConfig));
+    } catch (e) {
+      console.error("Failed to persist completed list sprint", e);
+    }
   };
 
-  const handleCompleteListSprint = () => {
-    if (!window.confirm("Are you sure you want to complete this list sprint? Incomplete tasks will be rolled over to the Overall Backlog.")) return;
+  const handleCompleteSprint = () => {
+    if (!window.confirm("Are you sure you want to complete this board sprint? Active board tasks will be moved to the backlog board.")) return;
+    const wsId = selectedWorkspace?.id;
+    if (!wsId) return;
 
-    // 1. Identify tasks in the active list that are NOT completed
-    const incompleteTasks = listTasks.filter(task => 
-      task.status !== 'Done' && task.status !== 'Completed' && task.status !== 'Remove'
-    );
-
-    // 2. Sync incomplete tasks back to the master workspace backlog with a reset status
-    if (incompleteTasks.length > 0) {
-      setWorkspaceTasks(prev => {
-        const updatedWorkspace = [...prev];
-        incompleteTasks.forEach(task => {
-          const existingIndex = updatedWorkspace.findIndex(t => t.id === task.id);
-          if (existingIndex !== -1) {
-            // Reset status if it already exists in the master list
-            updatedWorkspace[existingIndex] = { ...updatedWorkspace[existingIndex], status: 'To Do' };
-          } else {
-            // Append if it somehow missing from the master list
-            updatedWorkspace.push({ ...task, status: 'To Do' });
-          }
-        });
-        return updatedWorkspace;
+    // Move all tasks from active boardTasks to boardBacklogTasks (Board Backlog)
+    let nextBoardBacklog = [...boardBacklogTasks];
+    if (boardTasks.length > 0) {
+      boardTasks.forEach(task => {
+        if (!nextBoardBacklog.some(t => String(t.id) === String(task.id) || (t.key && t.key === task.key))) {
+          nextBoardBacklog.push({
+            ...task,
+            status: (task.status === 'Done' || task.status === 'Completed') ? 'Done' : 'To Do'
+          });
+        }
       });
+      setBoardBacklogTasks(nextBoardBacklog);
     }
 
-    // 3. Clear the Active Sprint List table
-    setListTasks([]);
-    
-    // Ensure listTasks is synchronized to localStorage to trigger cross-tab updates
+    // Clear Active Sprint Board
+    setBoardTasks([]);
+
+    const updatedConfig = sprintConfig ? { ...sprintConfig, isCompleted: true } : { isCompleted: true };
+    setSprintConfig(updatedConfig);
+
+    // Persist only board-related collections to project-scoped localStorage
     try {
-      localStorage.setItem('pmpulse_listTasks', JSON.stringify([]));
-      window.dispatchEvent(new CustomEvent('pmpulse_listTasks_updated', { detail: [] }));
+      window.localStorage.setItem(`pmpulse_boardTasks_${wsId}`, JSON.stringify([]));
+      window.localStorage.setItem(`pmpulse_boardBacklogTasks_${wsId}`, JSON.stringify(nextBoardBacklog));
+      window.localStorage.setItem(`pmpulse_sprintConfig_${wsId}`, JSON.stringify(updatedConfig));
     } catch (e) {
-      console.error("Failed to sync cleared list tasks", e);
+      console.error("Failed to persist completed board sprint", e);
     }
   };
 
@@ -1021,16 +1265,16 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
       {activeView === 'list' && (
         <>
           {/* Active Sprint Header (List View) */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between px-5 py-3 mb-6 bg-slate-800/40 border border-slate-700/50 rounded-lg shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center justify-between px-5 py-3 mb-6 bg-slate-100 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-lg shadow-sm">
             <div>
-              <h2 className="text-md font-semibold text-white">Active Sprint</h2>
-              <span className="text-xs text-slate-400">{sprintConfig ? `${sprintConfig.start} — ${sprintConfig.end}` : '07 Sept 2026 — 14 Sept 2026'}</span>
+              <h2 className="text-md font-semibold text-slate-900 dark:text-white">Active Sprint</h2>
+              <span className="text-xs text-slate-500 dark:text-slate-400">{sprintConfig ? `${sprintConfig.start} — ${sprintConfig.end}${sprintConfig.isCompleted ? ' (Completed)' : ''}` : '07 Sept 2026 — 14 Sept 2026'}</span>
             </div>
             
             <div className="mt-3 md:mt-0">
               <button 
                 onClick={handleCompleteListSprint}
-                className="text-sm bg-slate-700 hover:bg-slate-600 text-white font-medium px-4 py-1.5 rounded-md shadow-sm transition-colors"
+                className="text-sm bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-medium px-4 py-1.5 rounded-md shadow-sm transition-colors"
               >
                 Complete Sprint
               </button>
@@ -1200,7 +1444,7 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
             </div>
             <div className="flex items-center p-3 border-t border-slate-200 dark:border-slate-800 mt-auto">
               <button 
-                onClick={() => { if (!sprintConfig) { setIsSprintSetupOpen(true); } else { setPullOrigin(activeView); setIsCreationSourceModalOpen(true); } }} 
+                onClick={() => handleInitiateTaskCreation('list', 'To Do')} 
                 className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-1.5 rounded-md transition-colors"
               >
                 <Plus size={16} /> Create
@@ -1264,9 +1508,9 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
 
       {/* Overall Tasks View */}
       {activeView === 'overall' && (
-        <div className="bg-[#0F172A] dark:bg-slate-900 rounded-lg border border-slate-700/50 shadow-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-700/50 bg-slate-800/50 flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-white">Overall Project Tasks</h2>
+        <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Overall Project Tasks</h2>
             <button 
               onClick={() => setIsAddTaskModalOpen(true)}
               className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-slate-900 rounded-md transition-colors shadow-sm"
@@ -1276,7 +1520,7 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-slate-400 bg-slate-800/50 uppercase border-b border-slate-700/50">
+              <thead className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 uppercase border-b border-slate-200 dark:border-slate-700/50">
                 <tr>
                   <th className="px-4 py-3 font-medium">Task Name</th>
                   <th className="px-4 py-3 font-medium">Status</th>
@@ -1286,45 +1530,70 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                   <th className="px-4 py-3 font-medium">Added On</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700/50">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-700/50">
                 {workspaceTasks.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No overall tasks available for this workspace.</td></tr>
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No overall tasks available for this workspace.</td></tr>
                 ) : (
-                  workspaceTasks.map((task, i) => (
-                    <tr 
-                      key={task.id || i} 
-                      onClick={() => { if (isMultiSelectMode) { setSelectedTasks(prev => prev.some(t => t === task) ? prev.filter(t => t !== task) : [...prev, task]); } else { setActionModalTasks([task]); } }}
-                      className={`hover:bg-slate-800/50 transition-colors cursor-pointer ${selectedTasks.some(t => t === task) ? 'bg-yellow-500/10' : ''}`}
-                    >
-                      <td className="px-4 py-3 font-medium text-slate-200">
-                        {task['Issue / Task / Enhancement'] || task.title || task.task || 'Untitled Task'}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="px-2 py-1 bg-slate-800 text-slate-300 rounded text-xs">
-                          {task['Status'] || (task.status === 'in_progress' ? 'In Progress' : (task.status || 'To Do'))}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-400">
-                        {task['Responsible'] || task.assignee || task['Added by'] || 'Unassigned'}
-                      </td>
-                      <td className="px-4 py-3 text-slate-400">
-                        {task['Completed'] || task.dueDate || task.end_date || '—'}
-                      </td>
-                      <td className="px-4 py-3 text-slate-400">
-                        <span className="px-2 py-1 bg-slate-800 text-slate-300 rounded-md text-xs">
-                          {task['Priority'] || task.priority || 'Medium'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-400">
-                        {task['Added '] || (task.description && task.description !== (task['Issue / Task / Enhancement'] || task.title) ? task.description : '—')}
-                      </td>
-                    </tr>
-                  ))
+                  workspaceTasks.map((task, i) => {
+                    const normalizeTitle = (str) => !str ? '' : str.trim().replace(/[\u2010-\u2015]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/\s+/g, ' ').toLowerCase();
+                    const tTitle = normalizeTitle(task['Issue / Task / Enhancement'] || task.title || task.description || '');
+                    
+                    const activeMatch = [...(listTasks || []), ...(boardTasks || []), ...(boardBacklogTasks || [])].find(at => 
+                      (at.id && String(at.id) === String(task.id)) ||
+                      (at.key && task.key && at.key === task.key) ||
+                      (tTitle && normalizeTitle(at.task || at.title || at.description || at.taskName || '') === tTitle)
+                    );
+
+                    const displayAssignee = (activeMatch?.assignee && activeMatch.assignee !== 'Unassigned')
+                      ? activeMatch.assignee
+                      : (activeMatch?.['Responsible'] && activeMatch['Responsible'] !== 'Unassigned')
+                        ? activeMatch['Responsible']
+                        : (task['Responsible'] || task.assignee || task['Added by'] || 'Unassigned');
+
+                    const displayStatus = activeMatch?.status || activeMatch?.['Status'] || task['Status'] || (task.status === 'in_progress' ? 'In Progress' : (task.status || 'To Do'));
+                    const displayDueDate = (activeMatch?.dueDate && activeMatch.dueDate !== '—')
+                      ? activeMatch.dueDate
+                      : (activeMatch?.['Completed'] && activeMatch['Completed'] !== '—')
+                        ? activeMatch['Completed']
+                        : (task['Completed'] || task.dueDate || task.end_date || '—');
+                    const displayPriority = activeMatch?.priority || activeMatch?.['Priority'] || task['Priority'] || task.priority || 'Medium';
+
+                    return (
+                      <tr 
+                        key={task.id || i} 
+                        onClick={() => { if (isMultiSelectMode) { setSelectedTasks(prev => prev.some(t => t === task) ? prev.filter(t => t !== task) : [...prev, task]); } else { setActionModalTasks([task]); } }}
+                        className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer ${selectedTasks.some(t => t === task) ? 'bg-yellow-500/10' : ''}`}
+                      >
+                        <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-200">
+                          {task['Issue / Task / Enhancement'] || task.title || task.task || 'Untitled Task'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded text-xs">
+                            {displayStatus}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+                          {displayAssignee}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+                          {displayDueDate}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+                          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-md text-xs">
+                            {displayPriority}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
+                          {task['Added '] || (task.description && task.description !== (task['Issue / Task / Enhancement'] || task.title) ? task.description : '—')}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
 
                 {/* Inline task creation row */}
                 {isAddTaskModalOpen && (
-                  <tr className="bg-slate-800/40 border-b border-slate-700/50">
+                  <tr className="bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-700/50">
                     <td colSpan={6} className="px-4 py-3">
                       <form onSubmit={handleAddTask} className="flex items-center gap-3">
                         <input 
@@ -1334,13 +1603,13 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                           value={newTaskName}
                           onChange={(e) => setNewTaskName(e.target.value)}
                           required
-                          className="flex-1 bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-yellow-500"
+                          className="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-yellow-500"
                         />
                         <div className="flex items-center gap-2">
                           <button 
                             type="button"
                             onClick={() => setIsAddTaskModalOpen(false)}
-                            className="text-sm text-slate-400 hover:text-white px-3 py-1.5 transition-colors"
+                            className="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white px-3 py-1.5 transition-colors"
                           >
                             Cancel
                           </button>
@@ -1362,7 +1631,7 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                     <td colSpan={6} className="px-4 py-3">
                       <button 
                         onClick={() => setIsAddTaskModalOpen(true)}
-                        className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 px-3 py-1.5 rounded-md transition-colors"
+                        className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-1.5 rounded-md transition-colors"
                       >
                         <Plus size={16} /> Create
                       </button>
@@ -1373,10 +1642,10 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
             </table>
           </div>
           {isMultiSelectMode && selectedTasks.length > 0 && (
-            <div className="m-3 flex items-center justify-between bg-slate-800 p-3 rounded-lg border border-slate-700">
-              <span className="text-sm font-medium text-slate-200">{selectedTasks.length} tasks selected</span>
+            <div className="m-3 flex items-center justify-between bg-slate-100 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{selectedTasks.length} tasks selected</span>
               <div className="flex gap-2">
-                <button onClick={() => { setIsMultiSelectMode(false); setSelectedTasks([]); setPullOrigin(null); }} className="px-3 py-1.5 text-sm font-medium text-slate-400 hover:bg-slate-700 rounded-md">Cancel</button>
+                <button onClick={() => { setIsMultiSelectMode(false); setSelectedTasks([]); setPullOrigin(null); }} className="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md">Cancel</button>
                 <button onClick={() => pullOrigin ? setIsPullConfirmModalOpen(true) : setActionModalTasks(selectedTasks)} className="px-3 py-1.5 text-sm font-medium text-slate-900 bg-yellow-500 hover:bg-yellow-600 rounded-md shadow-sm">Proceed</button>
               </div>
             </div>
@@ -1388,16 +1657,16 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
       {activeView === 'board' && (
         <>
           {/* Active Sprint Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between px-5 py-3 mb-6 bg-slate-800/40 border border-slate-700/50 rounded-lg shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center justify-between px-5 py-3 mb-6 bg-slate-100 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-lg shadow-sm">
             <div>
-              <h2 className="text-md font-semibold text-white">Active Sprint</h2>
-              <span className="text-xs text-slate-400">{sprintConfig ? `${sprintConfig.start} — ${sprintConfig.end}` : '07 Sept 2026 — 14 Sept 2026'}</span>
+              <h2 className="text-md font-semibold text-slate-900 dark:text-white">Active Sprint</h2>
+              <span className="text-xs text-slate-500 dark:text-slate-400">{sprintConfig ? `${sprintConfig.start} — ${sprintConfig.end}${sprintConfig.isCompleted ? ' (Completed)' : ''}` : '07 Sept 2026 — 14 Sept 2026'}</span>
             </div>
             
             <div className="mt-3 md:mt-0">
               <button 
                 onClick={handleCompleteSprint}
-                className="text-sm bg-slate-700 hover:bg-slate-600 text-white font-medium px-4 py-1.5 rounded-md shadow-sm transition-colors"
+                className="text-sm bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-medium px-4 py-1.5 rounded-md shadow-sm transition-colors"
               >
                 Complete Sprint
               </button>
@@ -1406,7 +1675,7 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
           <div className="flex flex-col gap-6">
             <div className="flex gap-4 overflow-x-auto pb-4 pt-2 h-full min-h-[600px] items-start">
             {boardColumns.map(column => (
-              <div key={column} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, column, column)} className="min-w-[280px] w-[280px] bg-slate-50 dark:bg-slate-800/40 rounded-xl p-3 flex flex-col gap-3">
+              <div key={column} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, column, column)} className="min-w-[280px] w-[280px] bg-slate-50 dark:bg-slate-800/40 rounded-xl p-3 flex flex-col gap-3 border border-slate-200/60 dark:border-slate-700/30">
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">{column}</h3>
                   <span className="bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 text-xs px-2 py-0.5 rounded-full">
@@ -1419,8 +1688,8 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                     <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-3">
                       <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
                     </div>
-                    <p className="text-sm font-semibold mb-1">No work items</p>
-                    <p className="text-xs text-slate-500">Create a work item to get started. Work will appear here.</p>
+                    <p className="text-sm font-semibold mb-1 text-slate-700 dark:text-slate-200">No work items</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Create a work item to get started. Work will appear here.</p>
                   </div>
                 ) : (
                   boardTasks.filter(t => t.status === column).map(task => (
@@ -1434,21 +1703,21 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                       <div className="absolute top-2 right-2 action-menu-container z-20">
                         <button
                           onClick={(e) => handleToggleActionMenu(e, task.id)}
-                          className="p-1 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded transition-colors"
+                          className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded transition-colors"
                         >
                           <MoreHorizontal size={16} />
                         </button>
                         {activeDropdownId === task.id && (
-                          <div className="absolute right-0 mt-1 w-32 bg-slate-800 border border-slate-700 rounded-md shadow-xl z-50 overflow-hidden text-left">
+                          <div className="absolute right-0 mt-1 w-32 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl z-50 overflow-hidden text-left">
                             <button
                               onClick={(e) => handleOpenBoardEditModal(e, task)}
-                              className="w-full px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2"
+                              className="w-full px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
                             >
                               <Edit2 size={14} /> Edit
                             </button>
                             <button
                               onClick={(e) => handleDeleteTask(e, task.id)}
-                              className="w-full px-4 py-2 text-sm text-red-400 hover:bg-slate-700 flex items-center gap-2"
+                              className="w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
                             >
                               <Trash2 size={14} /> Delete
                             </button>
@@ -1459,18 +1728,18 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                       <div className="flex items-center justify-between text-xs text-slate-500">
                         <span>{task.key || task.id}</span>
                         {task.assignee && task.assignee !== 'Unassigned' && (
-                          <span className="text-[11px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{task.assignee}</span>
+                          <span className="text-[11px] text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{task.assignee}</span>
                         )}
                       </div>
                     </div>
                   ))
                 )}
                 {draftTask.columnId === column && draftTask.boardType === 'active' ? (
-                  <div className="bg-slate-800 border-2 border-blue-500 rounded-lg p-3 mt-2 shadow-lg">
+                  <div className="bg-white dark:bg-slate-800 border-2 border-blue-500 rounded-lg p-3 mt-2 shadow-lg">
                     <textarea
                       autoFocus
                       placeholder="What needs to be done?"
-                      className="w-full bg-transparent text-sm text-white resize-none outline-none mb-3"
+                      className="w-full bg-transparent text-sm text-slate-900 dark:text-white resize-none outline-none mb-3"
                       rows={2}
                       value={draftTask.title}
                       onChange={(e) => setDraftTask({...draftTask, title: e.target.value})}
@@ -1478,8 +1747,8 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                     />
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="relative group flex items-center justify-center p-1.5 hover:bg-slate-700 rounded cursor-pointer" title={draftTask.dueDate || 'Set due date'}>
-                          <Calendar size={14} className={draftTask.dueDate ? 'text-blue-400' : 'text-slate-400'} />
+                        <div className="relative group flex items-center justify-center p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded cursor-pointer" title={draftTask.dueDate || 'Set due date'}>
+                          <Calendar size={14} className={draftTask.dueDate ? 'text-blue-500 dark:text-blue-400' : 'text-slate-400'} />
                           <input
                             type="date"
                             value={draftTask.dueDate}
@@ -1487,16 +1756,16 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                             onChange={(e) => setDraftTask({...draftTask, dueDate: e.target.value})}
                           />
                         </div>
-                        <div className="relative group flex items-center justify-center p-1.5 hover:bg-slate-700 rounded cursor-pointer" title={draftTask.assignee || 'Assign member'}>
-                          <User size={14} className={draftTask.assignee !== 'Unassigned' ? 'text-blue-400' : 'text-slate-400'} />
+                        <div className="relative group flex items-center justify-center p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded cursor-pointer" title={draftTask.assignee || 'Assign member'}>
+                          <User size={14} className={draftTask.assignee !== 'Unassigned' ? 'text-blue-500 dark:text-blue-400' : 'text-slate-400'} />
                           <select
                             value={draftTask.assignee}
                             className="absolute inset-0 opacity-0 cursor-pointer w-full"
                             onChange={(e) => setDraftTask({...draftTask, assignee: e.target.value})}
                           >
-                            <option value="Unassigned" className="bg-slate-800 text-slate-300">Unassigned</option>
+                            <option value="Unassigned" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-300">Unassigned</option>
                             {dynamicAssignees && dynamicAssignees.filter(a => a !== 'Unassigned').map((name, i) => (
-                              <option key={i} value={name} className="bg-slate-800 text-white">{name}</option>
+                              <option key={i} value={name} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">{name}</option>
                             ))}
                           </select>
                         </div>
@@ -1508,8 +1777,8 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                   </div>
                 ) : (
                   <button
-                    onClick={() => setDraftTask({ columnId: column, boardType: 'active', title: '', assignee: 'Unassigned', dueDate: '' })}
-                    className="flex items-center gap-2 text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 p-2 rounded-md w-full mt-2 transition-colors text-sm font-medium"
+                    onClick={() => handleInitiateTaskCreation('board', column)}
+                    className="flex items-center gap-2 text-slate-500 hover:bg-slate-200/70 dark:hover:bg-slate-800/50 hover:text-slate-800 dark:hover:text-slate-200 p-2 rounded-md w-full mt-2 transition-colors text-sm font-medium"
                   >
                     <span>+</span> Create
                   </button>
@@ -1521,9 +1790,9 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
           {/* --- START BACKLOG BOARD UI --- */}
           <div className="mt-12">
             {/* Backlog Header */}
-            <div className="flex items-center justify-between px-5 py-3 mb-6 bg-slate-800/30 border border-slate-700/50 rounded-lg">
-              <h2 className="text-md font-semibold text-slate-300">Project Backlog</h2>
-              <span className="text-xs text-slate-500">Staging area for upcoming sprints</span>
+            <div className="flex items-center justify-between px-5 py-3 mb-6 bg-slate-100 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-700/50 rounded-lg">
+              <h2 className="text-md font-semibold text-slate-800 dark:text-slate-300">Project Backlog</h2>
+              <span className="text-xs text-slate-500 dark:text-slate-400">Staging area for upcoming sprints</span>
             </div>
 
             {/* Backlog Columns Container */}
@@ -1539,7 +1808,7 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                     id={dropId}
                     onDragOver={handleDragOver} 
                     onDrop={(e) => handleDrop(e, dropId, column)}
-                    className="flex-shrink-0 w-80 bg-slate-50 dark:bg-slate-800/40 rounded-xl p-3 flex flex-col gap-3"
+                    className="flex-shrink-0 w-80 bg-slate-50 dark:bg-slate-800/40 rounded-xl p-3 flex flex-col gap-3 border border-slate-200/60 dark:border-slate-700/30"
                   >
                     <div className="flex items-center gap-2">
                       <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">{column}</h3>
@@ -1553,8 +1822,8 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                         <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-3">
                           <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
                         </div>
-                        <p className="text-sm font-semibold mb-1">No work items</p>
-                        <p className="text-xs text-slate-500">Create a work item to get started. Work will appear here.</p>
+                        <p className="text-sm font-semibold mb-1 text-slate-700 dark:text-slate-200">No work items</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Create a work item to get started. Work will appear here.</p>
                       </div>
                     ) : (
                       columnTasks.map(task => (
@@ -1568,21 +1837,21 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                           <div className="absolute top-2 right-2 action-menu-container z-20">
                             <button
                               onClick={(e) => handleToggleActionMenu(e, task.id)}
-                              className="p-1 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded transition-colors"
+                              className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded transition-colors"
                             >
                               <MoreHorizontal size={16} />
                             </button>
                             {activeDropdownId === task.id && (
-                              <div className="absolute right-0 mt-1 w-32 bg-slate-800 border border-slate-700 rounded-md shadow-xl z-50 overflow-hidden text-left">
+                              <div className="absolute right-0 mt-1 w-32 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl z-50 overflow-hidden text-left">
                                 <button
                                   onClick={(e) => handleOpenBoardEditModal(e, task)}
-                                  className="w-full px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2"
+                                  className="w-full px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
                                 >
                                   <Edit2 size={14} /> Edit
                                 </button>
                                 <button
                                   onClick={(e) => handleDeleteTask(e, task.id)}
-                                  className="w-full px-4 py-2 text-sm text-red-400 hover:bg-slate-700 flex items-center gap-2"
+                                  className="w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
                                 >
                                   <Trash2 size={14} /> Delete
                                 </button>
@@ -1593,18 +1862,18 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                           <div className="flex items-center justify-between text-xs text-slate-500">
                             <span>{task.key || task.id}</span>
                             {task.assignee && task.assignee !== 'Unassigned' && (
-                              <span className="text-[11px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{task.assignee}</span>
+                              <span className="text-[11px] text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{task.assignee}</span>
                             )}
                           </div>
                         </div>
                       ))
                     )}
                     {draftTask.columnId === column && draftTask.boardType === 'backlog' ? (
-                      <div className="bg-slate-800 border-2 border-blue-500 rounded-lg p-3 mt-2 shadow-lg">
+                      <div className="bg-white dark:bg-slate-800 border-2 border-blue-500 rounded-lg p-3 mt-2 shadow-lg">
                         <textarea
                           autoFocus
                           placeholder="What needs to be done?"
-                          className="w-full bg-transparent text-sm text-white resize-none outline-none mb-3"
+                          className="w-full bg-transparent text-sm text-slate-900 dark:text-white resize-none outline-none mb-3"
                           rows={2}
                           value={draftTask.title}
                           onChange={(e) => setDraftTask({...draftTask, title: e.target.value})}
@@ -1612,8 +1881,8 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                         />
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <div className="relative group flex items-center justify-center p-1.5 hover:bg-slate-700 rounded cursor-pointer" title={draftTask.dueDate || 'Set due date'}>
-                              <Calendar size={14} className={draftTask.dueDate ? 'text-blue-400' : 'text-slate-400'} />
+                            <div className="relative group flex items-center justify-center p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded cursor-pointer" title={draftTask.dueDate || 'Set due date'}>
+                              <Calendar size={14} className={draftTask.dueDate ? 'text-blue-500 dark:text-blue-400' : 'text-slate-400'} />
                               <input
                                 type="date"
                                 value={draftTask.dueDate}
@@ -1621,16 +1890,16 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                                 onChange={(e) => setDraftTask({...draftTask, dueDate: e.target.value})}
                               />
                             </div>
-                            <div className="relative group flex items-center justify-center p-1.5 hover:bg-slate-700 rounded cursor-pointer" title={draftTask.assignee || 'Assign member'}>
-                              <User size={14} className={draftTask.assignee !== 'Unassigned' ? 'text-blue-400' : 'text-slate-400'} />
+                            <div className="relative group flex items-center justify-center p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded cursor-pointer" title={draftTask.assignee || 'Assign member'}>
+                              <User size={14} className={draftTask.assignee !== 'Unassigned' ? 'text-blue-500 dark:text-blue-400' : 'text-slate-400'} />
                               <select
                                 value={draftTask.assignee}
                                 className="absolute inset-0 opacity-0 cursor-pointer w-full"
                                 onChange={(e) => setDraftTask({...draftTask, assignee: e.target.value})}
                               >
-                                <option value="Unassigned" className="bg-slate-800 text-slate-300">Unassigned</option>
+                                <option value="Unassigned" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-300">Unassigned</option>
                                 {dynamicAssignees && dynamicAssignees.filter(a => a !== 'Unassigned').map((name, i) => (
-                                  <option key={i} value={name} className="bg-slate-800 text-white">{name}</option>
+                                  <option key={i} value={name} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">{name}</option>
                                 ))}
                               </select>
                             </div>
@@ -1643,7 +1912,7 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                     ) : (
                       <button
                         onClick={() => setDraftTask({ columnId: column, boardType: 'backlog', title: '', assignee: 'Unassigned', dueDate: '' })}
-                        className="flex items-center gap-2 text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 p-2 rounded-md w-full mt-2 transition-colors text-sm font-medium"
+                        className="flex items-center gap-2 text-slate-500 hover:bg-slate-200/70 dark:hover:bg-slate-800/50 hover:text-slate-800 dark:hover:text-slate-200 p-2 rounded-md w-full mt-2 transition-colors text-sm font-medium"
                       >
                         <span>+</span> Create
                       </button>
@@ -1872,14 +2141,106 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
       )}
 
       {actionModalTasks && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm p-6 bg-white dark:bg-slate-900 rounded-lg shadow-xl relative">
-            <h2 className="text-lg font-bold mb-4 text-slate-900 dark:text-white">Add {actionModalTasks.length} Task(s) To:</h2>
-            <button onClick={() => routeTasksToView(actionModalTasks, 'list')} className="w-full text-left px-4 py-2 mb-2 rounded border border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800 text-slate-900 dark:text-white">Add in List view</button>
-            <button onClick={() => routeTasksToView(actionModalTasks, 'board')} className="w-full text-left px-4 py-2 mb-2 rounded border border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800 text-slate-900 dark:text-white">Add in Board view</button>
-            <button onClick={() => { setIsMultiSelectMode(true); setSelectedTasks(prev => [...new Set([...prev, ...actionModalTasks])]); setActionModalTasks(null); }} className="w-full text-left px-4 py-2 rounded border border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800 font-medium text-yellow-600 dark:text-yellow-500">Select more tasks</button>
-            <div className="mt-4 flex justify-end">
-              <button onClick={() => setActionModalTasks(null)} className="text-sm font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">Cancel</button>
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in"
+          onClick={(e) => e.target === e.currentTarget && setActionModalTasks(null)}
+        >
+          <div className="w-full max-w-md p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 relative animate-scale-up">
+            <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border border-yellow-500/20">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                    Add {actionModalTasks.length} Task(s) To:
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Route selected task to an active workspace view
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setActionModalTasks(null)} 
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              <button 
+                onClick={() => routeTasksToView(actionModalTasks, 'list')} 
+                className="w-full flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/70 hover:bg-blue-50/60 dark:bg-slate-800/60 dark:hover:bg-slate-800 hover:border-blue-400 dark:hover:border-blue-500 transition-all group text-left shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                    <List className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                      Add in List view
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Organize tasks into active sprint list table
+                    </div>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
+              </button>
+
+              <button 
+                onClick={() => routeTasksToView(actionModalTasks, 'board')} 
+                className="w-full flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/70 hover:bg-indigo-50/60 dark:bg-slate-800/60 dark:hover:bg-slate-800 hover:border-indigo-400 dark:hover:border-indigo-500 transition-all group text-left shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+                    <LayoutGrid className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                      Add in Board view
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Position tasks onto Kanban sprint workflow columns
+                    </div>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all" />
+              </button>
+
+              <button 
+                onClick={() => { 
+                  setIsMultiSelectMode(true); 
+                  setSelectedTasks(prev => [...new Set([...prev, ...actionModalTasks])]); 
+                  setActionModalTasks(null); 
+                }} 
+                className="w-full flex items-center justify-between p-3 rounded-xl border border-dashed border-yellow-400/80 dark:border-yellow-500/50 bg-yellow-50/50 hover:bg-yellow-100/50 dark:bg-yellow-500/5 dark:hover:bg-yellow-500/10 text-left transition-all group"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 rounded-lg bg-yellow-500/15 text-yellow-600 dark:text-yellow-400">
+                    <CheckSquare className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-yellow-800 dark:text-yellow-400">
+                      Select more tasks
+                    </div>
+                    <div className="text-[11px] text-yellow-700/70 dark:text-yellow-500/70">
+                      Enable multi-select mode to choose additional tasks
+                    </div>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-yellow-600 dark:text-yellow-400 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+              <button 
+                onClick={() => setActionModalTasks(null)} 
+                className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
@@ -1887,14 +2248,144 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
 
       {isCreationSourceModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm p-6 bg-white dark:bg-slate-900 rounded-lg shadow-xl">
+          <div className="w-full max-w-sm p-6 bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Make current selection from..</h3>
             <div className="flex flex-col gap-3">
-              <button onClick={() => { setIsCreationSourceModalOpen(false); setActiveView('overall'); setIsMultiSelectMode(true); }} className="w-full text-left px-4 py-2 rounded border border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800 font-medium text-slate-900 dark:text-white">Select from overall task list</button>
-              <button onClick={() => { setIsCreationSourceModalOpen(false); setIsCreateListTaskOpen(true); }} className="w-full text-left px-4 py-2 rounded border border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800 font-medium text-slate-900 dark:text-white">Create new task</button>
+              <button
+                onClick={() => {
+                  setIsCreationSourceModalOpen(false);
+                  setActiveView('overall');
+                  setIsMultiSelectMode(true);
+                }}
+                className="w-full text-left px-4 py-2 rounded border border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800 font-medium text-slate-900 dark:text-white"
+              >
+                Select from overall task list
+              </button>
+              <button
+                onClick={() => {
+                  setIsCreationSourceModalOpen(false);
+                  setIsCreateListTaskOpen(true);
+                }}
+                className="w-full text-left px-4 py-2 rounded border border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800 font-medium text-slate-900 dark:text-white"
+              >
+                Create new task
+              </button>
+              {allBacklogTasks.length > 0 && (
+                <button
+                  onClick={() => {
+                    setIsCreationSourceModalOpen(false);
+                    setIsBacklogPickerOpen(true);
+                  }}
+                  className="w-full text-left px-4 py-2 rounded border border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800 font-medium flex items-center justify-between text-slate-900 dark:text-white"
+                >
+                  <span>Add from backlog tasks</span>
+                  <span className="text-xs bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 font-semibold px-2 py-0.5 rounded-full">
+                    {allBacklogTasks.length}
+                  </span>
+                </button>
+              )}
             </div>
             <div className="mt-4 flex justify-end">
-              <button onClick={() => { setIsCreationSourceModalOpen(false); setPullOrigin(null); }} className="text-sm font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">Cancel</button>
+              <button
+                onClick={() => {
+                  setIsCreationSourceModalOpen(false);
+                  setPullOrigin(null);
+                }}
+                className="text-sm font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isBacklogPickerOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-xl bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                  Add from Backlog Tasks
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Click any task to add it into the active {(pullOrigin === 'board' || activeView === 'board') ? 'board' : 'list'}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setIsBacklogPickerOpen(false);
+                  setPullOrigin(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-md"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto space-y-2 flex-1 divide-y divide-slate-100 dark:divide-slate-800">
+              {allBacklogTasks.length === 0 ? (
+                <div className="text-center py-10 text-slate-500 dark:text-slate-400 text-sm">
+                  No backlog tasks available for this project.
+                </div>
+              ) : (
+                allBacklogTasks.map((task) => (
+                  <div
+                    key={task.id || task.key}
+                    onClick={() => handleAddBacklogTaskToActive(task)}
+                    className="pt-2 pb-2 px-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/70 cursor-pointer transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-700 flex items-center justify-between group"
+                  >
+                    <div className="flex-1 min-w-0 pr-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                          {task.key || task.id}
+                        </span>
+                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                          {task.type || 'Task'}
+                        </span>
+                        {task.priority && (
+                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">
+                            {task.priority}
+                          </span>
+                        )}
+                        {task.sprintNumber && (
+                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
+                            {task.sprintNumber}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+                        {task.description || task.task || task.taskName || task.title || 'Untitled Task'}
+                      </p>
+                      <div className="text-xs text-slate-400 mt-0.5">
+                        Assignee: {task.assignee || 'Unassigned'}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddBacklogTaskToActive(task);
+                      }}
+                      className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-md bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 group-hover:bg-yellow-500 group-hover:text-slate-900 transition-colors shrink-0"
+                    >
+                      <Plus size={14} /> Add
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="px-6 py-3 border-t border-slate-200 dark:border-slate-800 flex justify-end">
+              <button
+                onClick={() => {
+                  setIsBacklogPickerOpen(false);
+                  setPullOrigin(null);
+                }}
+                className="px-4 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
+              >
+                Done
+              </button>
             </div>
           </div>
         </div>
@@ -1918,17 +2409,17 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
           onClick={(e) => { if (e.target === e.currentTarget) setSelectedTaskModal(null); }}
         >
-          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
 
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-5 border-b border-slate-800">
+            <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-3">
-                <span className="text-xs font-mono text-slate-400 bg-slate-800 px-2 py-1 rounded">{selectedTaskModal.id}</span>
-                <span className="text-sm font-medium text-slate-300">{selectedTaskModal.status}</span>
+                <span className="text-xs font-mono text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">{selectedTaskModal.id}</span>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{selectedTaskModal.status}</span>
               </div>
               <button
                 onClick={() => setSelectedTaskModal(null)}
-                className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 <X size={20} />
               </button>
@@ -1936,15 +2427,15 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
 
             {/* Modal Body */}
             <div className="p-6 overflow-y-auto space-y-6">
-              <h2 className="text-2xl font-bold text-white">
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
                 {selectedTaskModal.taskName || selectedTaskModal.title || selectedTaskModal.description || 'Untitled Task'}
               </h2>
 
-              <div className="grid grid-cols-2 gap-6 bg-slate-800/30 p-4 rounded-lg border border-slate-800/50">
+              <div className="grid grid-cols-2 gap-6 bg-slate-50 dark:bg-slate-800/30 p-4 rounded-lg border border-slate-200 dark:border-slate-800/50">
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Assignee</label>
-                  <div className="flex items-center gap-2 text-slate-300 font-medium">
-                    <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400">
+                  <div className="flex items-center gap-2 text-slate-800 dark:text-slate-300 font-medium">
+                    <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-500 dark:text-blue-400">
                       <User size={12} />
                     </div>
                     {selectedTaskModal.assignee || 'Unassigned'}
@@ -1952,11 +2443,11 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Due Date</label>
-                  <div className="text-slate-300 font-medium">{selectedTaskModal.dueDate || 'No date set'}</div>
+                  <div className="text-slate-800 dark:text-slate-300 font-medium">{selectedTaskModal.dueDate || 'No date set'}</div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Priority</label>
-                  <div className="text-slate-300 font-medium">{selectedTaskModal.priority || 'Medium'}</div>
+                  <div className="text-slate-800 dark:text-slate-300 font-medium">{selectedTaskModal.priority || 'Medium'}</div>
                 </div>
               </div>
             </div>
@@ -1966,26 +2457,26 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
       {/* Kanban Task Edit Modal */}
       {boardEditTask && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg overflow-hidden shadow-2xl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl w-full max-w-lg overflow-hidden shadow-2xl">
             <div className="p-6">
-              <h2 className="text-xl font-bold text-white mb-4">Edit Task: {boardEditTask.key || boardEditTask.id}</h2>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Edit Task: {boardEditTask.key || boardEditTask.id}</h2>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Task Title</label>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Task Title</label>
                   <input
                     type="text"
                     value={boardEditTask.task || boardEditTask.title || ''}
                     onChange={(e) => setBoardEditTask({...boardEditTask, task: e.target.value, title: e.target.value})}
-                    className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white text-sm focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded p-2 text-slate-900 dark:text-white text-sm focus:border-blue-500 focus:outline-none"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Status</label>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Status</label>
                     <select
                       value={boardEditTask.status || 'To Do'}
                       onChange={(e) => setBoardEditTask({...boardEditTask, status: e.target.value})}
-                      className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white text-sm focus:border-blue-500 focus:outline-none"
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded p-2 text-slate-900 dark:text-white text-sm focus:border-blue-500 focus:outline-none"
                     >
                       <option value="To Do">To Do</option>
                       <option value="In Progress">In Progress</option>
@@ -1994,11 +2485,11 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Priority</label>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Priority</label>
                     <select
                       value={boardEditTask.priority || 'Medium'}
                       onChange={(e) => setBoardEditTask({...boardEditTask, priority: e.target.value})}
-                      className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white text-sm focus:border-blue-500 focus:outline-none"
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded p-2 text-slate-900 dark:text-white text-sm focus:border-blue-500 focus:outline-none"
                     >
                       <option value="Highest">Highest</option>
                       <option value="High">High</option>
@@ -2007,31 +2498,31 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Assignee</label>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Assignee</label>
                     <input
                       type="text"
                       value={boardEditTask.assignee || ''}
                       onChange={(e) => setBoardEditTask({...boardEditTask, assignee: e.target.value})}
-                      className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white text-sm focus:border-blue-500 focus:outline-none"
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded p-2 text-slate-900 dark:text-white text-sm focus:border-blue-500 focus:outline-none"
                       placeholder="Unassigned"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Due Date</label>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Due Date</label>
                     <input
                       type="date"
                       value={boardEditTask.dueDate || ''}
                       onChange={(e) => setBoardEditTask({...boardEditTask, dueDate: e.target.value})}
-                      className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white text-sm focus:border-blue-500 focus:outline-none [color-scheme:dark]"
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded p-2 text-slate-900 dark:text-white text-sm focus:border-blue-500 focus:outline-none"
                     />
                   </div>
                 </div>
               </div>
             </div>
-            <div className="p-4 border-t border-slate-800 flex justify-end gap-3 bg-slate-900/50">
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3 bg-slate-50 dark:bg-slate-900/50">
               <button
                 onClick={() => setBoardEditTask(null)}
-                className="px-4 py-2 bg-transparent hover:bg-slate-800 text-slate-300 text-sm font-medium rounded-lg transition-colors"
+                className="px-4 py-2 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-lg transition-colors"
               >
                 Cancel
               </button>

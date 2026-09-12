@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard,
-  Calendar,
   Users,
   UserCheck,
   Sparkles,
@@ -38,7 +37,6 @@ export default function Navbar({ activeTab, onSelectTab, workspaces, setSelected
 
   const pmTabs = [
     { id: 'dashboard', label: 'Project Dashboard', icon: LayoutDashboard },
-    { id: 'calendar_matrix', label: 'Calendar Matrix Tracker', icon: Calendar },
     { id: 'workforce', label: 'Workforce Directory', icon: Users },
     { id: 'employee_360', label: 'Employee 360° Analytics', icon: UserCheck },
     { id: 'ai_summary', label: 'AI Summary Hub', icon: Sparkles, highlight: true }
