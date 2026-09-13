@@ -19,6 +19,12 @@ export default function Sidebar({ activeTab, onSelectTab }) {
   const { user, isPM } = useAuth();
   const [expanded, setExpanded] = useState(false);
 
+  const isSuperuser = user?.user_type === 'superuser';
+
+  const superuserNavItems = [
+    { id: 'superuser_hub', label: 'Superuser Hub', icon: ShieldCheck, highlight: true },
+  ];
+
   const pmNavItems = [
     { id: 'dashboard',        label: 'Project Dashboard',       icon: LayoutDashboard },
     { id: 'other_workspaces', label: 'Other Workspaces',        icon: FolderKanban },
@@ -31,7 +37,7 @@ export default function Sidebar({ activeTab, onSelectTab }) {
     { id: 'employee_dash',       label: 'My Tasks & Daily Log', icon: Briefcase },
     { id: 'employee_daily_logs', label: 'Daily Logs',           icon: FileText },
   ];
-  const navItems = isPM ? pmNavItems : empNavItems;
+  const navItems = isSuperuser ? superuserNavItems : (isPM ? pmNavItems : empNavItems);
 
   /* Widths */
   const W_CLOSED = 56;
@@ -119,7 +125,7 @@ export default function Sidebar({ activeTab, onSelectTab }) {
         {/* Nav Items */}
         {navItems.map(item => {
           const Icon = item.icon;
-          const isActive = activeTab === item.id;
+          const isActive = isSuperuser ? true : activeTab === item.id;
           const accent = item.highlight ? '#eeb20d' : undefined;
           return (
             <button

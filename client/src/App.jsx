@@ -120,6 +120,7 @@ function MainApp() {
     if (!loading && user) {
       if (isPM && activeTab === 'employee_dash') setActiveTab('dashboard');
       if (!isPM && user.user_type !== 'superuser' && activeTab !== 'employee_dash' && activeTab !== 'employee_daily_logs') setActiveTab('employee_dash');
+      if (user.user_type === 'superuser' && activeTab !== 'superuser_hub') setActiveTab('superuser_hub');
     }
   }, [user?.user_type, loading]);
 
