@@ -35,6 +35,7 @@ export function seedDatabase() {
     `);
 
     const superuserPasswordHash = bcrypt.hashSync('PulsePM@2005', 10);
+    const adminSuperuserPasswordHash = bcrypt.hashSync('PulsePM@2026', 10);
 
     const su = db.prepare(`
         INSERT INTO users (email, password_hash, full_name, role_title, user_type, status, avatar_url, manager_id, is_first_login)
@@ -47,6 +48,21 @@ export function seedDatabase() {
         'superuser',
         'active',
         'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80',
+        null,
+        0
+    );
+
+    const su2 = db.prepare(`
+        INSERT INTO users (email, password_hash, full_name, role_title, user_type, status, avatar_url, manager_id, is_first_login)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+        'admin@pulsepm.internal',
+        adminSuperuserPasswordHash,
+        'Admin Superuser',
+        'System Superuser',
+        'superuser',
+        'active',
+        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
         null,
         0
     );
