@@ -105,6 +105,7 @@ export function AuthProvider({ children }) {
       const res = await api.auth.login('alex.mercer@pulsepm.internal', 'password123');
       localStorage.setItem('pulsepm_token', res.token);
       localStorage.setItem('pulsepm_user', JSON.stringify(res.user));
+      localStorage.setItem('pmpulse_active_tab', 'other_workspaces');
       setToken(res.token);
       setUser(res.user);
       setSessionExpired(false);
@@ -120,7 +121,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem('pulsepm_token', res.token);
       localStorage.setItem('pulsepm_user', JSON.stringify(res.user));
       localStorage.removeItem('pmpulse_active_workspace');
-      localStorage.setItem('pmpulse_active_tab', 'dashboard');
+      localStorage.setItem('pmpulse_active_tab', res.user?.user_type === 'pm' ? 'other_workspaces' : (res.user?.user_type === 'superuser' ? 'superuser_hub' : 'employee_dash'));
       setToken(res.token);
       setUser(res.user);
       setSessionExpired(false);
@@ -136,6 +137,9 @@ export function AuthProvider({ children }) {
     if (!res.requires_password_change) {
       localStorage.setItem('pulsepm_token', res.token);
       localStorage.setItem('pulsepm_user', JSON.stringify(res.user));
+      if (res.user?.user_type === 'pm') {
+        localStorage.setItem('pmpulse_active_tab', 'other_workspaces');
+      }
       setToken(res.token);
       setUser(res.user);
       setSessionExpired(false);
@@ -146,6 +150,9 @@ export function AuthProvider({ children }) {
   const completeLogin = (tokenData, userData) => {
     localStorage.setItem('pulsepm_token', tokenData);
     localStorage.setItem('pulsepm_user', JSON.stringify(userData));
+    if (userData?.user_type === 'pm') {
+      localStorage.setItem('pmpulse_active_tab', 'other_workspaces');
+    }
     setToken(tokenData);
     setUser(userData);
     setSessionExpired(false);

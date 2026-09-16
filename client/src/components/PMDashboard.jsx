@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Layout, Upload, Loader2, Inbox, Trash2, Plus, Users, X, FileText, UploadCloud, File, UserCheck, DownloadCloud, Home, Folder, Target, AlertTriangle, SearchCheck, Bug, Clock, LayoutList, ChevronDown, Calendar, User, CornerDownLeft, MoreHorizontal, Edit2, Grid2x2, ArrowRight, CheckCircle2, List, LayoutGrid, CheckSquare, Layers } from 'lucide-react';
-import ActiveProjectContainers from './ActiveProjectContainers';
+import { Layout, Upload, Loader2, Inbox, Trash2, Plus, Users, X, FileText, UploadCloud, File, UserCheck, DownloadCloud, Folder, Target, AlertTriangle, SearchCheck, Bug, Clock, LayoutList, ChevronDown, Calendar, User, CornerDownLeft, MoreHorizontal, Edit2, Grid2x2, ArrowRight, CheckCircle2, List, LayoutGrid, CheckSquare, Layers, TrendingUp } from 'lucide-react';
 const getSafeStorage = (key, fallback) => {
     if (typeof window === 'undefined') return fallback;
     try {
@@ -18,18 +17,17 @@ const parseSprintEndDate = (dateStr) => {
   if (!dateStr) return null;
   const direct = new Date(String(dateStr).replace(/Sept/i, 'Sep'));
   if (!isNaN(direct.getTime())) {
-    direct.setHours(23, 59, 59, 999);
     return direct;
   }
-  const months = { jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, sept:8, oct:9, nov:10, dec:11 };
-  const parts = String(dateStr).trim().split(/\s+/);
-  if (parts.length === 3) {
+  const parts = String(dateStr).trim().split(/[\s-]+/);
+  if (parts.length >= 3) {
     const day = parseInt(parts[0], 10);
-    const mStr = parts[1].toLowerCase().slice(0, 4);
-    const month = months[mStr] !== undefined ? months[mStr] : months[mStr.slice(0, 3)];
+    const monthStr = parts[1];
     const year = parseInt(parts[2], 10);
+    const months = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, sept: 8, oct: 9, nov: 10, dec: 11 };
+    const month = months[monthStr.toLowerCase().slice(0, 3)];
     if (!isNaN(day) && month !== undefined && !isNaN(year)) {
-      return new Date(year, month, day, 23, 59, 59, 999);
+      return new Date(year, month, day);
     }
   }
   return null;
@@ -51,7 +49,7 @@ const isSprintExpired = (config) => {
   return false;
 };
 
-export default function PMDashboard({ onNavigateTab, onSelectEmployee360, selectedWorkspace, initialSidebarView, setSelectedProject, setCurrentView }) {
+export default function PMDashboard({ onNavigateTab, onSelectEmployee360, selectedWorkspace, initialSidebarView }) {
   const { user } = useAuth();
   const [currentUser, setCurrentUser] = useState(() => {
     try {
@@ -82,7 +80,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     }
   }, [user, currentUser]);
 
-  const [sidebarView, setSidebarView] = useState(initialSidebarView || 'overview');
+  const [sidebarView, setSidebarView] = useState(initialSidebarView || 'workspace');
 
   useEffect(() => {
     if (initialSidebarView) {
@@ -90,14 +88,8 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     }
   }, [initialSidebarView]);
 
-  useEffect(() => {
-    if (!selectedWorkspace) {
-      setSidebarView('overview'); // Forces the Welcome Dashboard to mount
-    }
-  }, [selectedWorkspace]);
-
   const activeWsIdRef = useRef(selectedWorkspace?.id);
-  const [overviewFilter, setOverviewFilter] = useState('all'); // 'all' or specific projectId
+  const [overviewFilter, setOverviewFilter] = useState(() => selectedWorkspace?.id ? String(selectedWorkspace.id) : ''); // specific projectId
   const [workspaces, setWorkspaces] = useState([]);
   const [allWorkspacesTasks, setAllWorkspacesTasks] = useState([]);
   const [allWorkspacesDocs, setAllWorkspacesDocs] = useState([]);
@@ -107,6 +99,13 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       const res = await api.projects.getAll();
       const projectList = res.projects || [];
       setWorkspaces(projectList);
+      setOverviewFilter(prev => {
+        if (selectedWorkspace?.id) return String(selectedWorkspace.id);
+        if (!prev || prev === 'all' || !projectList.some(p => String(p.id) === String(prev))) {
+          return projectList[0]?.id ? String(projectList[0].id) : '';
+        }
+        return prev;
+      });
 
       const tasksRes = await api.projects.getAllTasks();
       if (tasksRes?.tasks) {
@@ -128,6 +127,12 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
   };
 
   useEffect(() => {
+    if (selectedWorkspace?.id) {
+      setOverviewFilter(String(selectedWorkspace.id));
+    }
+  }, [selectedWorkspace?.id]);
+
+  useEffect(() => {
     fetchAllWorkspacesData();
 
     const handleSyncGlobal = () => {
@@ -138,12 +143,14 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     window.addEventListener('pmpulse_listTasks_updated', handleSyncGlobal);
     window.addEventListener('pmpulse_boardTasks_updated', handleSyncGlobal);
     window.addEventListener('pmpulse_boardBacklogTasks_updated', handleSyncGlobal);
+    window.addEventListener('pmpulse_projects_updated', handleSyncGlobal);
 
     return () => {
       window.removeEventListener('pmpulse_workspaceTasks_updated', handleSyncGlobal);
       window.removeEventListener('pmpulse_listTasks_updated', handleSyncGlobal);
       window.removeEventListener('pmpulse_boardTasks_updated', handleSyncGlobal);
       window.removeEventListener('pmpulse_boardBacklogTasks_updated', handleSyncGlobal);
+      window.removeEventListener('pmpulse_projects_updated', handleSyncGlobal);
     };
   }, [user?.id, overviewFilter]);
 
@@ -291,13 +298,31 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     if (typeof setBoardBacklogTasks === 'function') setBoardBacklogTasks(updateArray);
 
     if (selectedWorkspace?.id && boardEditTask) {
-      api.projects.updateWorkspaceTask(selectedWorkspace.id, boardEditTask.id, {
+      const matchedMember = (workspaceMembers || []).find(m => m.name === boardEditTask.assignee || m.full_name === boardEditTask.assignee || String(m.id) === String(boardEditTask.assignee))
+        || ((boardEditTask.assignee === (user?.full_name || user?.name) || boardEditTask.assignee === `${user?.full_name || user?.name} (PM)`) ? user : null);
+
+      api.projects.updateWorkspaceTask(selectedWorkspace.id, boardEditTask.serverId || boardEditTask.id, {
         assignee: boardEditTask.assignee,
+        assignee_id: matchedMember?.id,
         status: boardEditTask.status,
         dueDate: boardEditTask.dueDate,
         title: boardEditTask.task || boardEditTask.title || boardEditTask.description,
-        priority: boardEditTask.priority
-      }).catch(err => console.error("Failed to sync board edit to backend:", err));
+        priority: boardEditTask.priority || 'Medium',
+        type: boardEditTask.type || 'Task',
+        key: boardEditTask.key || boardEditTask.task_key
+      }).then(res => {
+        const realId = res?.task?.id || boardEditTask.serverId || boardEditTask.id;
+        const updateTaskWithId = (t) => (t.id === boardEditTask.id || (t.key && t.key === boardEditTask.key)) ? { ...t, id: realId, serverId: realId, syncStatus: 'synced' } : t;
+        setBoardTasks(prev => prev.map(updateTaskWithId));
+        setBoardBacklogTasks(prev => prev.map(updateTaskWithId));
+        setWorkspaceTasks(prev => prev.map(updateTaskWithId));
+      }).catch(err => {
+        console.error("Failed to sync board edit to backend:", err);
+        const updateTaskFail = (t) => (t.id === boardEditTask.id || (t.key && t.key === boardEditTask.key)) ? { ...t, syncStatus: 'failed' } : t;
+        setBoardTasks(prev => prev.map(updateTaskFail));
+        setBoardBacklogTasks(prev => prev.map(updateTaskFail));
+        setWorkspaceTasks(prev => prev.map(updateTaskFail));
+      });
     }
 
     setBoardEditTask(null);
@@ -335,11 +360,21 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
   const handleDeleteTask = (e, taskId) => {
     e.stopPropagation();
     if (!window.confirm('Are you sure you want to delete this task?')) return;
+    const taskToDelete = (workspaceTasks || []).find(t => t.id === taskId) ||
+                         (listTasks || []).find(t => t.id === taskId) ||
+                         (boardTasks || []).find(t => t.id === taskId);
+
     if (typeof setWorkspaceTasks === 'function') setWorkspaceTasks(prev => prev.filter(t => t.id !== taskId));
     if (typeof setListTasks === 'function') setListTasks(prev => prev.filter(t => t.id !== taskId));
     if (typeof setBoardTasks === 'function') setBoardTasks(prev => prev.filter(t => t.id !== taskId));
     if (typeof setBoardBacklogTasks === 'function') setBoardBacklogTasks(prev => prev.filter(t => t.id !== taskId));
     setActiveDropdownId(null);
+
+    if (selectedWorkspace?.id && taskId) {
+      const targetId = taskToDelete?.serverId || taskId;
+      api.projects.deleteWorkspaceTask(selectedWorkspace.id, targetId)
+        .catch(err => console.error("Failed to delete task from backend:", err));
+    }
   };
 
   // Push to localStorage to trigger cross-tab sync in other windows
@@ -451,7 +486,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       (t.key && currentTask?.key && t.key === currentTask.key) ||
       (cleanTitle && normalizeTaskTitle(t['Issue / Task / Enhancement'] || t.title || t.description || '') === cleanTitle)
     );
-    const effectiveDbId = (matchingWs?.id && !isNaN(Number(matchingWs.id)) && Number(matchingWs.id) < 1000000000) ? matchingWs.id : taskId;
+    const effectiveDbId = currentTask?.serverId || (matchingWs?.id && !isNaN(Number(matchingWs.id)) && Number(matchingWs.id) < 1000000000 ? matchingWs.id : taskId);
 
     // Sync Master Backlog Data Mapping (matches by id OR key OR normalized title)
     setWorkspaceTasks(prev => prev.map(t => {
@@ -480,22 +515,49 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
           updatedTask['Priority'] = value;
           updatedTask.priority = value;
         }
+        if (field === 'type' || field === 'Type') {
+          updatedTask['Type'] = value;
+          updatedTask.type = value;
+        }
         return updatedTask;
       }
       return t;
     }));
 
     if (selectedWorkspace?.id) {
+      const effectiveAssignee = (field === 'assignee' || field === 'Responsible') ? value : (currentTask?.assignee || currentTask?.['Responsible']);
+      const matchedMember = (workspaceMembers || []).find(m => m.name === effectiveAssignee || m.full_name === effectiveAssignee || String(m.id) === String(effectiveAssignee))
+        || ((effectiveAssignee === (user?.full_name || user?.name) || effectiveAssignee === `${user?.full_name || user?.name} (PM)`) ? user : null);
+
       const payload = {
         [field]: value,
         title: field === 'description' ? value : taskTitle,
-        assignee: (field === 'assignee' || field === 'Responsible') ? value : (currentTask?.assignee || currentTask?.['Responsible']),
+        assignee: effectiveAssignee,
+        assignee_id: matchedMember?.id,
         status: (field === 'status' || field === 'Status') ? value : (currentTask?.status || currentTask?.['Status']),
-        dueDate: (field === 'dueDate' || field === 'Completed') ? value : (currentTask?.dueDate || currentTask?.['Completed'])
+        dueDate: (field === 'dueDate' || field === 'Completed') ? value : (currentTask?.dueDate || currentTask?.['Completed']),
+        priority: (field === 'priority' || field === 'Priority') ? value : (currentTask?.priority || currentTask?.['Priority'] || 'Medium'),
+        type: (field === 'type' || field === 'Type') ? value : (currentTask?.type || currentTask?.['Type'] || 'Task'),
+        key: currentTask?.key || currentTask?.task_key
       };
 
       api.projects.updateWorkspaceTask(selectedWorkspace.id, effectiveDbId, payload)
-        .catch(err => console.error("Failed to sync inline update to backend:", err));
+        .then(res => {
+          const realId = res?.task?.id || effectiveDbId;
+          const updateTaskWithId = (t) => (t.id === taskId || (t.key && currentTask?.key && t.key === currentTask.key)) ? { ...t, id: realId, serverId: realId, syncStatus: 'synced' } : t;
+          setListTasks(prev => prev.map(updateTaskWithId));
+          setBoardTasks(prev => prev.map(updateTaskWithId));
+          setBoardBacklogTasks(prev => prev.map(updateTaskWithId));
+          setWorkspaceTasks(prev => prev.map(updateTaskWithId));
+        })
+        .catch(err => {
+          console.error("Failed to sync inline update to backend:", err);
+          const updateTaskFail = (t) => (t.id === taskId || (t.key && currentTask?.key && t.key === currentTask.key)) ? { ...t, syncStatus: 'failed' } : t;
+          setListTasks(prev => prev.map(updateTaskFail));
+          setBoardTasks(prev => prev.map(updateTaskFail));
+          setBoardBacklogTasks(prev => prev.map(updateTaskFail));
+          setWorkspaceTasks(prev => prev.map(updateTaskFail));
+        });
     }
   };
 
@@ -793,6 +855,79 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
           const activeTasks = [...currentList, ...currentBoard, ...currentBacklog, ...currentBoardBacklog];
           const normalizeTitle = (str) => !str ? '' : str.trim().replace(/[\u2010-\u2015]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/\s+/g, ' ').toLowerCase();
 
+          // 1. Reconcile existing local tasks that match a DB row by title/key to use the real database ID
+          const matchRealId = (items) => items.map(item => {
+            if (typeof item.id === 'number' && item.id < 1000000000) return item;
+            const itemTitle = normalizeTitle(item.task || item.title || item.description || item.taskName || item['Issue / Task / Enhancement'] || '');
+            const found = data.tasks.find(dbT => 
+              (dbT.key && item.key && dbT.key === item.key) ||
+              (itemTitle && normalizeTitle(dbT.title || dbT['Issue / Task / Enhancement'] || '') === itemTitle)
+            );
+            return found ? { ...item, id: found.id, serverId: found.id, priority: item.priority || found.priority || 'Medium', type: item.type || found.type || 'Task' } : item;
+          });
+          setListTasks(prev => matchRealId(prev));
+          setBoardTasks(prev => matchRealId(prev));
+          setBoardBacklogTasks(prev => matchRealId(prev));
+          setSprintBacklogTasks(prev => matchRealId(prev));
+
+          // 2. Option A: Identify local tasks not yet persisted in SQLite and silently batch-sync them
+          const unsyncedTasks = activeTasks.filter(at => {
+            const atTitle = normalizeTitle(at.task || at.title || at.description || at.taskName || at['Issue / Task / Enhancement'] || '');
+            if (!atTitle) return false;
+            return !data.tasks.some(dbT => 
+              (dbT.id && String(dbT.id) === String(at.id)) ||
+              (dbT.key && at.key && dbT.key === at.key) ||
+              (atTitle && normalizeTitle(dbT.title || dbT['Issue / Task / Enhancement'] || '') === atTitle)
+            );
+          });
+
+          if (unsyncedTasks.length > 0) {
+            const enrichedUnsynced = unsyncedTasks.map(t => {
+              const aName = t.assignee || t['Responsible'];
+              const matchedMember = (workspaceMembers || []).find(m => m.name === aName || m.full_name === aName || String(m.id) === String(aName))
+                || ((aName === (user?.full_name || user?.name) || aName === `${user?.full_name || user?.name} (PM)`) ? user : null);
+              return { ...t, assignee_id: matchedMember?.id || t.assignee_id };
+            });
+
+            api.projects.syncWorkspaceTasks(targetWsId, enrichedUnsynced)
+              .then(syncRes => {
+                if (syncRes && Array.isArray(syncRes.synced)) {
+                  const idMap = new Map();
+                  syncRes.synced.forEach(s => {
+                    if (s.originalId) idMap.set(String(s.originalId), s.id);
+                  });
+                  const updateIds = (items) => items.map(item => {
+                    const mappedId = idMap.get(String(item.id));
+                    return mappedId ? { ...item, id: mappedId, serverId: mappedId, syncStatus: 'synced' } : item;
+                  });
+                  setListTasks(prev => updateIds(prev));
+                  setBoardTasks(prev => updateIds(prev));
+                  setBoardBacklogTasks(prev => updateIds(prev));
+                  setSprintBacklogTasks(prev => updateIds(prev));
+
+                  fetch(`/api/workspaces/${targetWsId}/tasks`, { headers: { 'Authorization': `Bearer ${token}` } })
+                    .then(r => r.json())
+                    .then(freshData => {
+                      if (freshData && Array.isArray(freshData.tasks)) {
+                        setWorkspaceTasks(freshData.tasks);
+                      }
+                    })
+                    .catch(() => {});
+                }
+              })
+              .catch(err => {
+                console.error("Auto-sync existing local tasks error:", err);
+                const markFailed = (items) => items.map(item => {
+                  const isUnsynced = unsyncedTasks.some(u => u.id === item.id || (u.key && u.key === item.key));
+                  return isUnsynced ? { ...item, syncStatus: 'failed' } : item;
+                });
+                setListTasks(prev => markFailed(prev));
+                setBoardTasks(prev => markFailed(prev));
+                setBoardBacklogTasks(prev => markFailed(prev));
+                setSprintBacklogTasks(prev => markFailed(prev));
+              });
+          }
+
           const reconciled = data.tasks.map(t => {
             const tTitle = normalizeTitle(t['Issue / Task / Enhancement'] || t.title || t.description || '');
             const activeMatch = activeTasks.find(at => 
@@ -804,11 +939,13 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
             const activeStatus = activeMatch?.status || activeMatch?.['Status'];
             const activeDueDate = activeMatch?.dueDate || activeMatch?.['Completed'];
             const activePriority = activeMatch?.priority || activeMatch?.['Priority'];
+            const activeType = activeMatch?.type || activeMatch?.['Type'];
 
             const effectiveAssignee = (activeAssignee && activeAssignee !== 'Unassigned') ? activeAssignee : (t['Responsible'] || t.assignee || 'Unassigned');
             const effectiveStatus = activeStatus || t['Status'] || t.status || 'To Do';
-            const effectiveDueDate = (activeDueDate && activeDueDate !== '—') ? activeDueDate : (t['Completed'] || t.dueDate || '—');
+            const effectiveDueDate = (activeDueDate && activeDueDate !== '—') ? activeDueDate : (t['Completed'] || t.dueDate || t.due_date || '—');
             const effectivePriority = activePriority || t['Priority'] || t.priority || 'Medium';
+            const effectiveType = activeType || t['Type'] || t.type || 'Task';
 
             return {
               ...t,
@@ -819,7 +956,10 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
               'Completed': effectiveDueDate,
               dueDate: effectiveDueDate,
               'Priority': effectivePriority,
-              priority: effectivePriority
+              priority: effectivePriority,
+              'Type': effectiveType,
+              type: effectiveType,
+              key: t.key || t.task_key || `VVM-${t.id}`
             };
           });
 
@@ -1165,49 +1305,37 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     e.preventDefault();
     const newKey = `VVM-${workspaceTasks.length + 1}`;
     const newId = Date.now();
-    const sprintTask = { ...listTaskForm, id: newId, key: newKey };
+    const sprintTask = { ...listTaskForm, id: newId, key: newKey, task_key: newKey };
     
     const todayDate = new Date().toLocaleDateString('en-GB');
     const backlogTask = {
         'Issue / Task / Enhancement': listTaskForm.description,
+        'title': listTaskForm.description,
         'Status': listTaskForm.status,
         'status': listTaskForm.status,
         'Responsible': listTaskForm.assignee,
         'assignee': listTaskForm.assignee,
         'Completed': listTaskForm.dueDate,
         'dueDate': listTaskForm.dueDate,
+        'due_date': listTaskForm.dueDate,
         'Priority': listTaskForm.priority,
         'priority': listTaskForm.priority,
+        'Type': listTaskForm.type,
+        'type': listTaskForm.type,
         'Added ': todayDate, 
         'id': newId,
-        'key': newKey
+        'key': newKey,
+        'task_key': newKey
     };
-    
-    // --- INJECT NEW BACKEND PERSISTENCE ---
-    if (selectedWorkspace) {
-      try {
-        const token = localStorage.getItem('pulsepm_token');
-        // Await the POST request to ensure the database receives the new task
-        const res = await fetch(`/api/workspaces/${selectedWorkspace.id}/tasks`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(backlogTask)
-        });
-        const data = await res.json();
-        if (data && data.task && data.task.id) {
-          sprintTask.id = data.task.id;
-          backlogTask.id = data.task.id;
-        }
-      } catch (error) {
-        console.error('Failed to persist task to database:', error);
-      }
-    }
-    // --------------------------------------
 
-    // (Keep your existing state updates below this line exactly as they are)
+    const matchedMember = (workspaceMembers || []).find(m => m.name === listTaskForm.assignee || m.full_name === listTaskForm.assignee || String(m.id) === String(listTaskForm.assignee))
+      || ((listTaskForm.assignee === (user?.full_name || user?.name) || listTaskForm.assignee === `${user?.full_name || user?.name} (PM)`) ? user : null);
+    if (matchedMember?.id) {
+      backlogTask.assignee_id = matchedMember.id;
+      sprintTask.assignee_id = matchedMember.id;
+    }
+
+    // 1. Instant, synchronous local state updates (zero delay for snappy UI)
     if (pullOrigin === 'boardBacklog' || pullOrigin === 'backlog') {
       setBoardBacklogTasks(prev => {
         const next = [...prev, sprintTask];
@@ -1230,7 +1358,31 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     }
     setWorkspaceTasks(prev => [backlogTask, ...prev]);
 
-    setListTaskForm({ type: 'Task', description: '', status: 'To Do', assignee: '', dueDate: '', priority: 'Medium' }); setIsCreateListTaskOpen(false);
+    setListTaskForm({ type: 'Task', description: '', status: 'To Do', assignee: '', dueDate: '', priority: 'Medium' }); 
+    setIsCreateListTaskOpen(false);
+
+    // 2. Fire-and-forget sync to SQLite backend
+    if (selectedWorkspace?.id) {
+      api.projects.createWorkspaceTask(selectedWorkspace.id, backlogTask)
+        .then(data => {
+          if (data && data.task && data.task.id) {
+            const realId = data.task.id;
+            const updateTaskWithId = (t) => (t.id === newId || (t.key && t.key === newKey)) ? { ...t, id: realId, serverId: realId, syncStatus: 'synced' } : t;
+            setListTasks(prev => prev.map(updateTaskWithId));
+            setBoardTasks(prev => prev.map(updateTaskWithId));
+            setBoardBacklogTasks(prev => prev.map(updateTaskWithId));
+            setWorkspaceTasks(prev => prev.map(updateTaskWithId));
+          }
+        })
+        .catch(error => {
+          console.error('Failed to persist task to database:', error);
+          const updateTaskFail = (t) => (t.id === newId || (t.key && t.key === newKey)) ? { ...t, syncStatus: 'failed' } : t;
+          setListTasks(prev => prev.map(updateTaskFail));
+          setBoardTasks(prev => prev.map(updateTaskFail));
+          setBoardBacklogTasks(prev => prev.map(updateTaskFail));
+          setWorkspaceTasks(prev => prev.map(updateTaskFail));
+        });
+    }
   };
 
   const handleDragStart = (e, id, sourceDroppableId = 'active') => {
@@ -1271,6 +1423,36 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
         setBoardBacklogTasks(prev => prev.filter(t => t.id !== taskId));
         setBoardTasks(prev => [...prev, { ...taskToMove, status: targetStatus }]);
       }
+    }
+
+    // Sync in-memory workspaceTasks so Overall Tasks reflects new status immediately
+    setWorkspaceTasks(prev => prev.map(t => {
+      if (t.id === taskId || (t.key && (boardTasks.find(bt => bt.id === taskId)?.key === t.key || boardBacklogTasks.find(bt => bt.id === taskId)?.key === t.key))) {
+        return { ...t, status: targetStatus, 'Status': targetStatus };
+      }
+      return t;
+    }));
+
+    // Fire-and-forget sync drag-and-drop status to database
+    if (selectedWorkspace?.id) {
+      const movedTask = boardTasks.find(t => t.id === taskId) || boardBacklogTasks.find(t => t.id === taskId) || workspaceTasks.find(t => t.id === taskId);
+      const effectiveDbId = movedTask?.serverId || taskId;
+      api.projects.updateWorkspaceTask(selectedWorkspace.id, effectiveDbId, {
+        status: targetStatus,
+        title: movedTask?.title || movedTask?.description || movedTask?.task || movedTask?.['Issue / Task / Enhancement'],
+        key: movedTask?.key || movedTask?.task_key
+      }).then(res => {
+        const updateTaskSuccess = (t) => (t.id === taskId || (t.key && movedTask?.key && t.key === movedTask.key)) ? { ...t, syncStatus: 'synced' } : t;
+        setBoardTasks(prev => prev.map(updateTaskSuccess));
+        setBoardBacklogTasks(prev => prev.map(updateTaskSuccess));
+        setWorkspaceTasks(prev => prev.map(updateTaskSuccess));
+      }).catch(err => {
+        console.error("Failed to sync drag status to backend:", err);
+        const updateTaskFail = (t) => (t.id === taskId || (t.key && movedTask?.key && t.key === movedTask.key)) ? { ...t, syncStatus: 'failed' } : t;
+        setBoardTasks(prev => prev.map(updateTaskFail));
+        setBoardBacklogTasks(prev => prev.map(updateTaskFail));
+        setWorkspaceTasks(prev => prev.map(updateTaskFail));
+      });
     }
 
     setDraggedTaskId(null);
@@ -1427,7 +1609,13 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     if (overviewFilter === 'all') {
       rawTasks = dedupeById(allWorkspacesTasks.length > 0 ? allWorkspacesTasks : workspaceTasks);
     } else {
-      rawTasks = dedupeById(workspaceTasks);
+      const projectScopedTasks = (allWorkspacesTasks || []).filter(t => String(t.project_id) === String(overviewFilter));
+      if (String(selectedWorkspace?.id) === String(overviewFilter)) {
+        rawTasks = dedupeById((workspaceTasks && workspaceTasks.length > 0) ? workspaceTasks : projectScopedTasks);
+      } else {
+        const localTasks = getSafeStorage(`pmpulse_workspaceTasks_${overviewFilter}`, []);
+        rawTasks = dedupeById(localTasks.length > 0 ? localTasks : projectScopedTasks);
+      }
     }
 
     const dbMerged = rawTasks.map(mergeTask);
@@ -1574,19 +1762,16 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       overdueTasks, escalatedTasks, inReviewTasks,
       bugCount, featureCount, backlogSize, unassignedCount, workloadMap,
       totalTasks: activeBucketTotal || fullTasks.length || 1,
-      totalProjectTasks: (workspaceTasks || []).length,
-      docsCount: (workspaceDocs || []).length,
+      totalProjectTasks: String(selectedWorkspace?.id) === String(overviewFilter) && (workspaceTasks || []).length > 0
+        ? (workspaceTasks || []).length
+        : (rawTasks.length || (workspaceTasks || []).length),
+      docsCount: String(selectedWorkspace?.id) === String(overviewFilter)
+        ? (workspaceDocs || []).length
+        : (allWorkspacesDocs || []).filter(d => String(d.project_id || d.projectId || d.workspace_id) === String(overviewFilter)).length,
       completedTasksCount,
       tasksCompletedOutOfTotalTasks: `${completedTasksCount} / ${(workspaceTasks || []).length}`,
     };
   }, [overviewFilter, workspaceTasks, workspaceDocs, allWorkspacesTasks, allWorkspacesDocs, listTasks, boardTasks, sprintBacklogTasks, boardBacklogTasks, user, workspaceDirectory, workspaceMembers]);
-
-  const displayedContainers = useMemo(() => {
-    if (overviewFilter === 'all') {
-      return workspaces || [];
-    }
-    return (workspaces || []).filter(p => String(p.id) === String(overviewFilter));
-  }, [overviewFilter, workspaces]);
 
   const dynamicAssignees = useMemo(() => {
     const pmName = user?.full_name || user?.name || currentUser?.fullName || currentUser?.name || 'Project Manager';
@@ -1596,7 +1781,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     return ['Unassigned', pmLabel, ...uniqueTeam];
   }, [user, currentUser, workspaceMembers]);
 
-  const handleSaveDraftTask = async () => {
+  const handleSaveDraftTask = () => {
     if (!draftTask.title.trim()) {
       setDraftTask({ columnId: null, boardType: null, title: '', assignee: 'Unassigned', dueDate: '' });
       return;
@@ -1606,110 +1791,159 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     const newId = Date.now();
 
     const newTask = {
-      id: `KAN-${newId}`, // Or your standard ID generator
+      id: newId,
+      key: newKey,
+      task_key: newKey,
       taskName: draftTask.title,
       description: draftTask.title,
-      status: draftTask.columnId,
-      assignee: draftTask.assignee,
-      dueDate: draftTask.dueDate,
-      priority: 'Medium', // Default
-      type: 'Task' // Default
+      title: draftTask.title,
+      status: draftTask.columnId || 'To Do',
+      assignee: draftTask.assignee || 'Unassigned',
+      dueDate: draftTask.dueDate || '',
+      due_date: draftTask.dueDate || '',
+      priority: 'Medium',
+      type: 'Task'
     };
 
     const todayDate = new Date().toLocaleDateString('en-GB');
     const newOverallEntry = {
       'Issue / Task / Enhancement': draftTask.title,
-      'Status': draftTask.columnId,
-      'status': draftTask.columnId,
-      'Responsible': draftTask.assignee,
-      'assignee': draftTask.assignee,
-      'Completed': draftTask.dueDate,
-      'dueDate': draftTask.dueDate,
+      'title': draftTask.title,
+      'Status': draftTask.columnId || 'To Do',
+      'status': draftTask.columnId || 'To Do',
+      'Responsible': draftTask.assignee || 'Unassigned',
+      'assignee': draftTask.assignee || 'Unassigned',
+      'Completed': draftTask.dueDate || '',
+      'dueDate': draftTask.dueDate || '',
+      'due_date': draftTask.dueDate || '',
       'Priority': 'Medium',
       'priority': 'Medium',
+      'Type': 'Task',
+      'type': 'Task',
       'Added ': todayDate,
       'id': newId,
-      'key': newKey
+      'key': newKey,
+      'task_key': newKey
     };
 
-    if (selectedWorkspace) {
-      try {
-        const token = localStorage.getItem('pulsepm_token');
-        const res = await fetch(`/api/workspaces/${selectedWorkspace.id}/tasks`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(newOverallEntry)
-        });
-        const data = await res.json();
-        if (data && data.task && data.task.id) {
-          newTask.id = data.task.id;
-          newOverallEntry.id = data.task.id;
-        }
-      } catch (error) {
-        console.error('Failed to persist task to database:', error);
-      }
+    const matchedMember = (workspaceMembers || []).find(m => m.name === draftTask.assignee || m.full_name === draftTask.assignee || String(m.id) === String(draftTask.assignee))
+      || ((draftTask.assignee === (user?.full_name || user?.name) || draftTask.assignee === `${user?.full_name || user?.name} (PM)`) ? user : null);
+    if (matchedMember?.id) {
+      newOverallEntry.assignee_id = matchedMember.id;
+      newTask.assignee_id = matchedMember.id;
     }
 
+    // 1. Instant optimistic state update (snappy UI with zero latency)
     if (draftTask.boardType === 'active') {
-      setBoardTasks(prev => [...prev, newTask]);
+      setBoardTasks(prev => {
+        const next = [...prev, newTask];
+        try { if (selectedWorkspace?.id) window.localStorage.setItem(`pmpulse_boardTasks_${selectedWorkspace.id}`, JSON.stringify(next)); } catch (e) {}
+        return next;
+      });
     } else {
-      setBoardBacklogTasks(prev => [...prev, newTask]);
+      setBoardBacklogTasks(prev => {
+        const next = [...prev, newTask];
+        try { if (selectedWorkspace?.id) window.localStorage.setItem(`pmpulse_boardBacklogTasks_${selectedWorkspace.id}`, JSON.stringify(next)); } catch (e) {}
+        return next;
+      });
     }
     setWorkspaceTasks(prev => [newOverallEntry, ...prev]);
 
-    // Reset Draft
+    // Reset Draft immediately
     setDraftTask({ columnId: null, boardType: null, title: '', assignee: 'Unassigned', dueDate: '' });
+
+    // 2. Fire-and-forget sync to SQLite database
+    if (selectedWorkspace?.id) {
+      api.projects.createWorkspaceTask(selectedWorkspace.id, newOverallEntry)
+        .then(data => {
+          if (data && data.task && data.task.id) {
+            const realId = data.task.id;
+            const updateTaskWithId = (t) => (t.id === newId || (t.key && t.key === newKey)) ? { ...t, id: realId, serverId: realId, syncStatus: 'synced' } : t;
+            setBoardTasks(prev => prev.map(updateTaskWithId));
+            setBoardBacklogTasks(prev => prev.map(updateTaskWithId));
+            setWorkspaceTasks(prev => prev.map(updateTaskWithId));
+          }
+        })
+        .catch(error => {
+          console.error('Failed to persist board task to database:', error);
+          const updateTaskFail = (t) => (t.id === newId || (t.key && t.key === newKey)) ? { ...t, syncStatus: 'failed' } : t;
+          setBoardTasks(prev => prev.map(updateTaskFail));
+          setBoardBacklogTasks(prev => prev.map(updateTaskFail));
+          setWorkspaceTasks(prev => prev.map(updateTaskFail));
+        });
+    }
+  };
+
+  const handleRetryTaskSync = (e, task) => {
+    e?.stopPropagation();
+    if (!selectedWorkspace?.id || !task) return;
+    const targetId = task.serverId || task.id;
+    if (typeof targetId === 'number' && targetId < 1000000000) {
+      api.projects.updateWorkspaceTask(selectedWorkspace.id, targetId, {
+        status: task.status,
+        title: task.taskName || task.description || task.title || task.task,
+        dueDate: task.dueDate,
+        priority: task.priority,
+        type: task.type,
+        key: task.key || task.task_key,
+        assignee: task.assignee,
+        assignee_id: task.assignee_id
+      }).then(res => {
+        const updateSync = t => (t.id === task.id || (t.key && t.key === task.key)) ? { ...t, syncStatus: 'synced' } : t;
+        setListTasks(prev => prev.map(updateSync));
+        setBoardTasks(prev => prev.map(updateSync));
+        setBoardBacklogTasks(prev => prev.map(updateSync));
+        setWorkspaceTasks(prev => prev.map(updateSync));
+      }).catch(err => console.error("Retry sync failed:", err));
+    } else {
+      const payload = {
+        title: task.taskName || task.description || task.title || task.task,
+        status: task.status || 'To Do',
+        assignee: task.assignee,
+        assignee_id: task.assignee_id,
+        dueDate: task.dueDate,
+        priority: task.priority || 'Medium',
+        type: task.type || 'Task',
+        key: task.key || task.task_key
+      };
+      api.projects.createWorkspaceTask(selectedWorkspace.id, payload)
+        .then(res => {
+          if (res?.task?.id) {
+            const realId = res.task.id;
+            const updateSync = t => (t.id === task.id || (t.key && t.key === task.key)) ? { ...t, id: realId, serverId: realId, syncStatus: 'synced' } : t;
+            setListTasks(prev => prev.map(updateSync));
+            setBoardTasks(prev => prev.map(updateSync));
+            setBoardBacklogTasks(prev => prev.map(updateSync));
+            setWorkspaceTasks(prev => prev.map(updateSync));
+          }
+        }).catch(err => console.error("Retry sync failed:", err));
+    }
   };
 
   return (
-    <div className="flex flex-1 min-h-[calc(100vh-5rem)] -m-6 min-w-0">
-      {/* Inside your Sidebar container */}
-      <div className="w-16 flex flex-col items-center py-4 border-r border-slate-200 dark:border-slate-800/60 gap-2 shrink-0">
-        <button 
-          onClick={() => setSidebarView('overview')}
-          className={`p-3 rounded-xl transition-colors ${sidebarView === 'overview' ? 'bg-yellow-500/10 text-yellow-500' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-transparent dark:hover:text-white'}`}
-          title="Overview"
-        >
-          <Home size={24} />
-        </button>
-        {/* Keep any other existing sidebar icons below this */}
-      </div>
-
-      {/* Main Content Area */}
-      <div className="flex-1 min-w-0 p-6">
-        {sidebarView === 'overview' && (
-          <div className="overview-container space-y-8 p-2">
-            
-            {/* Seamless Welcome Banner */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between bg-transparent">
-              <div>
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2 tracking-tight">
-                  Welcome, {currentUser?.fullName || currentUser?.name || currentUser?.full_name || user?.full_name || 'Project Manager'}
-                </h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
-                  Project Manager • Workspace Overview & Analytics
-                </p>
-              </div>
-              <div className="mt-4 md:mt-0 flex items-center gap-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400 bg-transparent px-2 py-1">
-                   <span>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Overview Header & Dropdown */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-8 mb-6 bg-transparent">
+    <div className="w-full min-w-0">
+      {sidebarView === 'overview' && (
+        <div className="overview-container space-y-8">
+          
+          {/* Overview Header & Dropdown */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 bg-transparent">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSidebarView('workspace')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors shadow-sm"
+                title="Back to Workspace"
+              >
+                <ArrowRight size={14} className="rotate-180 text-slate-400" />
+                <span>Back to Workspace</span>
+              </button>
               <h2 className="text-xl font-bold text-slate-900 dark:text-white">Performance Overview</h2>
+            </div>
               <div className="relative mt-4 sm:mt-0">
                 <select 
                   value={overviewFilter}
                   onChange={(e) => setOverviewFilter(e.target.value)}
                   className="appearance-none bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm rounded-lg pl-4 pr-10 py-2 focus:outline-none focus:border-yellow-500 shadow-sm transition-colors cursor-pointer min-w-[200px]"
                 >
-                  <option value="all">All Projects (Global)</option>
                   {workspaces && workspaces.map((workspace) => (
                     <option key={workspace.id} value={workspace.id}>
                       {workspace.name || workspace.title}
@@ -1720,32 +1954,9 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
               </div>
             </div>
 
-            {/* GLOBAL KPIs (Render if 'all' is selected) */}
-            {overviewFilter === 'all' && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <div className="bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-xl p-5 hover:bg-slate-50 dark:hover:bg-slate-800/60 shadow-sm transition-colors">
-                  <div className="flex justify-between items-start">
-                    <div><p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Global Overdue Tasks</p><h3 className="text-3xl font-bold text-red-500">{kpiData.overdueTasks}</h3></div>
-                    <div className="p-2 bg-red-500/10 rounded-lg text-red-500"><Clock size={20} /></div>
-                  </div>
-                </div>
-                <div className="bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-xl p-5 hover:bg-slate-50 dark:hover:bg-slate-800/60 shadow-sm transition-colors">
-                  <div className="flex justify-between items-start">
-                    <div><p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Global Escalated Tasks</p><h3 className="text-3xl font-bold text-orange-500">{kpiData.escalatedTasks}</h3></div>
-                    <div className="p-2 bg-orange-500/10 rounded-lg text-orange-500"><AlertTriangle size={20} /></div>
-                  </div>
-                </div>
-                <div className="bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-xl p-5 hover:bg-slate-50 dark:hover:bg-slate-800/60 shadow-sm transition-colors">
-                  <div className="flex justify-between items-start">
-                    <div><p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Global In-Review / QA</p><h3 className="text-3xl font-bold text-blue-500">{kpiData.inReviewTasks}</h3></div>
-                    <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500"><SearchCheck size={20} /></div>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* PROJECT SPECIFIC KPIs (Render if a specific project is selected) */}
-            {overviewFilter !== 'all' && (
+            {overviewFilter && overviewFilter !== 'all' && (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
                 {/* 1. Bug-to-Feature Ratio */}
                 <div className="bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-xl p-5 shadow-sm">
@@ -1839,19 +2050,6 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
               </div>
             )}
 
-            {/* Active Project Containers (Dropdown-Scoped) */}
-            <ActiveProjectContainers
-              projects={displayedContainers}
-              allProjects={workspaces}
-              onRefresh={fetchAllWorkspacesData}
-              onOpenWorkspace={(proj) => {
-                setSidebarView('workspace');
-                if (typeof onNavigateTab === 'function') {
-                  onNavigateTab('dashboard', proj.id, 'workspace');
-                }
-              }}
-            />
-
           </div>
         )}
 
@@ -1881,19 +2079,38 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
                       Check members
                     </button>
                     {(user?.user_type === 'pm' || currentUser?.user_type === 'pm') && (
-                      <button
-                        onClick={() => {
-                          if (typeof setSelectedProject === 'function') setSelectedProject(selectedWorkspace);
-                          if (typeof setCurrentView === 'function') setCurrentView('matrix');
-                          if (typeof onNavigateTab === 'function' && selectedWorkspace?.id) onNavigateTab('calendar_matrix', selectedWorkspace.id);
-                        }}
-                        className="flex items-center gap-2 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700 shadow-sm"
-                        title="Open Calendar Matrix for this Project"
-                      >
-                        <Grid2x2 size={16} className="text-yellow-500" />
-                        <span>Matrix</span>
-                        <ArrowRight size={14} className="text-slate-400" />
-                      </button>
+                      <>
+                        <button
+                          onClick={() => {
+                            if (typeof setSelectedProject === 'function') setSelectedProject(selectedWorkspace);
+                            if (typeof setCurrentView === 'function') setCurrentView('matrix');
+                            if (typeof onNavigateTab === 'function' && selectedWorkspace?.id) onNavigateTab('calendar_matrix', selectedWorkspace.id);
+                          }}
+                          className="flex items-center gap-2 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700 shadow-sm"
+                          title="Open Calendar Matrix for this Project"
+                        >
+                          <Grid2x2 size={16} className="text-yellow-500" />
+                          <span>Matrix</span>
+                          <ArrowRight size={14} className="text-slate-400" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (selectedWorkspace?.id) {
+                              setOverviewFilter(selectedWorkspace.id);
+                            }
+                            setSidebarView('overview');
+                            if (typeof onNavigateTab === 'function' && selectedWorkspace?.id) {
+                              onNavigateTab('dashboard', selectedWorkspace.id, 'overview');
+                            }
+                          }}
+                          className="flex items-center gap-2 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700 shadow-sm"
+                          title="Open Performance Overview & Summary for this Project"
+                        >
+                          <TrendingUp size={16} className="text-yellow-500" />
+                          <span>Summary</span>
+                          <ArrowRight size={14} className="text-slate-400" />
+                        </button>
+                      </>
                     )}
                   </div>
                 )}
@@ -2138,7 +2355,20 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
                           </td>
                           
                           {/* Key (Read Only) */}
-                          <td className="px-4 py-3 text-blue-600 dark:text-blue-400 text-sm">{task.key}</td>
+                          <td className="px-4 py-3 text-blue-600 dark:text-blue-400 text-sm">
+                            <span className="inline-flex items-center gap-1.5">
+                              <span>{task.key}</span>
+                              {task.syncStatus === 'failed' && (
+                                <span 
+                                  onClick={(e) => handleRetryTaskSync(e, task)}
+                                  title="Not saved to database — click to retry" 
+                                  className="inline-flex items-center text-amber-500 hover:text-amber-600 dark:text-amber-400 cursor-pointer shrink-0"
+                                >
+                                  <AlertTriangle size={13} />
+                                </span>
+                              )}
+                            </span>
+                          </td>
                           
                           {/* Task / Description: Text Input */}
                           <td className="px-2 py-2 w-full max-w-md">
@@ -2295,7 +2525,20 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
                       sprintBacklogTasks.map((task, index) => (
                         <tr key={task.id || task.key || `backlog-${index}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                           <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">{task.type || 'Task'}</td>
-                          <td className="px-4 py-3 text-blue-600 dark:text-blue-400">{task.key}</td>
+                          <td className="px-4 py-3 text-blue-600 dark:text-blue-400">
+                            <span className="inline-flex items-center gap-1.5">
+                              <span>{task.key}</span>
+                              {task.syncStatus === 'failed' && (
+                                <span 
+                                  onClick={(e) => handleRetryTaskSync(e, task)}
+                                  title="Not saved to database — click to retry" 
+                                  className="inline-flex items-center text-amber-500 hover:text-amber-600 dark:text-amber-400 cursor-pointer shrink-0"
+                                >
+                                  <AlertTriangle size={13} />
+                                </span>
+                              )}
+                            </span>
+                          </td>
                           <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{task.description || task.task}</td>
                           <td className="px-4 py-3">
                             <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded text-xs">{task.status || 'To Do'}</span>
@@ -2390,7 +2633,18 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
                         </div>
                         <div className="text-sm font-medium text-slate-900 dark:text-white mb-2 pr-6" onClick={() => setSelectedTaskModal(task)} style={{cursor:'pointer'}}>{task.taskName || task.description || task.title}</div>
                         <div className="flex items-center justify-between text-xs text-slate-500">
-                          <span>{task.key || task.id}</span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span>{task.key || task.id}</span>
+                            {task.syncStatus === 'failed' && (
+                              <span 
+                                onClick={(e) => handleRetryTaskSync(e, task)}
+                                title="Not saved to database — click to retry" 
+                                className="inline-flex items-center text-amber-500 hover:text-amber-600 dark:text-amber-400 cursor-pointer shrink-0"
+                              >
+                                <AlertTriangle size={12} />
+                              </span>
+                            )}
+                          </span>
                           {task.assignee && task.assignee !== 'Unassigned' && (
                             <span className="text-[11px] text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{task.assignee}</span>
                           )}
@@ -2527,7 +2781,18 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
                             </div>
                             <div className="text-sm font-medium text-slate-900 dark:text-white mb-2 pr-6" onClick={() => setSelectedTaskModal(task)} style={{cursor:'pointer'}}>{task.taskName || task.description || task.title}</div>
                             <div className="flex items-center justify-between text-xs text-slate-500">
-                              <span>{task.key || task.id}</span>
+                              <span className="inline-flex items-center gap-1.5">
+                                <span>{task.key || task.id}</span>
+                                {task.syncStatus === 'failed' && (
+                                  <span 
+                                    onClick={(e) => handleRetryTaskSync(e, task)}
+                                    title="Not saved to database — click to retry" 
+                                    className="inline-flex items-center text-amber-500 hover:text-amber-600 dark:text-amber-400 cursor-pointer shrink-0"
+                                  >
+                                    <AlertTriangle size={12} />
+                                  </span>
+                                )}
+                              </span>
                               {task.assignee && task.assignee !== 'Unassigned' && (
                                 <span className="text-[11px] text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{task.assignee}</span>
                               )}
@@ -2675,7 +2940,6 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       )}
           </div>
         )}
-      </div>
 
       {isAddTaskModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">

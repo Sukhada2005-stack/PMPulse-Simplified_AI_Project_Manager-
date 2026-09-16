@@ -106,8 +106,7 @@ export default function Employee360View({ employeeId, onBack }) {
             <User className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--acube-gold)]">360° Employee Analysis Portal</div>
-            <h2 className="text-xl font-bold tracking-tight" style={{ color: 'var(--color-text-1)' }}>Holistic Contributor Intelligence</h2>
+            <h2 className="text-xl font-bold tracking-tight" style={{ color: 'var(--color-text-1)' }}>360° Employee Analysis Portal</h2>
           </div>
         </div>
 
@@ -253,15 +252,12 @@ export default function Employee360View({ employeeId, onBack }) {
             {/* MODULE 3: Blockers & Risk Identification */}
             <div className="jira-card p-6 flex flex-col justify-between" style={{ background: 'var(--color-surface-solid)', border: '1px solid var(--color-border)' }}>
               <div>
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-4">
                   <AlertTriangle className="w-5 h-5 text-rose-500" />
                   <h3 className="font-bold text-sm" style={{ color: 'var(--color-text-1)' }}>
                     Module 3: Impediment &amp; Inactivity Analysis
                   </h3>
                 </div>
-                <p className="text-xs mb-4 text-slate-500 dark:text-slate-400">
-                  AI-aggregated breakdown of friction points, vendor delays, and dependency wait-times
-                </p>
 
                 {/* Blocker Category Chips */}
                 <div className="grid grid-cols-3 gap-2 mb-4">
@@ -338,9 +334,6 @@ export default function Employee360View({ employeeId, onBack }) {
                     {mod4?.productivity_score || 'Strong (A)'}
                   </span>
                 </div>
-                <p className="text-xs -mt-2 text-slate-500 dark:text-slate-400">
-                  Comprehensive performance assessment formulated from direct sprint milestones, daily logs, and impediment frequency
-                </p>
 
                 {/* Elaborated Executive Summary from PM Perspective */}
                 {mod4?.executive_assessment && (

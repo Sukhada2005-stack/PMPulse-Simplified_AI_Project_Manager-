@@ -1,7 +1,7 @@
 import express from 'express';
 import { login, getMe, listAllUsers, checkRole, changePassword, setPermanentPassword } from '../controllers/authController.js';
 import { createEmployee, getEmployees, getEmployeeAnalytics, deleteEmployee, sendWarning, getMyWarnings } from '../controllers/employeeController.js';
-import { createProject, getProjects, getProjectById, createTask, getMyTasks, addProjectMember, updateProject, deleteProject, removeProjectMember, getProjectTasks, getAllProjectsTasks, createWorkspaceTask, updateWorkspaceTask, syncWorkspaceTasks, importProjectTasks, deleteProjectTasks, getProjectDocs, createProjectDoc, deleteProjectDoc } from '../controllers/projectController.js';
+import { createProject, getProjects, getProjectById, createTask, getMyTasks, addProjectMember, updateProject, deleteProject, removeProjectMember, getProjectTasks, getAllProjectsTasks, createWorkspaceTask, updateWorkspaceTask, syncWorkspaceTasks, importProjectTasks, deleteProjectTasks, deleteWorkspaceTask, getProjectDocs, createProjectDoc, deleteProjectDoc } from '../controllers/projectController.js';
 import { submitDailyLog, getMyDailyLogs, getProjectMatrix, getFleetMatrix } from '../controllers/dailyLogController.js';
 import { generateSummary } from '../controllers/aiController.js';
 import { getProjectMessages, sendProjectMessage } from '../controllers/chatController.js';
@@ -48,6 +48,7 @@ router.post('/workspaces/:id/tasks', authenticateToken, createWorkspaceTask);
 router.put('/workspaces/:id/tasks/:taskId', authenticateToken, updateWorkspaceTask);
 router.post('/workspaces/:id/tasks/sync', authenticateToken, syncWorkspaceTasks);
 router.post('/workspaces/:id/tasks/import', authenticateToken, requirePM, upload.single('file'), importProjectTasks);
+router.delete('/workspaces/:id/tasks/:taskId', authenticateToken, requirePM, deleteWorkspaceTask);
 router.delete('/workspaces/:id/tasks', authenticateToken, requirePM, deleteProjectTasks);
 
 // --- Document Operations ---

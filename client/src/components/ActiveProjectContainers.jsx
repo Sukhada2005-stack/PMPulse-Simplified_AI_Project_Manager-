@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { NewTaskModal } from './ProjectTaskModal';
 import ProjectChatModal from './ProjectChatModal';
+import { PriorityBadge } from './OtherWorkspaces';
 
 /* ── Status badge colour mapping (mirrors OtherWorkspaces / PMDashboard tokens) ── */
 function StatusBadge({ status }) {
@@ -66,9 +67,12 @@ export default function ActiveProjectContainers({ projects = [], allProjects = [
             >
               {/* Card body */}
               <div>
-                {/* Status + task count badges */}
+                {/* Status + priority KPI + task count badges */}
                 <div className="flex items-start justify-between gap-3 mb-2.5">
-                  <StatusBadge status={proj.status} />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <StatusBadge status={proj.status} />
+                    <PriorityBadge priority={proj.priority} />
+                  </div>
                   <span className="lozenge lozenge-default font-mono">
                     {proj.task_count ?? 0} Tasks
                   </span>

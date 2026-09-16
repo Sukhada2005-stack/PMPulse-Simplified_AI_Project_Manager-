@@ -56,21 +56,25 @@ export default function Navbar({ activeTab, onSelectTab, workspaces, setSelected
           {/* Left: Brand Logo & Tagline */}
           <div className="flex-1 flex items-center justify-start">
             <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-emerald-400 p-0.5 shadow-lg shadow-indigo-600/30 flex items-center justify-center">
-              <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
-                <span className="text-lg font-black bg-gradient-to-r from-indigo-400 to-emerald-400 bg-clip-text text-transparent">
-                  P
-                </span>
+            <div className="flex flex-col justify-center select-none">
+              <span
+                className="text-2xl font-black tracking-tight leading-none text-white"
+              >
+                PMPulse
+              </span>
+              <div
+                className="flex items-center gap-1.5 mt-1 text-white"
+                style={{ fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.08em' }}
+              >
+                <span>BY</span>
+                <img
+                  src="/acube-cube.png"
+                  onError={(e) => { e.currentTarget.src = "https://www.acubeai.com/favicon-32x32.png"; }}
+                  alt="Acube AI Logo"
+                  className="w-4 h-4 object-contain"
+                />
+                <span className="font-bold tracking-widest text-[12px]">ACUBE AI</span>
               </div>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold text-base tracking-tight text-white">PulsePM</span>
-                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                  AI CORE
-                </span>
-              </div>
-              <span className="text-[10px] text-slate-400 hidden sm:block">Zero-Agile Overhead Platform</span>
             </div>
             </div>
           </div>

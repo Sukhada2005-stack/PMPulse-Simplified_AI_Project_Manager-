@@ -16,7 +16,9 @@ import {
   X,
   Trash2,
   UserMinus,
-  Edit
+  Edit,
+  Layers,
+  AlertCircle
 } from 'lucide-react';
 
 const EditContributorModal = ({ data, onClose }) => {
@@ -188,6 +190,54 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
     );
   });
 
+  // ── Workforce Directory KPIs Calculation ───────────────────────────
+  // 1. Total Headcount: total number of members (div cards) present in directory
+  const totalHeadcount = employees.length;
+
+  // Reconcile project counts combining DB records and workspace members from localStorage
+  const getEmployeeProjectCount = (emp) => {
+    let storageCount = 0;
+    try {
+      const storageProjects = new Set();
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('pmpulse_workspaceMembers_')) {
+          const wsId = key.replace('pmpulse_workspaceMembers_', '');
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const list = JSON.parse(raw);
+            if (Array.isArray(list)) {
+              const found = list.some(m => {
+                if (m.id && emp.id && String(m.id) === String(emp.id)) return true;
+                const mName = (m.name || m.full_name || '').trim().toLowerCase();
+                const eName = (emp.full_name || '').trim().toLowerCase();
+                if (mName && eName && mName === eName) return true;
+                const mEmail = (m.email || '').trim().toLowerCase();
+                const eEmail = (emp.email || '').trim().toLowerCase();
+                if (mEmail && eEmail && mEmail === eEmail) return true;
+                return false;
+              });
+              if (found) {
+                storageProjects.add(wsId);
+              }
+            }
+          }
+        }
+      }
+      storageCount = storageProjects.size;
+    } catch (err) {
+      console.error('Error computing local workspace memberships:', err);
+    }
+    const dbCount = Number(emp.project_count) || 0;
+    return Math.max(dbCount, storageCount);
+  };
+
+  // 2. MultiProject Staff: members working on >1 project
+  const multiProjectStaff = employees.filter(emp => getEmployeeProjectCount(emp) > 1).length;
+
+  // 3. Available / Bench: members not present in any project (0 assigned projects)
+  const availableMembers = employees.filter(emp => getEmployeeProjectCount(emp) === 0).length;
+
   return (
     <div className="space-y-6 animate-fade-up">
       {/* Header & Onboard Action */}
@@ -226,6 +276,120 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
             <UserPlus className="w-4 h-4" />
             <span>Onboard Contributor</span>
           </button>
+        </div>
+      </div>
+
+      {/* ── Workforce Summary KPIs ────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        {/* KPI 1: Total Headcount */}
+        <div
+          className="jira-card p-5 rounded-2xl flex items-center gap-4 border border-slate-200 dark:border-slate-800/80 shadow-sm transition-all"
+          style={{ background: 'var(--color-surface-solid)' }}
+        >
+          <div
+            className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border"
+            style={{
+              background: 'rgba(99, 102, 241, 0.12)',
+              borderColor: 'rgba(99, 102, 241, 0.25)',
+              color: '#818cf8',
+            }}
+          >
+            <Users className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div
+              className="text-[11px] font-bold font-mono tracking-wider uppercase"
+              style={{ color: 'var(--color-text-3)' }}
+            >
+              TOTAL HEADCOUNT
+            </div>
+            <div
+              className="text-3xl font-extrabold leading-tight my-0.5"
+              style={{ color: 'var(--color-text-1)' }}
+            >
+              {totalHeadcount}
+            </div>
+            <div
+              className="text-xs"
+              style={{ color: 'var(--color-text-3)' }}
+            >
+              Actual company employees
+            </div>
+          </div>
+        </div>
+
+        {/* KPI 2: Multi-Project Staff */}
+        <div
+          className="jira-card p-5 rounded-2xl flex items-center gap-4 border border-slate-200 dark:border-slate-800/80 shadow-sm transition-all"
+          style={{ background: 'var(--color-surface-solid)' }}
+        >
+          <div
+            className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border"
+            style={{
+              background: 'rgba(238, 178, 13, 0.12)',
+              borderColor: 'rgba(238, 178, 13, 0.3)',
+              color: '#eeb20d',
+            }}
+          >
+            <Layers className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div
+              className="text-[11px] font-bold font-mono tracking-wider uppercase"
+              style={{ color: 'var(--color-text-3)' }}
+            >
+              MULTI-PROJECT STAFF
+            </div>
+            <div
+              className="text-3xl font-extrabold leading-tight my-0.5"
+              style={{ color: '#eeb20d' }}
+            >
+              {multiProjectStaff}
+            </div>
+            <div
+              className="text-xs"
+              style={{ color: 'var(--color-text-3)' }}
+            >
+              Working on &gt;1 project
+            </div>
+          </div>
+        </div>
+
+        {/* KPI 3: Available / Bench */}
+        <div
+          className="jira-card p-5 rounded-2xl flex items-center gap-4 border border-slate-200 dark:border-slate-800/80 shadow-sm transition-all"
+          style={{ background: 'var(--color-surface-solid)' }}
+        >
+          <div
+            className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border"
+            style={{
+              background: 'rgba(148, 163, 184, 0.12)',
+              borderColor: 'rgba(148, 163, 184, 0.25)',
+              color: 'var(--color-text-2)',
+            }}
+          >
+            <AlertCircle className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div
+              className="text-[11px] font-bold font-mono tracking-wider uppercase"
+              style={{ color: 'var(--color-text-3)' }}
+            >
+              AVAILABLE / BENCH
+            </div>
+            <div
+              className="text-3xl font-extrabold leading-tight my-0.5"
+              style={{ color: 'var(--color-text-2)' }}
+            >
+              {availableMembers}
+            </div>
+            <div
+              className="text-xs"
+              style={{ color: 'var(--color-text-3)' }}
+            >
+              0 assigned projects
+            </div>
+          </div>
         </div>
       </div>
 

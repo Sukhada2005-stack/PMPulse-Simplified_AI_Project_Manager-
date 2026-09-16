@@ -14,16 +14,25 @@ import LandingPage from './components/LandingPage';
 import SetPassword from './components/SetPassword';
 import SessionReauthModal from './components/SessionReauthModal';
 import OtherWorkspaces from './components/OtherWorkspaces';
-import { Sparkles, Loader2, Sun, Moon, LogOut, Search } from 'lucide-react';
+import { Loader2, Sun, Moon, LogOut, Search } from 'lucide-react';
 import { api } from './services/api';
 
 function MainApp() {
   const { user, isPM, loading, logout, sessionExpired } = useAuth();
   const [activeTab, setActiveTab] = useState(() => {
     try {
-      return localStorage.getItem('pmpulse_active_tab') || 'dashboard';
+      const storedTab = localStorage.getItem('pmpulse_active_tab');
+      if (storedTab) return storedTab;
+      const storedUser = localStorage.getItem('pulsepm_user');
+      if (storedUser) {
+        const u = JSON.parse(storedUser);
+        if (u?.user_type === 'pm') return 'other_workspaces';
+        if (u?.user_type === 'superuser') return 'superuser_hub';
+        return 'employee_dash';
+      }
+      return 'other_workspaces';
     } catch {
-      return 'dashboard';
+      return 'other_workspaces';
     }
   });
 
@@ -116,15 +125,23 @@ function MainApp() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeTab]);
 
+  const prevUserRef = useRef(user?.id);
   useEffect(() => {
     if (!loading && user) {
-      if (isPM && activeTab === 'employee_dash') setActiveTab('dashboard');
+      // Whenever a PM logs in fresh, entry point is other_workspaces
+      if (!prevUserRef.current && user.id && isPM) {
+        setActiveTab('other_workspaces');
+      }
+      prevUserRef.current = user.id;
+      if (isPM && activeTab === 'employee_dash') setActiveTab('other_workspaces');
       if (!isPM && user.user_type !== 'superuser' && activeTab !== 'employee_dash' && activeTab !== 'employee_daily_logs') setActiveTab('employee_dash');
       if (user.user_type === 'superuser' && activeTab !== 'superuser_hub') setActiveTab('superuser_hub');
+    } else if (!user) {
+      prevUserRef.current = null;
     }
-  }, [user?.user_type, loading]);
+  }, [user?.id, user?.user_type, loading, isPM]);
 
-  const [initialDashboardView, setInitialDashboardView] = useState('overview');
+  const [initialDashboardView, setInitialDashboardView] = useState('workspace');
 
   const handleNavigateTab = (tabId, projectId = null, view = null) => {
     if (projectId) {
@@ -142,6 +159,8 @@ function MainApp() {
     }
     if (view) {
       setInitialDashboardView(view);
+    } else if (tabId === 'dashboard') {
+      setInitialDashboardView('workspace');
     }
     setActiveTab(tabId);
   };
@@ -185,7 +204,7 @@ function MainApp() {
   /* ── Page Title lookup ───────────────────────────────────────── */
   const pageTitles = {
     dashboard:       'Project Dashboard',
-    other_workspaces:'Other Workspaces',
+    other_workspaces:'Dashboard',
     calendar_matrix: 'Calendar Matrix Tracker',
     pm_daily_logs:   'Daily Logs',
     workforce:       'Workforce Directory',
@@ -202,7 +221,15 @@ function MainApp() {
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--color-bg)', overflow: 'hidden' }}>
 
       {/* Left Sidebar */}
-      <Sidebar activeTab={activeTab} onSelectTab={setActiveTab} />
+      <Sidebar
+        activeTab={activeTab}
+        onSelectTab={(tab) => {
+          if (tab === 'dashboard') {
+            setInitialDashboardView('workspace');
+          }
+          setActiveTab(tab);
+        }}
+      />
 
       {/* Main Content Area */}
       <div
@@ -213,26 +240,25 @@ function MainApp() {
         <header className="jira-topbar no-print flex items-center justify-between relative" style={{ height: '72px', padding: '0 24px' }}>
           
           {/* Left: Logo */}
-          <div className="flex flex-col justify-center h-full pt-1 z-10">
+          <div className="flex flex-col justify-center h-full pt-1 z-10 select-none">
             <h1
-              className="text-4xl font-black tracking-tight"
-              style={{ color: 'var(--color-text-1)', lineHeight: '0.9' }}
+              className="text-3xl font-black tracking-tight"
+              style={{ color: 'var(--color-text-1)', lineHeight: '1' }}
             >
               PMPulse
             </h1>
             <div
-              className="flex items-center gap-1.5 mt-1 ml-16"
+              className="flex items-center gap-1.5 mt-1"
               style={{ color: 'var(--color-text-1)', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.08em' }}
             >
-              <span style={{ color: 'var(--color-text-3)' }}>BY</span>
-              <div className="flex items-center gap-1 opacity-90">
-                <img
-                  src="https://www.acubeai.com/favicon-32x32.png"
-                  alt="Acube Symbol"
-                  className="w-3.5 h-3.5 object-contain mb-0.5"
-                />
-                <span className="font-bold tracking-widest text-[12px]">ACUBE AI</span>
-              </div>
+              <span>BY</span>
+              <img
+                src="/acube-cube.png"
+                onError={(e) => { e.currentTarget.src = "https://www.acubeai.com/favicon-32x32.png"; }}
+                alt="Acube AI Logo"
+                className="w-4 h-4 object-contain"
+              />
+              <span className="font-bold tracking-widest text-[12px]">ACUBE AI</span>
             </div>
           </div>
 
@@ -384,21 +410,9 @@ function MainApp() {
               {activeTab === 'ai_summary' && (
                 <div className="space-y-4 animate-fade-up">
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span
-                        className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded font-bold uppercase tracking-wider"
-                        style={{ background: 'rgba(238,178,13,0.08)', color: '#eeb20d', border: '1px solid rgba(238,178,13,0.15)' }}
-                      >
-                        <Sparkles className="w-3 h-3 text-yellow-500" />
-                        Multi-Dimensional Synthesis Engine
-                      </span>
-                    </div>
                     <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text-1)' }}>
                       AI Executive Summary Hub
                     </h1>
-                    <p className="text-sm mt-1" style={{ color: 'var(--color-text-3)' }}>
-                      Transforms raw daily notes into polished executive summaries across 5 dimensions
-                    </p>
                   </div>
                   <AISummaryHub />
                 </div>

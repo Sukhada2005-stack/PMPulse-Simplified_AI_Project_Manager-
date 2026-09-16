@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
-  LayoutDashboard,
   Users,
   BarChart3,
   Sparkles,
@@ -26,8 +25,7 @@ export default function Sidebar({ activeTab, onSelectTab }) {
   ];
 
   const pmNavItems = [
-    { id: 'dashboard',        label: 'Project Dashboard',       icon: LayoutDashboard },
-    { id: 'other_workspaces', label: 'Other Workspaces',        icon: FolderKanban },
+    { id: 'other_workspaces', label: 'Dashboard',               icon: FolderKanban },
     { id: 'pm_daily_logs',    label: 'Daily Logs',              icon: FileText },
     { id: 'workforce',        label: 'Workforce Directory',     icon: Users },
     { id: 'employee_360',     label: 'Employee 360° Analytics', icon: BarChart3 },

@@ -66,8 +66,92 @@ export const getEmployees = (req, res) => {
     }
 };
 
+// Helper to synthesize telemetry data into an elaborate executive performance summary via Gemini
+const generateExecutiveSummary = async (dataPayload, apiKey, timeoutMs = 4000) => {
+    if (!apiKey || typeof apiKey !== 'string' || apiKey.trim() === '') {
+        return null;
+    }
+
+    const systemInstruction = `You are a Senior Technical Project Management Analyst for PulsePM.
+Your task is to synthesize verified telemetry and daily work logs into a detailed, cohesive, and executive-level performance summary for a Project Manager.
+
+CRITICAL CONSTRAINTS:
+1. Use ONLY facts, numbers, dates, task names, project names, and blocker reasons explicitly present in the provided JSON data. Never invent or extrapolate any project, technology, task title, date, or metric not present.
+2. Write a comprehensive, detailed executive summary of roughly 5 to 8 sentences formatted as a cohesive, professional paragraph.
+3. Do NOT use bullet points, markdown headers, or conversational introductions/conclusions. Return ONLY the executive summary text.
+
+DIMENSIONS TO COVER:
+- Allocation & Workload Context: Role, allocated project names, active deliverables vs total task count, and workload capacity status.
+- Cadence & Consistency Index: Exact breakdown of verified submissions (green logs) vs. impediment/blocker days, date range/recency, and overall consistency score.
+- Specific Deliverable Progress: Explicitly cite the actual named tasks the employee is or was working on from the input.
+- Blocker & Friction Analysis: If blocker days exist, cite or closely paraphrase the exact blocker reasons (e.g. client meetings, vendor timeouts, dependency wait-times) and the affected task. If zero blockers exist, explicitly state their unblocked momentum.
+- Strategic PM Recommendation: Concrete operational observation on sprint pacing, dependency unblocking, or upcoming capacity alignment.`;
+
+    const userPrompt = `Synthesize the following telemetry data for employee ${dataPayload.employee?.name || 'the employee'} into an executive PM performance summary:
+
+${JSON.stringify(dataPayload, null, 2)}`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey.trim())}`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                system_instruction: {
+                    parts: [{ text: systemInstruction }]
+                },
+                contents: [
+                    {
+                        parts: [{ text: userPrompt }]
+                    }
+                ],
+                generationConfig: {
+                    temperature: 0.3,
+                    maxOutputTokens: 1000
+                }
+            }),
+            signal: controller.signal
+        });
+
+        if (!response.ok) {
+            const errBody = await response.text().catch(() => '');
+            console.warn(`[Gemini API] Request failed with status ${response.status}: ${errBody.slice(0, 200)}`);
+            return null;
+        }
+
+        const resData = await response.json();
+        const candidate = resData?.candidates?.[0];
+        const rawText = candidate?.content?.parts?.[0]?.text;
+
+        if (rawText && typeof rawText === 'string') {
+            const cleanText = rawText
+                .replace(/^```[a-z]*\s*/i, '')
+                .replace(/```\s*$/, '')
+                .trim();
+            if (cleanText.length > 30) {
+                return cleanText;
+            }
+        }
+        return null;
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            console.warn(`[Gemini API] Executive summary generation timed out after ${timeoutMs}ms.`);
+        } else {
+            console.warn('[Gemini API] Error calling Gemini endpoint:', err.message);
+        }
+        return null;
+    } finally {
+        clearTimeout(timer);
+    }
+};
+
 // Employee 360° Deep Analysis Portal (PM View)
-export const getEmployeeAnalytics = (req, res) => {
+export const getEmployeeAnalytics = async (req, res) => {
     try {
         const employeeId = parseInt(req.params.id, 10);
         // Verify the employee belongs to this PM's team
@@ -264,12 +348,67 @@ export const getEmployeeAnalytics = (req, res) => {
             pmRecommendation = 'Align upcoming deliverables with current workload bandwidth; maintain regular daily check-ins.';
         }
 
+        // Construct telemetry payload for Gemini executive summary
+        const dataPayload = {
+            employee: {
+                name: employee.full_name,
+                role: employee.role_title,
+                email: employee.email,
+                status: employee.status
+            },
+            workload: {
+                projectCount: projects.length,
+                projectNames: projects.map(p => p.title),
+                totalTasksAssigned: tasks.length,
+                activeTaskCount,
+                workloadStatus
+            },
+            tasks: tasks.map(t => ({
+                title: t.title,
+                project: t.project_title,
+                status: t.status,
+                loggedDays: t.total_logged_days,
+                greenDays: t.green_days,
+                blockerDays: t.blocker_days
+            })),
+            submissionMetrics: {
+                totalLogsSubmitted: totalLogs,
+                greenLogsCount: greenLogs.length,
+                blockerLogsCount: blockerLogs.length,
+                consistencyScorePct: consistencyScore
+            },
+            blockerRecords: blockerLogs.map(b => ({
+                date: b.log_date,
+                taskTitle: b.task_title,
+                reason: b.no_work_reason
+            })),
+            recentWorkSubmissions: greenLogs.slice(0, 5).map(g => ({
+                date: g.log_date,
+                taskTitle: g.task_title,
+                workSummary: g.work_text
+            }))
+        };
+
+        // Fallback to existing rule-based template if Gemini key is missing or call fails/times out
+        let executiveAssessment = pmExecutiveAssessment;
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (apiKey && apiKey.trim() !== '') {
+            try {
+                const geminiAssessment = await generateExecutiveSummary(dataPayload, apiKey, 4000);
+                if (geminiAssessment && typeof geminiAssessment === 'string' && geminiAssessment.trim().length > 30) {
+                    executiveAssessment = geminiAssessment.trim();
+                }
+            } catch (aiErr) {
+                console.warn('[Gemini API] Fallback to rule-based executive summary:', aiErr.message);
+            }
+        }
+
         const aiDiagnostic = {
             productivity_score: consistencyScore >= 90 ? 'Exceptional (A+)' : consistencyScore >= 75 ? 'Strong (A)' : consistencyScore >= 50 ? 'Moderate (B)' : 'Requires Attention (B)',
             on_time_submission_rate: `${consistencyScore}%`,
             total_active_submissions: greenLogs.length,
             total_blocker_days: blockerLogs.length,
-            executive_assessment: pmExecutiveAssessment,
+            executive_assessment: executiveAssessment,
             core_strengths: strengths,
             key_milestone_delivery: keyMilestoneDelivery,
             summary_bullet_points: technicalTrajectories,

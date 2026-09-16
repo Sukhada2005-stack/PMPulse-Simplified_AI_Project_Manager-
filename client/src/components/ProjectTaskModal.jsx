@@ -30,6 +30,13 @@ const fieldLabel = {
   marginBottom: 6,
 };
 
+const PRIORITY_LEVELS = [
+  { value: 'Critical', label: 'Critical', icon: '⚡', iconClass: 'text-amber-500', subtext: 'Immediate focus' },
+  { value: 'High', label: 'High', icon: '🔥', iconClass: '', subtext: 'Top priority' },
+  { value: 'Medium', label: 'Medium', icon: null, iconClass: '', subtext: 'Standard track' },
+  { value: 'Low', label: 'Low', icon: null, iconClass: '', subtext: 'Low urgency' },
+];
+
 const inputStyle = {
   width: '100%',
   padding: '8px 12px',
@@ -140,6 +147,7 @@ export function NewProjectModal({ onClose, onSuccess }) {
   const [description, setDescription]             = useState('');
   const [startDate, setStartDate]                 = useState('2026-09-01');
   const [endDate, setEndDate]                     = useState('2026-09-10');
+  const [priority, setPriority]                   = useState('High');
   const [employees, setEmployees]                 = useState([]);
   const [selectedMemberIds, setSelectedMemberIds] = useState([]);
   const [submitting, setSubmitting]               = useState(false);
@@ -173,7 +181,8 @@ export function NewProjectModal({ onClose, onSuccess }) {
     }
     setSubmitting(true);
     try {
-      await api.projects.create({ title, description, start_date: startDate, end_date: endDate, member_ids: selectedMemberIds });
+      await api.projects.create({ title, description, start_date: startDate, end_date: endDate, member_ids: selectedMemberIds, priority });
+      window.dispatchEvent(new CustomEvent('pmpulse_projects_updated'));
       alert(`Project "${title}" created successfully!`);
       onSuccess(); onClose();
     } catch (err) {
@@ -239,6 +248,43 @@ export function NewProjectModal({ onClose, onSuccess }) {
               placeholder="Core goals, client specs, and deliverable targets..."
               rows={3}
             />
+          </div>
+
+          {/* Project Priority Level */}
+          <div>
+            <label
+              className="block text-[11px] font-bold uppercase tracking-wider mb-2 font-mono"
+              style={{ color: TEXT_MUTED }}
+            >
+              PROJECT PRIORITY LEVEL
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {PRIORITY_LEVELS.map(opt => {
+                const isSel = priority === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setPriority(opt.value)}
+                    className={`flex flex-col items-center justify-center py-2.5 px-2 rounded-2xl transition-all text-center cursor-pointer ${
+                      isSel
+                        ? 'border-2 border-indigo-500/90 bg-indigo-950/40 shadow-sm'
+                        : 'border border-slate-800/80 bg-slate-900/50 hover:border-slate-700/80'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-sm font-semibold">
+                      {opt.icon && <span className={opt.iconClass}>{opt.icon}</span>}
+                      <span className={isSel ? 'text-indigo-400 font-bold' : 'text-slate-200'}>
+                        {opt.label}
+                      </span>
+                    </div>
+                    <span className={`text-[10px] mt-0.5 ${isSel ? 'text-slate-200 font-medium' : 'text-slate-400'}`}>
+                      {opt.subtext}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Timeline box */}

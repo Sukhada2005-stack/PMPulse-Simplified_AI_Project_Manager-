@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS projects (
     start_date DATE,
     end_date DATE,
     status TEXT NOT NULL DEFAULT 'active', -- 'active', 'in-review', 'completed', 'archived'
+    priority TEXT DEFAULT 'Medium', -- 'Critical', 'High', 'Medium', 'Low'
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE CASCADE
 );
@@ -46,6 +47,10 @@ CREATE TABLE IF NOT EXISTS tasks (
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     status TEXT NOT NULL DEFAULT 'in_progress', -- 'in_progress', 'completed', 'stalled'
+    priority TEXT DEFAULT 'Medium',
+    type TEXT DEFAULT 'Task',
+    due_date DATE,
+    task_key TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
     FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE CASCADE

@@ -113,9 +113,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     }),
+    createWorkspaceTask: (projectId, data) => request(`/workspaces/${projectId}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
     updateWorkspaceTask: (projectId, taskId, data) => request(`/workspaces/${projectId}/tasks/${taskId}`, {
       method: 'PUT',
       body: JSON.stringify(data)
+    }),
+    deleteWorkspaceTask: (projectId, taskId) => request(`/workspaces/${projectId}/tasks/${taskId}`, {
+      method: 'DELETE'
     }),
     syncWorkspaceTasks: (projectId, tasks) => request(`/workspaces/${projectId}/tasks/sync`, {
       method: 'POST',

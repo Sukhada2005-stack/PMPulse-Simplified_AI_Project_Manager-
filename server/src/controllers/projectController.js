@@ -15,17 +15,20 @@ const normalizeTaskTitle = (str) => {
 // Create project (PM only)
 export const createProject = (req, res) => {
     try {
-        const { title, description, start_date, end_date, member_ids } = req.body;
+        const { title, description, start_date, end_date, member_ids, priority } = req.body;
         if (!title) {
             return res.status(400).json({ error: 'Project title is required' });
         }
 
+        const validPriorities = ['Critical', 'High', 'Medium', 'Low'];
+        const projectPriority = validPriorities.includes(priority) ? priority : 'Medium';
+
         const insertProject = db.prepare(`
-            INSERT INTO projects (title, description, start_date, end_date, manager_id, status)
-            VALUES (?, ?, ?, ?, ?, 'active')
+            INSERT INTO projects (title, description, start_date, end_date, manager_id, status, priority)
+            VALUES (?, ?, ?, ?, ?, 'active', ?)
         `);
 
-        const result = insertProject.run(title, description || '', start_date || null, end_date || null, req.user.id);
+        const result = insertProject.run(title, description || '', start_date || null, end_date || null, req.user.id, projectPriority);
         const projectId = result.lastInsertRowid;
 
         if (Array.isArray(member_ids) && member_ids.length > 0) {
@@ -305,7 +308,7 @@ export const addProjectMember = (req, res) => {
 export const updateProject = (req, res) => {
     try {
         const projectId = parseInt(req.params.id, 10);
-        const { status, end_date } = req.body;
+        const { status, end_date, priority } = req.body;
 
         const project = db.prepare('SELECT id FROM projects WHERE id = ? AND manager_id = ?').get(projectId, req.user.id);
         if (!project) {
@@ -321,6 +324,10 @@ export const updateProject = (req, res) => {
         if (end_date) {
             updates.push('end_date = ?');
             params.push(end_date);
+        }
+        if (priority) {
+            updates.push('priority = ?');
+            params.push(priority);
         }
 
         if (updates.length > 0) {
@@ -419,8 +426,15 @@ export const getProjectTasks = (req, res) => {
             'status': t.status || 'To Do',
             'Responsible': t.assignee || 'Unassigned',
             'assignee': t.assignee || 'Unassigned',
-            'Completed': t.end_date || '—',
-            'dueDate': t.end_date || ''
+            'Completed': t.due_date || t.end_date || '—',
+            'dueDate': t.due_date || t.end_date || '',
+            'due_date': t.due_date || t.end_date || '',
+            'Priority': t.priority || 'Medium',
+            'priority': t.priority || 'Medium',
+            'Type': t.type || 'Task',
+            'type': t.type || 'Task',
+            'key': t.task_key || `VVM-${t.id}`,
+            'task_key': t.task_key || `VVM-${t.id}`
         }));
 
         res.json({ tasks: mappedTasks });
@@ -478,13 +492,18 @@ export const getAllProjectsTasks = (req, res) => {
 export const createWorkspaceTask = (req, res) => {
     try {
         const projectId = parseInt(req.params.id, 10);
-        const { title, description, status, priority, assignee, dueDate } = req.body;
+        const { title, description, status, priority, type, assignee, dueDate, due_date, key, task_key } = req.body;
 
         const taskTitle = title || req.body['Issue / Task / Enhancement'] || req.body.task || 'Untitled Task';
         const taskAdded = req.body['Added '] || description || new Date().toLocaleDateString('en-GB');
         const taskStatus = status || req.body['Status'] || 'in_progress';
+        const taskPriority = priority || req.body['Priority'] || 'Medium';
+        const taskType = type || req.body['Type'] || 'Task';
+        const rawDue = dueDate || due_date || req.body['Completed'] || null;
         const startDate = new Date().toISOString().split('T')[0];
-        const endDate = dueDate || req.body['Completed'] || new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0];
+        const endDate = (rawDue && rawDue !== '—') ? rawDue : new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0];
+        const taskDueDate = (rawDue && rawDue !== '—') ? rawDue : endDate;
+        const taskKey = key || task_key || null;
 
         // Verify project exists
         const project = db.prepare('SELECT id, manager_id FROM projects WHERE id = ?').get(projectId);
@@ -495,31 +514,39 @@ export const createWorkspaceTask = (req, res) => {
         const managerId = project.manager_id || req.user.id;
 
         const insertTask = db.prepare(`
-            INSERT INTO tasks (project_id, manager_id, title, description, start_date, end_date, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tasks (project_id, manager_id, title, description, start_date, end_date, status, priority, type, due_date, task_key)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
-        const result = insertTask.run(projectId, managerId, taskTitle, taskAdded, startDate, endDate, taskStatus);
+        const result = insertTask.run(projectId, managerId, taskTitle, taskAdded, startDate, endDate, taskStatus, taskPriority, taskType, taskDueDate, taskKey);
         const taskId = result.lastInsertRowid;
 
         // Automatically associate task with assignee if provided
+        let targetUser = null;
+        const directUserId = req.body.assignee_id || req.body.user_id;
+        if (directUserId && !isNaN(Number(directUserId))) {
+            targetUser = db.prepare('SELECT id FROM users WHERE id = ?').get(Number(directUserId));
+        }
+
         const assigneeName = assignee || req.body['Responsible'];
-        if (assigneeName && assigneeName !== 'Unassigned' && assigneeName !== 'unassigned') {
+        if (!targetUser && assigneeName && assigneeName !== 'Unassigned' && assigneeName !== 'unassigned') {
             const cleanName = String(assigneeName).replace(/\s*\(pm\)$/i, '').trim();
-            const user = db.prepare(`
-                SELECT id FROM users 
-                WHERE TRIM(full_name) = ? COLLATE NOCASE OR email = ? COLLATE NOCASE OR id = ?
-            `).get(cleanName, cleanName, cleanName);
+            targetUser = db.prepare(`
+                SELECT u.id FROM users u
+                LEFT JOIN project_members pm ON pm.user_id = u.id AND pm.project_id = ?
+                WHERE (TRIM(u.full_name) = ? COLLATE NOCASE OR u.email = ? COLLATE NOCASE OR CAST(u.id AS TEXT) = ?)
+                ORDER BY CASE WHEN pm.project_id IS NOT NULL THEN 0 ELSE 1 END, u.id ASC
+            `).get(projectId, cleanName, cleanName, cleanName);
+        }
+
+        if (targetUser) {
+            db.prepare(`
+                INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)
+            `).run(taskId, targetUser.id);
             
-            if (user) {
-                db.prepare(`
-                    INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)
-                `).run(taskId, user.id);
-                
-                db.prepare(`
-                    INSERT OR IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)
-                `).run(projectId, user.id);
-            }
+            db.prepare(`
+                INSERT OR IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)
+            `).run(projectId, targetUser.id);
         }
 
         const createdTask = db.prepare(`
@@ -538,8 +565,15 @@ export const createWorkspaceTask = (req, res) => {
             'status': createdTask.status || 'To Do',
             'Responsible': createdTask.assignee || 'Unassigned',
             'assignee': createdTask.assignee || 'Unassigned',
-            'Completed': createdTask.end_date || '—',
-            'dueDate': createdTask.end_date || ''
+            'Completed': createdTask.due_date || createdTask.end_date || '—',
+            'dueDate': createdTask.due_date || createdTask.end_date || '',
+            'due_date': createdTask.due_date || createdTask.end_date || '',
+            'Priority': createdTask.priority || 'Medium',
+            'priority': createdTask.priority || 'Medium',
+            'Type': createdTask.type || 'Task',
+            'type': createdTask.type || 'Task',
+            'key': createdTask.task_key || `VVM-${createdTask.id}`,
+            'task_key': createdTask.task_key || `VVM-${createdTask.id}`
         };
 
         res.status(201).json({ message: 'Task created successfully', task: mappedTask });
@@ -549,17 +583,20 @@ export const createWorkspaceTask = (req, res) => {
     }
 };
 
-// Update a workspace task (assignee, status, dates, etc.)
+// Update a workspace task (assignee, status, dates, priority, type, etc.)
 export const updateWorkspaceTask = (req, res) => {
     try {
         const projectId = parseInt(req.params.id, 10);
         const taskIdParam = req.params.taskId;
-        const { assignee, status, dueDate, title, description, priority } = req.body;
+        const { assignee, status, dueDate, due_date, title, description, priority, type, key, task_key } = req.body;
 
-        // Find task by ID or by title (whitespace-tolerant)
+        // Find task by ID or by title (whitespace-tolerant) or by key
         let task = null;
         if (taskIdParam && !isNaN(Number(taskIdParam))) {
             task = db.prepare('SELECT * FROM tasks WHERE id = ? AND project_id = ?').get(taskIdParam, projectId);
+        }
+        if (!task && (key || task_key)) {
+            task = db.prepare('SELECT * FROM tasks WHERE project_id = ? AND task_key = ?').get(projectId, key || task_key);
         }
         if (!task) {
             const rawTitle = (title || req.body['Issue / Task / Enhancement'] || req.body.task || '').trim();
@@ -578,16 +615,21 @@ export const updateWorkspaceTask = (req, res) => {
             const taskTitle = title || req.body['Issue / Task / Enhancement'] || req.body.task || 'Untitled Task';
             const taskDesc = description || req.body['Added '] || '';
             const startDate = new Date().toISOString().split('T')[0];
-            const endDate = dueDate || req.body['Completed'] || new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0];
+            const rawDue = dueDate || due_date || req.body['Completed'] || null;
+            const endDate = (rawDue && rawDue !== '—') ? rawDue : new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0];
+            const taskDueDate = (rawDue && rawDue !== '—') ? rawDue : endDate;
             const taskStatus = status || req.body['Status'] || 'in_progress';
+            const taskPriority = priority || req.body['Priority'] || 'Medium';
+            const taskType = type || req.body['Type'] || 'Task';
+            const taskKey = key || task_key || null;
 
             const project = db.prepare('SELECT id, manager_id FROM projects WHERE id = ?').get(projectId);
             const managerId = project?.manager_id || req.user.id;
 
             const insert = db.prepare(`
-                INSERT INTO tasks (project_id, manager_id, title, description, start_date, end_date, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            `).run(projectId, managerId, taskTitle, taskDesc, startDate, endDate, taskStatus);
+                INSERT INTO tasks (project_id, manager_id, title, description, start_date, end_date, status, priority, type, due_date, task_key)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(projectId, managerId, taskTitle, taskDesc, startDate, endDate, taskStatus, taskPriority, taskType, taskDueDate, taskKey);
 
             task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(insert.lastInsertRowid);
         } else {
@@ -607,9 +649,26 @@ export const updateWorkspaceTask = (req, res) => {
                 updates.push('status = ?');
                 values.push(status || req.body['Status']);
             }
-            if (dueDate || req.body['Completed']) {
-                updates.push('end_date = ?');
-                values.push(dueDate || req.body['Completed']);
+            if (dueDate !== undefined || due_date !== undefined || req.body['Completed'] !== undefined) {
+                const targetDue = dueDate || due_date || req.body['Completed'];
+                if (targetDue && targetDue !== '—') {
+                    updates.push('due_date = ?');
+                    values.push(targetDue);
+                    updates.push('end_date = ?');
+                    values.push(targetDue);
+                }
+            }
+            if (priority || req.body['Priority']) {
+                updates.push('priority = ?');
+                values.push(priority || req.body['Priority']);
+            }
+            if (type || req.body['Type']) {
+                updates.push('type = ?');
+                values.push(type || req.body['Type']);
+            }
+            if (key || task_key) {
+                updates.push('task_key = ?');
+                values.push(key || task_key);
             }
 
             // Synchronize start_date to allocation date / today if allocated and start_date is not valid
@@ -632,21 +691,30 @@ export const updateWorkspaceTask = (req, res) => {
 
         // Handle assignee
         const assigneeName = assignee !== undefined ? assignee : req.body['Responsible'];
-        if (assigneeName !== undefined) {
-            if (!assigneeName || assigneeName === 'Unassigned' || assigneeName === 'unassigned') {
-                db.prepare('DELETE FROM task_assignees WHERE task_id = ?').run(task.id);
-            } else {
-                const cleanName = String(assigneeName).replace(/\s*\(pm\)$/i, '').trim();
-                const user = db.prepare(`
-                    SELECT id FROM users 
-                    WHERE TRIM(full_name) = ? COLLATE NOCASE OR email = ? COLLATE NOCASE OR id = ?
-                `).get(cleanName, cleanName, cleanName);
+        const directUserId = req.body.assignee_id !== undefined ? req.body.assignee_id : req.body.user_id;
 
-                if (user) {
-                    db.prepare('DELETE FROM task_assignees WHERE task_id = ?').run(task.id);
-                    db.prepare('INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)').run(task.id, user.id);
-                    db.prepare('INSERT OR IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)').run(projectId, user.id);
-                }
+        if (directUserId !== undefined || assigneeName !== undefined) {
+            let targetUser = null;
+            if (directUserId && !isNaN(Number(directUserId))) {
+                targetUser = db.prepare('SELECT id FROM users WHERE id = ?').get(Number(directUserId));
+            }
+
+            if (!targetUser && assigneeName && assigneeName !== 'Unassigned' && assigneeName !== 'unassigned') {
+                const cleanName = String(assigneeName).replace(/\s*\(pm\)$/i, '').trim();
+                targetUser = db.prepare(`
+                    SELECT u.id FROM users u
+                    LEFT JOIN project_members pm ON pm.user_id = u.id AND pm.project_id = ?
+                    WHERE (TRIM(u.full_name) = ? COLLATE NOCASE OR u.email = ? COLLATE NOCASE OR CAST(u.id AS TEXT) = ?)
+                    ORDER BY CASE WHEN pm.project_id IS NOT NULL THEN 0 ELSE 1 END, u.id ASC
+                `).get(projectId, cleanName, cleanName, cleanName);
+            }
+
+            if (targetUser) {
+                db.prepare('DELETE FROM task_assignees WHERE task_id = ?').run(task.id);
+                db.prepare('INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)').run(task.id, targetUser.id);
+                db.prepare('INSERT OR IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)').run(projectId, targetUser.id);
+            } else if (assigneeName === '' || assigneeName === 'Unassigned' || assigneeName === 'unassigned' || directUserId === null) {
+                db.prepare('DELETE FROM task_assignees WHERE task_id = ?').run(task.id);
             }
         }
 
@@ -666,8 +734,15 @@ export const updateWorkspaceTask = (req, res) => {
             'status': updatedTask.status || 'To Do',
             'Responsible': updatedTask.assignee || 'Unassigned',
             'assignee': updatedTask.assignee || 'Unassigned',
-            'Completed': updatedTask.end_date || '—',
-            'dueDate': updatedTask.end_date || ''
+            'Completed': updatedTask.due_date || updatedTask.end_date || '—',
+            'dueDate': updatedTask.due_date || updatedTask.end_date || '',
+            'due_date': updatedTask.due_date || updatedTask.end_date || '',
+            'Priority': updatedTask.priority || 'Medium',
+            'priority': updatedTask.priority || 'Medium',
+            'Type': updatedTask.type || 'Task',
+            'type': updatedTask.type || 'Task',
+            'key': updatedTask.task_key || `VVM-${updatedTask.id}`,
+            'task_key': updatedTask.task_key || `VVM-${updatedTask.id}`
         };
 
         res.json({ message: 'Task updated successfully', task: mappedTask });
@@ -696,26 +771,33 @@ export const syncWorkspaceTasks = (req, res) => {
 
         // Process each task in transaction
         const syncTx = db.transaction((taskList) => {
+            const synced = [];
             for (const t of taskList) {
                 const title = t.title || t['Issue / Task / Enhancement'] || t.task || t.taskName || t.description;
                 if (!title) continue;
 
                 const assigneeName = t.assignee || t['Responsible'];
-                const dueDate = t.dueDate || t['Completed'] || new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0];
+                const rawDue = t.dueDate || t.due_date || t['Completed'] || null;
                 const status = t.status || t['Status'] || 'in_progress';
                 const description = t.description || t['Added '] || '';
+                const priority = t.priority || t['Priority'] || 'Medium';
+                const type = t.type || t['Type'] || 'Task';
+                const key = t.key || t.task_key || null;
                 const startDate = new Date().toISOString().split('T')[0];
 
                 let dbTask = null;
-                if (t.id && !isNaN(Number(t.id))) {
-                    dbTask = db.prepare('SELECT id, start_date, end_date FROM tasks WHERE id = ? AND project_id = ?').get(t.id, projectId);
+                if (t.id && !isNaN(Number(t.id)) && Number(t.id) < 1000000000) {
+                    dbTask = db.prepare('SELECT id, start_date, end_date, due_date FROM tasks WHERE id = ? AND project_id = ?').get(t.id, projectId);
+                }
+                if (!dbTask && key) {
+                    dbTask = db.prepare('SELECT id, start_date, end_date, due_date FROM tasks WHERE project_id = ? AND task_key = ?').get(projectId, key);
                 }
                 if (!dbTask) {
                     const rawTitle = title.trim();
-                    dbTask = db.prepare('SELECT id, start_date, end_date FROM tasks WHERE project_id = ? AND TRIM(title) = ?').get(projectId, rawTitle);
+                    dbTask = db.prepare('SELECT id, start_date, end_date, due_date FROM tasks WHERE project_id = ? AND TRIM(title) = ?').get(projectId, rawTitle);
                     if (!dbTask) {
                         const normalized = normalizeTaskTitle(rawTitle);
-                        const allProjectTasks = db.prepare('SELECT id, title, start_date, end_date FROM tasks WHERE project_id = ?').all(projectId);
+                        const allProjectTasks = db.prepare('SELECT id, title, start_date, end_date, due_date FROM tasks WHERE project_id = ?').all(projectId);
                         dbTask = allProjectTasks.find(pt => normalizeTaskTitle(pt.title) === normalized);
                     }
                 }
@@ -726,7 +808,6 @@ export const syncWorkspaceTasks = (req, res) => {
 
                 if (dbTask) {
                     taskId = dbTask.id;
-                    // When task is allocated to an assignee, ensure start_date begins from allocation date or sprint window
                     let effectiveStart = dbTask.start_date;
                     if (isAllocated && (!effectiveStart || effectiveStart > todayStr)) {
                         effectiveStart = todayStr;
@@ -734,44 +815,95 @@ export const syncWorkspaceTasks = (req, res) => {
                         effectiveStart = todayStr;
                     }
 
-                    let effectiveEnd = (dueDate && dueDate !== '—') ? dueDate : dbTask.end_date;
+                    let effectiveEnd = (rawDue && rawDue !== '—') ? rawDue : dbTask.end_date;
                     if (!effectiveEnd || effectiveEnd < effectiveStart) {
                         effectiveEnd = effectiveStart;
                     }
+                    const targetDue = (rawDue && rawDue !== '—') ? rawDue : (dbTask.due_date || effectiveEnd);
 
-                    db.prepare('UPDATE tasks SET start_date = ?, end_date = ?, status = ? WHERE id = ?').run(effectiveStart, effectiveEnd, status, taskId);
+                    db.prepare(`
+                        UPDATE tasks 
+                        SET start_date = ?, end_date = ?, status = ?, priority = ?, type = ?, due_date = ?, task_key = COALESCE(?, task_key) 
+                        WHERE id = ?
+                    `).run(effectiveStart, effectiveEnd, status, priority, type, targetDue, key, taskId);
                 } else {
                     const effectiveStart = todayStr;
-                    const effectiveEnd = (dueDate && dueDate !== '—' && dueDate >= effectiveStart) ? dueDate : effectiveStart;
+                    const effectiveEnd = (rawDue && rawDue !== '—' && rawDue >= effectiveStart) ? rawDue : effectiveStart;
+                    const targetDue = (rawDue && rawDue !== '—') ? rawDue : effectiveEnd;
                     const ins = db.prepare(`
-                        INSERT INTO tasks (project_id, manager_id, title, description, start_date, end_date, status)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    `).run(projectId, managerId, title, description, effectiveStart, effectiveEnd, status);
+                        INSERT INTO tasks (project_id, manager_id, title, description, start_date, end_date, status, priority, type, due_date, task_key)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    `).run(projectId, managerId, title, description, effectiveStart, effectiveEnd, status, priority, type, targetDue, key);
                     taskId = ins.lastInsertRowid;
                 }
 
-                if (assigneeName && assigneeName !== 'Unassigned' && assigneeName !== 'unassigned') {
+                let targetUser = null;
+                const directUserId = t.assignee_id || t.user_id;
+                if (directUserId && !isNaN(Number(directUserId))) {
+                    targetUser = db.prepare('SELECT id FROM users WHERE id = ?').get(Number(directUserId));
+                }
+
+                if (!targetUser && assigneeName && assigneeName !== 'Unassigned' && assigneeName !== 'unassigned') {
                     const cleanName = String(assigneeName).replace(/\s*\(pm\)$/i, '').trim();
-                    const user = db.prepare(`
-                        SELECT id FROM users 
-                        WHERE TRIM(full_name) = ? COLLATE NOCASE OR email = ? COLLATE NOCASE OR id = ?
-                    `).get(cleanName, cleanName, cleanName);
-                    if (user) {
-                        db.prepare('DELETE FROM task_assignees WHERE task_id = ?').run(taskId);
-                        db.prepare('INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)').run(taskId, user.id);
-                        db.prepare('INSERT OR IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)').run(projectId, user.id);
-                    }
+                    targetUser = db.prepare(`
+                        SELECT u.id FROM users u
+                        LEFT JOIN project_members pm ON pm.user_id = u.id AND pm.project_id = ?
+                        WHERE (TRIM(u.full_name) = ? COLLATE NOCASE OR u.email = ? COLLATE NOCASE OR CAST(u.id AS TEXT) = ?)
+                        ORDER BY CASE WHEN pm.project_id IS NOT NULL THEN 0 ELSE 1 END, u.id ASC
+                    `).get(projectId, cleanName, cleanName, cleanName);
+                }
+
+                if (targetUser) {
+                    db.prepare('DELETE FROM task_assignees WHERE task_id = ?').run(taskId);
+                    db.prepare('INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)').run(taskId, targetUser.id);
+                    db.prepare('INSERT OR IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)').run(projectId, targetUser.id);
                 } else {
                     db.prepare('DELETE FROM task_assignees WHERE task_id = ?').run(taskId);
                 }
+
+                synced.push({
+                    originalId: t.id,
+                    id: taskId,
+                    key: key || `VVM-${taskId}`
+                });
             }
+            return synced;
         });
 
-        syncTx(tasks);
+        const syncedResults = syncTx(tasks);
 
-        res.json({ message: 'Tasks synchronized successfully' });
+        res.json({ message: 'Tasks synchronized successfully', synced: syncedResults });
     } catch (err) {
         console.error('syncWorkspaceTasks error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Delete a single workspace task
+export const deleteWorkspaceTask = (req, res) => {
+    try {
+        const projectId = parseInt(req.params.id, 10);
+        const taskId = parseInt(req.params.taskId, 10);
+
+        const project = db.prepare('SELECT id FROM projects WHERE id = ? AND manager_id = ?').get(projectId, req.user.id);
+        if (!project) {
+            return res.status(404).json({ error: 'Project not found' });
+        }
+
+        const task = db.prepare('SELECT id FROM tasks WHERE id = ? AND project_id = ?').get(taskId, projectId);
+        if (!task) {
+            return res.status(404).json({ error: 'Task not found' });
+        }
+
+        db.transaction(() => {
+            db.prepare('DELETE FROM daily_logs WHERE task_id = ?').run(taskId);
+            db.prepare('DELETE FROM task_assignees WHERE task_id = ?').run(taskId);
+            db.prepare('DELETE FROM tasks WHERE id = ? AND project_id = ?').run(taskId, projectId);
+        })();
+
+        res.json({ message: 'Task deleted successfully', taskId });
+    } catch (err) {
+        console.error('deleteWorkspaceTask error:', err);
         res.status(500).json({ error: err.message });
     }
 };

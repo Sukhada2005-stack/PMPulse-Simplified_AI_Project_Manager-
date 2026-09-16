@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import {
   FolderGit2,
   Plus,
@@ -10,9 +11,25 @@ import {
   Loader2,
   Layout,
   ArrowRight,
+  Clock,
+  AlertTriangle,
+  SearchCheck,
+  Filter,
+  ListFilter,
 } from 'lucide-react';
 import { NewProjectModal, NewTaskModal } from './ProjectTaskModal';
 import ProjectChatModal from './ProjectChatModal';
+
+const getSafeStorage = (key, fallback) => {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const item = window.localStorage.getItem(key);
+    return item ? JSON.parse(item) : fallback;
+  } catch (error) {
+    console.error(`Error reading localStorage key "${key}":`, error);
+    return fallback;
+  }
+};
 
 /* ── Status badge colour mapping (mirrors PMDashboard tokens) ────────── */
 function StatusBadge({ status }) {
@@ -26,10 +43,90 @@ function StatusBadge({ status }) {
   return <span className={cls}>{status || 'Active'}</span>;
 }
 
+/* ── Priority badge colour mapping ─────────────────────────────────── */
+export function PriorityBadge({ priority }) {
+  const p = (priority || 'Medium').toLowerCase();
+  if (p === 'critical') {
+    return (
+      <span className="lozenge font-semibold flex items-center gap-1 bg-red-500/15 text-red-400 border border-red-500/30">
+        <span>⚡</span> Critical
+      </span>
+    );
+  }
+  if (p === 'high') {
+    return (
+      <span className="lozenge font-semibold flex items-center gap-1 bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
+        <span>🔥</span> High
+      </span>
+    );
+  }
+  if (p === 'low') {
+    return (
+      <span className="lozenge font-semibold flex items-center gap-1 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+        Low
+      </span>
+    );
+  }
+  return (
+    <span className="lozenge font-semibold flex items-center gap-1 bg-amber-500/15 text-amber-400 border border-amber-500/30">
+      Medium
+    </span>
+  );
+}
+
+/* ── Priority filter configuration & helper ────────────────────────── */
+export function getProjectPriorityCategory(priority) {
+  const p = (priority || 'Medium').toString().trim().toLowerCase();
+  if (p.includes('critical')) return 'critical';
+  if (p.includes('high')) return 'high';
+  if (p.includes('low')) return 'low';
+  return 'medium';
+}
+
+const PRIORITY_FILTERS = [
+  { id: 'all', label: 'All Priorities' },
+  { id: 'high', label: 'High Priority', icon: '🔥' },
+  { id: 'critical', label: 'Critical', icon: '⚡' },
+  { id: 'medium', label: 'Medium' },
+  { id: 'low', label: 'Low' },
+];
+
 export default function OtherWorkspaces({ onNavigateTab }) {
+  const { user } = useAuth();
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const storedUser = localStorage.getItem('pulsepm_user'); 
+      const parsed = storedUser ? JSON.parse(storedUser) : (user || null);
+      if (parsed) {
+        return {
+          ...parsed,
+          fullName: parsed.fullName || parsed.full_name || parsed.name,
+          name: parsed.name || parsed.full_name || parsed.fullName
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error("Failed to parse user session", error);
+      return user ? { ...user, fullName: user.fullName || user.full_name, name: user.name || user.full_name } : null;
+    }
+  });
+
+  useEffect(() => {
+    if (user && !currentUser) {
+      setCurrentUser({
+        ...user,
+        fullName: user.fullName || user.full_name || user.name,
+        name: user.name || user.full_name || user.fullName
+      });
+    }
+  }, [user, currentUser]);
+
   const [projects, setProjects]   = useState([]);
+  const [allTasks, setAllTasks]   = useState([]);
   const [loading, setLoading]     = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedPriority, setSelectedPriority] = useState('all');
+  const [showFilterBar, setShowFilterBar] = useState(true);
 
   const [showNewProjectModal, setShowNewProjectModal]         = useState(false);
   const [showNewTaskModal, setShowNewTaskModal]               = useState(false);
@@ -38,36 +135,198 @@ export default function OtherWorkspaces({ onNavigateTab }) {
   const [selectedChatProjectId, setSelectedChatProjectId]     = useState(null);
 
   /* ── Data fetch ───────────────────────────────────────────────────── */
-  const fetchProjects = async () => {
+  const fetchProjectsAndTasks = async () => {
     try {
       setLoading(true);
-      const projRes = await api.projects.getAll();
+      const [projRes, tasksRes] = await Promise.all([
+        api.projects.getAll(),
+        api.projects.getAllTasks().catch(() => ({ tasks: [] }))
+      ]);
       setProjects(projRes.projects || []);
+      if (tasksRes?.tasks) {
+        setAllTasks(tasksRes.tasks);
+      }
     } catch (err) {
-      console.error('Failed to load projects:', err);
+      console.error('Failed to load projects and tasks:', err);
     } finally {
       setLoading(false);
     }
   };
+  const fetchProjects = fetchProjectsAndTasks;
 
-  useEffect(() => { fetchProjects(); }, []);
+  useEffect(() => {
+    fetchProjectsAndTasks();
 
-  /* ── Client-side search filter ────────────────────────────────────── */
-  const filteredProjects = projects.filter(proj => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      (proj.title       && proj.title.toLowerCase().includes(q)) ||
-      (proj.description && proj.description.toLowerCase().includes(q))
-    );
-  });
+    const handleSyncGlobal = () => {
+      fetchProjectsAndTasks();
+    };
 
-  /* ── Open "Provision Task" from the top bar ───────────────────────── */
-  const handleTopProvisionTask = () => {
-    // Pre-select the first project; the NewTaskModal lets the PM pick another.
-    setSelectedProjectIdForTask(projects[0]?.id || null);
-    setShowNewTaskModal(true);
-  };
+    window.addEventListener('pmpulse_workspaceTasks_updated', handleSyncGlobal);
+    window.addEventListener('pmpulse_listTasks_updated', handleSyncGlobal);
+    window.addEventListener('pmpulse_boardTasks_updated', handleSyncGlobal);
+    window.addEventListener('pmpulse_boardBacklogTasks_updated', handleSyncGlobal);
+
+    return () => {
+      window.removeEventListener('pmpulse_workspaceTasks_updated', handleSyncGlobal);
+      window.removeEventListener('pmpulse_listTasks_updated', handleSyncGlobal);
+      window.removeEventListener('pmpulse_boardTasks_updated', handleSyncGlobal);
+      window.removeEventListener('pmpulse_boardBacklogTasks_updated', handleSyncGlobal);
+    };
+  }, []);
+
+  /* ── Global KPIs calculation (mirrors PMDashboard calculation) ─────── */
+  const globalKpis = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const DONE = new Set(['Done', 'Completed', 'Remove', 'completed', 'archived', 'Archived']);
+
+    const parseDate = (val) => {
+      if (!val || val === '—' || val === '-') return null;
+      if (typeof val === 'number') {
+        if (val > 25000 && val < 60000) return new Date((val - 25569) * 86400 * 1000);
+        return new Date(val);
+      }
+      const s = String(val).trim();
+      if (!isNaN(Number(s)) && Number(s) > 25000 && Number(s) < 60000) {
+        return new Date((Number(s) - 25569) * 86400 * 1000);
+      }
+      const parts = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+      if (parts) {
+        const day = parseInt(parts[1], 10);
+        const month = parseInt(parts[2], 10) - 1;
+        const year = parseInt(parts[3], 10);
+        return new Date(year, month, day);
+      }
+      const d = new Date(s);
+      return isNaN(d.getTime()) ? null : d;
+    };
+
+    // ── Step 1: Deduplicate rows by task id or key ────────────────────────
+    const dedupeById = (arr) => {
+      const seen = new Map();
+      (arr || []).forEach(t => {
+        if (!t) return;
+        const key = String(t.id ?? t.key ?? t.title ?? Math.random());
+        if (!seen.has(key)) seen.set(key, t);
+      });
+      return Array.from(seen.values());
+    };
+
+    // ── Step 2: Build local task map across all views ──────────────────────
+    const allLocalTasksRaw = [];
+    (projects || []).forEach(p => {
+      const wsTasks = getSafeStorage(`pmpulse_workspaceTasks_${p.id}`, []);
+      const lTasks = getSafeStorage(`pmpulse_listTasks_${p.id}`, []);
+      const bTasks = getSafeStorage(`pmpulse_boardTasks_${p.id}`, []);
+      const bbTasks = getSafeStorage(`pmpulse_boardBacklogTasks_${p.id}`, []);
+      allLocalTasksRaw.push(...wsTasks, ...lTasks, ...bTasks, ...bbTasks);
+    });
+
+    const allLocalTasks = dedupeById(allLocalTasksRaw);
+    const localTaskMap = new Map();
+    allLocalTasks.forEach(t => {
+      if (t.id != null) localTaskMap.set(String(t.id), t);
+      if (t.key != null) localTaskMap.set(String(t.key), t);
+      if (t.title) localTaskMap.set(String(t.title).toLowerCase().trim(), t);
+      if (t['Issue / Task / Enhancement']) localTaskMap.set(String(t['Issue / Task / Enhancement']).toLowerCase().trim(), t);
+      if (t.task) localTaskMap.set(String(t.task).toLowerCase().trim(), t);
+      if (t.taskName) localTaskMap.set(String(t.taskName).toLowerCase().trim(), t);
+      if (t.description) localTaskMap.set(String(t.description).toLowerCase().trim(), t);
+    });
+
+    const mergeTask = (task) => {
+      const titleKey = (task.title || task['Issue / Task / Enhancement'] || task.task || task.taskName || task.description || '').toLowerCase().trim();
+      const local = localTaskMap.get(String(task.id)) ||
+                    (task.key ? localTaskMap.get(String(task.key)) : null) ||
+                    (titleKey ? localTaskMap.get(titleKey) : null);
+      const merged = local ? { ...task, ...local } : { ...task };
+      const due = merged.dueDate || merged['Completed'] || merged.end_date;
+      const prio = merged.priority || merged['Priority'] || 'Medium';
+      const stat = merged.status || merged['Status'] || 'To Do';
+      return {
+        ...merged,
+        dueDate: due,
+        priority: prio,
+        status: stat
+      };
+    };
+
+    const rawTasks = dedupeById(allTasks.length > 0 ? allTasks : allLocalTasks);
+    const dbMerged = rawTasks.map(mergeTask);
+    const dbIds = new Set(rawTasks.map(t => String(t.id)));
+    const localOnlyTasks = allLocalTasks
+      .filter(t => t.id != null && !dbIds.has(String(t.id)))
+      .map(mergeTask);
+
+    const fullTasks = dedupeById([...dbMerged, ...localOnlyTasks]);
+
+    // ── Global KPIs ───────────────────────────────────────────────────
+    // 1. Overdue: due date < today AND not in a done-like status
+    const overdueTasks = fullTasks.filter(t => {
+      const due = t.dueDate || t['Completed'] || t.end_date;
+      const d = parseDate(due);
+      if (!d) return false;
+      d.setHours(0, 0, 0, 0);
+      const s = t.status || t['Status'];
+      return d < today && !DONE.has(s);
+    }).length;
+
+    // 2. Escalated: High / Highest priority tasks or synonyms (urgent, critical, escalated)
+    const escalatedTasks = fullTasks.filter(t => {
+      if (t.is_escalated || t.escalated || t.isEscalated) return true;
+      const p = t.priority || t['Priority'] || t.Priority || t.priority_level;
+      if (!p) return false;
+      const norm = String(p).trim().toLowerCase();
+      return (
+        norm === 'high' ||
+        norm === 'highest' ||
+        norm === 'urgent' ||
+        norm === 'critical' ||
+        norm === 'escalated' ||
+        norm === 'p1' ||
+        norm === 'blocker' ||
+        norm.startsWith('high') ||
+        norm.includes('urgent') ||
+        norm.includes('critical') ||
+        norm.includes('escalat')
+      );
+    }).length;
+
+    // 3. In Review: exact Kanban column name 'In Review' or synonyms
+    const inReviewTasks = fullTasks.filter(t => {
+      const s = t.status || t['Status'];
+      if (!s) return false;
+      const norm = String(s).trim().toLowerCase().replace(/[_\s-]+/g, ' ');
+      return norm === 'in review' || norm === 'in review / qa' || norm === 'qa' || norm === 'review';
+    }).length;
+
+    return {
+      overdueTasks,
+      escalatedTasks,
+      inReviewTasks
+    };
+  }, [allTasks, projects]);
+
+  /* ── Client-side search & priority filter ─────────────────────────── */
+  const filteredProjects = useMemo(() => {
+    return projects.filter(proj => {
+      // 1. Priority filter based on project card priority KPI
+      if (selectedPriority !== 'all') {
+        const cat = getProjectPriorityCategory(proj.priority);
+        if (cat !== selectedPriority) return false;
+      }
+
+      // 2. Search query filter
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        (proj.title       && proj.title.toLowerCase().includes(q)) ||
+        (proj.description && proj.description.toLowerCase().includes(q)) ||
+        (proj.priority    && proj.priority.toLowerCase().includes(q))
+      );
+    });
+  }, [projects, selectedPriority, searchQuery]);
 
 
   /* ── Loading spinner ──────────────────────────────────────────────── */
@@ -84,6 +343,60 @@ export default function OtherWorkspaces({ onNavigateTab }) {
 
   return (
     <div className="space-y-6 animate-fade-up">
+
+      {/* ── Seamless Welcome Banner ─────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between bg-transparent">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2 tracking-tight">
+            Welcome, {currentUser?.fullName || currentUser?.name || currentUser?.full_name || user?.full_name || 'Project Manager'}
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+            Project Manager • Workspace Overview & Analytics
+          </p>
+        </div>
+        <div className="mt-4 md:mt-0 flex items-center gap-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400 bg-transparent px-2 py-1">
+            <span>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Global KPIs (Overdue, Escalated, In-Review) ────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-xl p-5 hover:bg-slate-50 dark:hover:bg-slate-800/60 shadow-sm transition-colors">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Global Overdue Tasks</p>
+              <h3 className="text-3xl font-bold text-red-500">{globalKpis.overdueTasks}</h3>
+            </div>
+            <div className="p-2 bg-red-500/10 rounded-lg text-red-500">
+              <Clock size={20} />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-xl p-5 hover:bg-slate-50 dark:hover:bg-slate-800/60 shadow-sm transition-colors">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Global Escalated Tasks</p>
+              <h3 className="text-3xl font-bold text-orange-500">{globalKpis.escalatedTasks}</h3>
+            </div>
+            <div className="p-2 bg-orange-500/10 rounded-lg text-orange-500">
+              <AlertTriangle size={20} />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-xl p-5 hover:bg-slate-50 dark:hover:bg-slate-800/60 shadow-sm transition-colors">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Global In-Review / QA</p>
+              <h3 className="text-3xl font-bold text-blue-500">{globalKpis.inReviewTasks}</h3>
+            </div>
+            <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500">
+              <SearchCheck size={20} />
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* ── Header row ──────────────────────────────────────────────── */}
       <div className="space-y-4">
@@ -113,14 +426,22 @@ export default function OtherWorkspaces({ onNavigateTab }) {
               />
             </div>
 
-            {/* + Provision Task */}
+            {/* Filter */}
             <button
-              onClick={handleTopProvisionTask}
-              disabled={projects.length === 0}
-              className="btn-primary whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+              type="button"
+              onClick={() => setShowFilterBar(prev => !prev)}
+              className={`border rounded-md px-3.5 py-2 text-sm font-medium flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer select-none ${
+                showFilterBar
+                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border-slate-300 dark:border-slate-600 shadow-sm'
+                  : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+              }`}
+              title={showFilterBar ? "Hide filters" : "Show filters"}
             >
-              <Plus className="w-4 h-4" />
-              <span>Provision Task</span>
+              <ListFilter className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+              <span>Filter</span>
+              {selectedPriority !== 'all' && (
+                <span className="w-2 h-2 rounded-full bg-[#7156fb] inline-block" />
+              )}
             </button>
 
             {/* + New Project */}
@@ -134,6 +455,35 @@ export default function OtherWorkspaces({ onNavigateTab }) {
           </div>
         </div>
 
+        {/* ── Priority Filter Bar ───────────────────────────────────── */}
+        {showFilterBar && (
+          <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap pt-0.5 pb-1 animate-fade-in">
+            <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-400 select-none mr-1">
+              <Filter className="w-3.5 h-3.5 text-slate-400 dark:text-slate-400" />
+              <span className="text-[11px] font-bold tracking-widest uppercase font-mono">PRIORITY:</span>
+            </div>
+
+            {PRIORITY_FILTERS.map(filter => {
+              const isSelected = selectedPriority === filter.id;
+              return (
+                <button
+                  key={filter.id}
+                  type="button"
+                  onClick={() => setSelectedPriority(filter.id)}
+                  className={`text-xs font-semibold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                    isSelected
+                      ? 'bg-[#7156fb] text-white shadow-sm border border-transparent'
+                      : 'bg-white dark:bg-[#12151c] text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700/60 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  {filter.icon && <span>{filter.icon}</span>}
+                  <span>{filter.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* ── Project card grid ────────────────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
 
@@ -146,15 +496,15 @@ export default function OtherWorkspaces({ onNavigateTab }) {
               <FolderGit2 className="w-12 h-12 text-gray-500" />
               <div>
                 <h3 className="text-xl font-bold" style={{ color: 'var(--color-text-1)' }}>
-                  {searchQuery ? 'No Results Found' : 'No Workspaces Yet'}
+                  {searchQuery || selectedPriority !== 'all' ? 'No Results Found' : 'No Workspaces Yet'}
                 </h3>
                 <p className="text-sm mt-2 max-w-sm mx-auto" style={{ color: 'var(--color-text-3)' }}>
-                  {searchQuery
-                    ? `No projects matched "${searchQuery}".`
+                  {searchQuery || selectedPriority !== 'all'
+                    ? 'No project containers matched your search or priority filter criteria.'
                     : 'Your workspace is completely clean. No active projects are provisioned yet. Start by creating your first project container to begin tracking deliverables.'}
                 </p>
               </div>
-              {!searchQuery && (
+              {!searchQuery && selectedPriority === 'all' && (
                 <button
                   onClick={() => setShowNewProjectModal(true)}
                   className="btn-primary mt-4"
@@ -174,9 +524,12 @@ export default function OtherWorkspaces({ onNavigateTab }) {
               >
                 {/* Card body */}
                 <div>
-                  {/* Status + task count badges */}
+                  {/* Status + priority KPI + task count badges */}
                   <div className="flex items-start justify-between gap-3 mb-2.5">
-                    <StatusBadge status={proj.status} />
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <StatusBadge status={proj.status} />
+                      <PriorityBadge priority={proj.priority} />
+                    </div>
                     <span className="lozenge lozenge-default font-mono">
                       {proj.task_count ?? 0} Tasks
                     </span>
@@ -257,7 +610,7 @@ export default function OtherWorkspaces({ onNavigateTab }) {
                       if (window.confirm(`Delete "${proj.title}"? This cannot be undone.`)) {
                         try {
                           await api.projects.delete(proj.id);
-                          fetchProjects();
+                          fetchProjectsAndTasks();
                         } catch (err) {
                           alert(err.message || 'Failed to delete project');
                         }
@@ -280,7 +633,7 @@ export default function OtherWorkspaces({ onNavigateTab }) {
       {showNewProjectModal && (
         <NewProjectModal
           onClose={() => setShowNewProjectModal(false)}
-          onSuccess={fetchProjects}
+          onSuccess={fetchProjectsAndTasks}
         />
       )}
 
@@ -289,7 +642,7 @@ export default function OtherWorkspaces({ onNavigateTab }) {
           projectId={selectedProjectIdForTask}
           projects={projects}
           onClose={() => setShowNewTaskModal(false)}
-          onSuccess={fetchProjects}
+          onSuccess={fetchProjectsAndTasks}
         />
       )}
 
