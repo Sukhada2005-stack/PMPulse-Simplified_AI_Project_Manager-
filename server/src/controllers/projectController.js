@@ -15,20 +15,21 @@ const normalizeTaskTitle = (str) => {
 // Create project (PM only)
 export const createProject = (req, res) => {
     try {
-        const { title, description, start_date, end_date, member_ids, priority } = req.body;
+        const { title, description, start_date, end_date, member_ids, priority, category } = req.body;
         if (!title) {
             return res.status(400).json({ error: 'Project title is required' });
         }
 
         const validPriorities = ['Critical', 'High', 'Medium', 'Low'];
         const projectPriority = validPriorities.includes(priority) ? priority : 'Medium';
+        const projectCategory = category ? String(category).trim() : 'General';
 
         const insertProject = db.prepare(`
-            INSERT INTO projects (title, description, start_date, end_date, manager_id, status, priority)
-            VALUES (?, ?, ?, ?, ?, 'active', ?)
+            INSERT INTO projects (title, description, start_date, end_date, manager_id, status, priority, category)
+            VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
         `);
 
-        const result = insertProject.run(title, description || '', start_date || null, end_date || null, req.user.id, projectPriority);
+        const result = insertProject.run(title, description || '', start_date || null, end_date || null, req.user.id, projectPriority, projectCategory);
         const projectId = result.lastInsertRowid;
 
         if (Array.isArray(member_ids) && member_ids.length > 0) {
@@ -308,7 +309,7 @@ export const addProjectMember = (req, res) => {
 export const updateProject = (req, res) => {
     try {
         const projectId = parseInt(req.params.id, 10);
-        const { status, end_date, priority } = req.body;
+        const { status, end_date, priority, category } = req.body;
 
         const project = db.prepare('SELECT id FROM projects WHERE id = ? AND manager_id = ?').get(projectId, req.user.id);
         if (!project) {
@@ -328,6 +329,10 @@ export const updateProject = (req, res) => {
         if (priority) {
             updates.push('priority = ?');
             params.push(priority);
+        }
+        if (category) {
+            updates.push('category = ?');
+            params.push(String(category).trim());
         }
 
         if (updates.length > 0) {
@@ -426,9 +431,9 @@ export const getProjectTasks = (req, res) => {
             'status': t.status || 'To Do',
             'Responsible': t.assignee || 'Unassigned',
             'assignee': t.assignee || 'Unassigned',
-            'Completed': t.due_date || t.end_date || '—',
-            'dueDate': t.due_date || t.end_date || '',
-            'due_date': t.due_date || t.end_date || '',
+            'Completed': (t.due_date && t.due_date !== '—') ? t.due_date : '—',
+            'dueDate': (t.due_date && t.due_date !== '—') ? t.due_date : '',
+            'due_date': (t.due_date && t.due_date !== '—') ? t.due_date : '',
             'Priority': t.priority || 'Medium',
             'priority': t.priority || 'Medium',
             'Type': t.type || 'Task',
@@ -500,9 +505,9 @@ export const createWorkspaceTask = (req, res) => {
         const taskPriority = priority || req.body['Priority'] || 'Medium';
         const taskType = type || req.body['Type'] || 'Task';
         const rawDue = dueDate || due_date || req.body['Completed'] || null;
+        const taskDueDate = (rawDue && rawDue !== '—') ? rawDue : null;
         const startDate = new Date().toISOString().split('T')[0];
-        const endDate = (rawDue && rawDue !== '—') ? rawDue : new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0];
-        const taskDueDate = (rawDue && rawDue !== '—') ? rawDue : endDate;
+        const endDate = taskDueDate || new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0];
         const taskKey = key || task_key || null;
 
         // Verify project exists
@@ -616,8 +621,8 @@ export const updateWorkspaceTask = (req, res) => {
             const taskDesc = description || req.body['Added '] || '';
             const startDate = new Date().toISOString().split('T')[0];
             const rawDue = dueDate || due_date || req.body['Completed'] || null;
-            const endDate = (rawDue && rawDue !== '—') ? rawDue : new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0];
-            const taskDueDate = (rawDue && rawDue !== '—') ? rawDue : endDate;
+            const taskDueDate = (rawDue && rawDue !== '—') ? rawDue : null;
+            const endDate = taskDueDate || new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0];
             const taskStatus = status || req.body['Status'] || 'in_progress';
             const taskPriority = priority || req.body['Priority'] || 'Medium';
             const taskType = type || req.body['Type'] || 'Task';
@@ -650,10 +655,11 @@ export const updateWorkspaceTask = (req, res) => {
                 values.push(status || req.body['Status']);
             }
             if (dueDate !== undefined || due_date !== undefined || req.body['Completed'] !== undefined) {
-                const targetDue = dueDate || due_date || req.body['Completed'];
-                if (targetDue && targetDue !== '—') {
-                    updates.push('due_date = ?');
-                    values.push(targetDue);
+                const rawTargetDue = dueDate !== undefined ? dueDate : (due_date !== undefined ? due_date : req.body['Completed']);
+                const targetDue = (rawTargetDue && rawTargetDue !== '—') ? rawTargetDue : null;
+                updates.push('due_date = ?');
+                values.push(targetDue);
+                if (targetDue) {
                     updates.push('end_date = ?');
                     values.push(targetDue);
                 }
@@ -815,11 +821,11 @@ export const syncWorkspaceTasks = (req, res) => {
                         effectiveStart = todayStr;
                     }
 
-                    let effectiveEnd = (rawDue && rawDue !== '—') ? rawDue : dbTask.end_date;
+                    const targetDue = (rawDue && rawDue !== '—') ? rawDue : null;
+                    let effectiveEnd = targetDue || dbTask.end_date;
                     if (!effectiveEnd || effectiveEnd < effectiveStart) {
                         effectiveEnd = effectiveStart;
                     }
-                    const targetDue = (rawDue && rawDue !== '—') ? rawDue : (dbTask.due_date || effectiveEnd);
 
                     db.prepare(`
                         UPDATE tasks 
@@ -828,8 +834,8 @@ export const syncWorkspaceTasks = (req, res) => {
                     `).run(effectiveStart, effectiveEnd, status, priority, type, targetDue, key, taskId);
                 } else {
                     const effectiveStart = todayStr;
-                    const effectiveEnd = (rawDue && rawDue !== '—' && rawDue >= effectiveStart) ? rawDue : effectiveStart;
-                    const targetDue = (rawDue && rawDue !== '—') ? rawDue : effectiveEnd;
+                    const targetDue = (rawDue && rawDue !== '—') ? rawDue : null;
+                    const effectiveEnd = (targetDue && targetDue >= effectiveStart) ? targetDue : effectiveStart;
                     const ins = db.prepare(`
                         INSERT INTO tasks (project_id, manager_id, title, description, start_date, end_date, status, priority, type, due_date, task_key)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -934,8 +940,8 @@ export const importProjectTasks = (req, res) => {
         const rows = xlsx.utils.sheet_to_json(sheet);
 
         const insertTask = db.prepare(`
-            INSERT INTO tasks (project_id, manager_id, title, description, start_date, end_date, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tasks (project_id, manager_id, title, description, start_date, end_date, status, due_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         // Transaction for bulk insert
@@ -944,10 +950,12 @@ export const importProjectTasks = (req, res) => {
                 const title = task['Issue / Task / Enhancement'] || 'Untitled Task';
                 const description = task['Added '] || ''; // Store 'Added ' in description to preserve it
                 const startDate = new Date().toISOString().split('T')[0];
-                const endDate = new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0];
+                const rawDue = task['Due Date'] || task['dueDate'] || task['due_date'] || task['Completed'] || null;
+                const taskDueDate = (rawDue && rawDue !== '—') ? rawDue : null;
+                const endDate = taskDueDate || new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0];
                 const status = 'in_progress';
                 
-                insertTask.run(projectId, req.user.id, title, description, startDate, endDate, status);
+                insertTask.run(projectId, req.user.id, title, description, startDate, endDate, status, taskDueDate);
             }
         });
 

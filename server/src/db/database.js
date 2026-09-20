@@ -28,6 +28,17 @@ try {
   console.error('Migration notice (projects.priority):', e.message);
 }
 
+// Migration: Ensure projects table has category column
+try {
+  const pragma = db.pragma('table_info(projects)');
+  const hasCategory = pragma.some(col => col.name === 'category');
+  if (!hasCategory) {
+    db.exec("ALTER TABLE projects ADD COLUMN category TEXT DEFAULT 'General'");
+  }
+} catch (e) {
+  console.error('Migration notice (projects.category):', e.message);
+}
+
 // Migration: Ensure tasks table has priority, type, due_date, task_key columns
 try {
   const taskCols = db.pragma('table_info(tasks)').map(col => col.name);

@@ -143,29 +143,35 @@ export function seedDatabase() {
 
     // 2. Insert Projects
     const insertProject = db.prepare(`
-        INSERT INTO projects (title, description, manager_id, status)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO projects (title, description, manager_id, status, priority, category)
+        VALUES (?, ?, ?, ?, ?, ?)
     `);
 
     const p1 = insertProject.run(
         'E-Commerce Mobile App & Web Redesign',
         'Comprehensive multi-platform overhaul featuring high-converting checkout flows, modern glassmorphism UI, Razorpay & Stripe integration, and sub-second catalog latency.',
         pmId,
-        'active'
+        'active',
+        'High',
+        'Business'
     );
 
     const p2 = insertProject.run(
         'Fintech Payment Gateway & Webhook Infrastructure',
         'Zero-trust payment reconciliation engine, idempotent webhook listeners, multi-currency processing, and PCI-DSS compliant vault tokenization.',
         pmId,
-        'active'
+        'active',
+        'Critical',
+        'Finance'
     );
 
     const p3 = insertProject.run(
         'AI Customer Intelligence & Analytics Hub',
         'Next-gen semantic log analysis, automated cohort retention models, and executive insight generation for real-time fleet visibility.',
         pmId,
-        'active'
+        'active',
+        'Medium',
+        'AI/ML'
     );
 
     const p1Id = p1.lastInsertRowid;

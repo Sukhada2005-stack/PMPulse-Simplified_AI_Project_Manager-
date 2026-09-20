@@ -12,8 +12,11 @@ import {
   ShieldAlert,
   Trash2
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import AICopilotPanel from './AICopilotPanel';
 
 export default function SuperuserDashboard() {
+  const { user } = useAuth();
   const [pms, setPMs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -353,6 +356,21 @@ export default function SuperuserDashboard() {
           </div>
         </div>
       )}
+
+      {/* Role-Scoped Conversational AI Copilot */}
+      <AICopilotPanel
+        role="superuser"
+        title="Superuser Fleet Copilot"
+        subtitle="Fleet Health & Cross-Project Telemetry"
+        endpoint="/copilot/superuser"
+        userName={user?.full_name || user?.fullName || 'Administrator'}
+        suggestedInquiries={[
+          "Provide a fleet-wide health summary of all project managers and their workspaces.",
+          "Which project managers have projects with stalled tasks or low activity?",
+          "What is the total headcount and project distribution across the organization?",
+          "Which PM accounts were recently created and how many teams do they oversee?"
+        ]}
+      />
     </>
   );
 }

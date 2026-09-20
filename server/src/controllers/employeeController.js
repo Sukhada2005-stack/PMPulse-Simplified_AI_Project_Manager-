@@ -42,7 +42,7 @@ export const getEmployees = (req, res) => {
             SELECT 
                 u.id, u.email, u.full_name, u.role_title, u.user_type, u.status, u.avatar_url, u.created_at,
                 (SELECT COUNT(*) FROM project_members pm WHERE pm.user_id = u.id) as project_count,
-                (SELECT COUNT(*) FROM task_assignees ta JOIN tasks t ON ta.task_id = t.id WHERE ta.user_id = u.id AND t.status = 'in_progress') as active_task_count,
+                (SELECT COUNT(*) FROM task_assignees ta JOIN tasks t ON ta.task_id = t.id WHERE ta.user_id = u.id AND LOWER(TRIM(t.status)) NOT IN ('completed', 'done', 'archived', 'closed', 'remove')) as active_task_count,
                 (SELECT COUNT(*) FROM daily_logs dl WHERE dl.user_id = u.id AND dl.has_worked = 1) as green_logs_count,
                 (SELECT COUNT(*) FROM daily_logs dl WHERE dl.user_id = u.id AND dl.has_worked = 0) as blocker_count
             FROM users u
@@ -187,7 +187,8 @@ export const getEmployeeAnalytics = async (req, res) => {
             ORDER BY t.start_date DESC
         `).all(employeeId, employeeId, employeeId, employeeId);
 
-        const activeTasks = tasks.filter(t => t.status === 'in_progress');
+        const isCompleted = (s) => ['done', 'completed', 'archived', 'closed', 'remove'].includes(String(s || '').trim().toLowerCase());
+        const activeTasks = tasks.filter(t => !isCompleted(t.status));
         const activeTaskCount = activeTasks.length;
         
         let workloadStatus = 'Optimal Balanced Flow (2–3 concurrent tasks)';

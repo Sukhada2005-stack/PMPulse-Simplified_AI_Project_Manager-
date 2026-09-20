@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/api';
 import {
   Users,
@@ -95,6 +95,7 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [activeKpiFilter, setActiveKpiFilter] = useState('all'); // 'all' | 'multi' | 'bench'
   const [showAddModal, setShowAddModal] = useState(false);
   const [removeTarget, setRemoveTarget] = useState(null); // { id, full_name }
   const [removing, setRemoving] = useState(false);
@@ -124,6 +125,22 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
 
   useEffect(() => {
     fetchDirectory();
+
+    const handleSyncTasks = () => {
+      fetchDirectory();
+    };
+
+    window.addEventListener('storage', handleSyncTasks);
+    window.addEventListener('pmpulse_listTasks_updated', handleSyncTasks);
+    window.addEventListener('pmpulse_boardTasks_updated', handleSyncTasks);
+    window.addEventListener('pmpulse_workspaceTasks_updated', handleSyncTasks);
+
+    return () => {
+      window.removeEventListener('storage', handleSyncTasks);
+      window.removeEventListener('pmpulse_listTasks_updated', handleSyncTasks);
+      window.removeEventListener('pmpulse_boardTasks_updated', handleSyncTasks);
+      window.removeEventListener('pmpulse_workspaceTasks_updated', handleSyncTasks);
+    };
   }, []);
 
   // Lock body scroll whenever any modal is open
@@ -181,15 +198,6 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
     }
   };
 
-  const filteredEmployees = employees.filter(e => {
-    const term = search.toLowerCase();
-    return (
-      e.full_name.toLowerCase().includes(term) ||
-      e.role_title.toLowerCase().includes(term) ||
-      e.email.toLowerCase().includes(term)
-    );
-  });
-
   // ── Workforce Directory KPIs Calculation ───────────────────────────
   // 1. Total Headcount: total number of members (div cards) present in directory
   const totalHeadcount = employees.length;
@@ -232,11 +240,126 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
     return Math.max(dbCount, storageCount);
   };
 
+  // Reconcile and calculate total active tasks assigned to this employee across all projects (List & Board views)
+  const getEmployeeActiveTaskCount = (emp) => {
+    let storageActiveCount = 0;
+    try {
+      const countedTaskKeys = new Set();
+
+      // Scan all localStorage keys for project listTasks and boardTasks
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+
+        let projectId = null;
+        let isList = false;
+        let isBoard = false;
+
+        if (key.startsWith('pmpulse_listTasks_')) {
+          projectId = key.replace('pmpulse_listTasks_', '');
+          isList = true;
+        } else if (key.startsWith('pmpulse_boardTasks_')) {
+          projectId = key.replace('pmpulse_boardTasks_', '');
+          isBoard = true;
+        }
+
+        if (projectId && (isList || isBoard)) {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            try {
+              const taskList = JSON.parse(raw);
+              if (Array.isArray(taskList)) {
+                taskList.forEach(task => {
+                  if (!task) return;
+
+                  // 1. Check if assigned to this employee
+                  let isAssigned = false;
+                  if (task.assignee_id && emp.id && String(task.assignee_id) === String(emp.id)) {
+                    isAssigned = true;
+                  } else if (task.user_id && emp.id && String(task.user_id) === String(emp.id)) {
+                    isAssigned = true;
+                  } else if (task.assignee && emp.id && String(task.assignee) === String(emp.id)) {
+                    isAssigned = true;
+                  } else {
+                    const empName = (emp.full_name || emp.name || '').trim().toLowerCase();
+                    const rawAssignee = typeof task.assignee === 'string' ? task.assignee.trim().toLowerCase() : '';
+                    const rawResp = typeof task.Responsible === 'string' ? task.Responsible.trim().toLowerCase() : '';
+                    const rawAssignedTo = typeof task.assigned_to === 'string' ? task.assigned_to.trim().toLowerCase() : '';
+
+                    if (empName && (rawAssignee === empName || rawAssignee.replace(/\s+/g, ' ') === empName.replace(/\s+/g, ' ') ||
+                                    rawResp === empName || rawResp.replace(/\s+/g, ' ') === empName.replace(/\s+/g, ' ') ||
+                                    rawAssignedTo === empName || rawAssignedTo.replace(/\s+/g, ' ') === empName.replace(/\s+/g, ' '))) {
+                      isAssigned = true;
+                    } else {
+                      const empEmail = (emp.email || '').trim().toLowerCase();
+                      const rawEmail = typeof task.email === 'string' ? task.email.trim().toLowerCase() : '';
+                      if (empEmail && (rawEmail === empEmail || rawAssignee === empEmail || rawResp === empEmail)) {
+                        isAssigned = true;
+                      }
+                    }
+                  }
+
+                  if (!isAssigned) return;
+
+                  // 2. Check if task is active (not done/completed/archived/closed)
+                  const status = String(task.status || task['Status'] || '').trim().toLowerCase();
+                  const isCompleted = ['done', 'completed', 'archived', 'closed', 'remove'].includes(status);
+                  if (isCompleted) return;
+
+                  // 3. Deduplicate across list and board views of the same project
+                  const taskKey = task.key || task.task_key || task.id ||
+                    (task.task || task.title || task.description || task.taskName || task['Issue / Task / Enhancement'] || '').trim().toLowerCase();
+                  const uniqueKey = `${projectId}_${taskKey}`;
+
+                  if (!countedTaskKeys.has(uniqueKey)) {
+                    countedTaskKeys.add(uniqueKey);
+                    storageActiveCount++;
+                  }
+                });
+              }
+            } catch (err) {
+              console.error(`Error parsing task data for ${key}:`, err);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error computing local employee active tasks:', err);
+    }
+
+    const dbCount = Number(emp.active_task_count) || 0;
+    return Math.max(dbCount, storageActiveCount);
+  };
+
   // 2. MultiProject Staff: members working on >1 project
   const multiProjectStaff = employees.filter(emp => getEmployeeProjectCount(emp) > 1).length;
 
   // 3. Available / Bench: members not present in any project (0 assigned projects)
   const availableMembers = employees.filter(emp => getEmployeeProjectCount(emp) === 0).length;
+
+  // ── Filtered Employees (Search + KPI Click Filter) ─────────────────
+  const filteredEmployees = useMemo(() => {
+    return employees.filter(e => {
+      // 1. KPI Filter
+      if (activeKpiFilter === 'multi') {
+        if (getEmployeeProjectCount(e) <= 1) return false;
+      } else if (activeKpiFilter === 'bench') {
+        if (getEmployeeProjectCount(e) !== 0) return false;
+      }
+
+      // 2. Search query filter
+      if (search.trim()) {
+        const term = search.toLowerCase();
+        const matches =
+          (e.full_name && e.full_name.toLowerCase().includes(term)) ||
+          (e.role_title && e.role_title.toLowerCase().includes(term)) ||
+          (e.email && e.email.toLowerCase().includes(term));
+        if (!matches) return false;
+      }
+
+      return true;
+    });
+  }, [employees, activeKpiFilter, search]);
 
   return (
     <div className="space-y-6 animate-fade-up">
@@ -283,8 +406,17 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
         {/* KPI 1: Total Headcount */}
         <div
-          className="jira-card p-5 rounded-2xl flex items-center gap-4 border border-slate-200 dark:border-slate-800/80 shadow-sm transition-all"
+          onClick={() => setActiveKpiFilter('all')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveKpiFilter('all'); } }}
+          className={`jira-card p-5 rounded-2xl flex items-center gap-4 border shadow-sm cursor-pointer select-none transition-all ${
+            activeKpiFilter === 'all'
+              ? 'border-indigo-500 dark:border-indigo-400 ring-2 ring-indigo-500/25 bg-indigo-50/15 dark:bg-indigo-950/20'
+              : 'border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700/80 hover:shadow-md'
+          }`}
           style={{ background: 'var(--color-surface-solid)' }}
+          title="Click to view all employees (reset filter)"
         >
           <div
             className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border"
@@ -298,10 +430,13 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
           </div>
           <div className="min-w-0">
             <div
-              className="text-[11px] font-bold font-mono tracking-wider uppercase"
+              className="text-[11px] font-bold font-mono tracking-wider uppercase flex items-center gap-2"
               style={{ color: 'var(--color-text-3)' }}
             >
-              TOTAL HEADCOUNT
+              <span>TOTAL HEADCOUNT</span>
+              {activeKpiFilter === 'all' && (
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 inline-block" title="Active Filter" />
+              )}
             </div>
             <div
               className="text-3xl font-extrabold leading-tight my-0.5"
@@ -320,8 +455,17 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
 
         {/* KPI 2: Multi-Project Staff */}
         <div
-          className="jira-card p-5 rounded-2xl flex items-center gap-4 border border-slate-200 dark:border-slate-800/80 shadow-sm transition-all"
+          onClick={() => setActiveKpiFilter(prev => prev === 'multi' ? 'all' : 'multi')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveKpiFilter(prev => prev === 'multi' ? 'all' : 'multi'); } }}
+          className={`jira-card p-5 rounded-2xl flex items-center gap-4 border shadow-sm cursor-pointer select-none transition-all ${
+            activeKpiFilter === 'multi'
+              ? 'border-amber-500 dark:border-amber-400 ring-2 ring-amber-500/25 bg-amber-50/15 dark:bg-amber-950/20'
+              : 'border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700/80 hover:shadow-md'
+          }`}
           style={{ background: 'var(--color-surface-solid)' }}
+          title={activeKpiFilter === 'multi' ? "Active filter. Click to reset to all employees." : "Click to filter employees working on >1 project"}
         >
           <div
             className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border"
@@ -335,10 +479,13 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
           </div>
           <div className="min-w-0">
             <div
-              className="text-[11px] font-bold font-mono tracking-wider uppercase"
+              className="text-[11px] font-bold font-mono tracking-wider uppercase flex items-center gap-2"
               style={{ color: 'var(--color-text-3)' }}
             >
-              MULTI-PROJECT STAFF
+              <span>MULTI-PROJECT STAFF</span>
+              {activeKpiFilter === 'multi' && (
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" title="Active Filter" />
+              )}
             </div>
             <div
               className="text-3xl font-extrabold leading-tight my-0.5"
@@ -357,8 +504,17 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
 
         {/* KPI 3: Available / Bench */}
         <div
-          className="jira-card p-5 rounded-2xl flex items-center gap-4 border border-slate-200 dark:border-slate-800/80 shadow-sm transition-all"
+          onClick={() => setActiveKpiFilter(prev => prev === 'bench' ? 'all' : 'bench')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveKpiFilter(prev => prev === 'bench' ? 'all' : 'bench'); } }}
+          className={`jira-card p-5 rounded-2xl flex items-center gap-4 border shadow-sm cursor-pointer select-none transition-all ${
+            activeKpiFilter === 'bench'
+              ? 'border-blue-500 dark:border-blue-400 ring-2 ring-blue-500/25 bg-blue-50/15 dark:bg-blue-950/20'
+              : 'border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700/80 hover:shadow-md'
+          }`}
           style={{ background: 'var(--color-surface-solid)' }}
+          title={activeKpiFilter === 'bench' ? "Active filter. Click to reset to all employees." : "Click to filter available / bench employees (0 projects)"}
         >
           <div
             className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border"
@@ -372,10 +528,13 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
           </div>
           <div className="min-w-0">
             <div
-              className="text-[11px] font-bold font-mono tracking-wider uppercase"
+              className="text-[11px] font-bold font-mono tracking-wider uppercase flex items-center gap-2"
               style={{ color: 'var(--color-text-3)' }}
             >
-              AVAILABLE / BENCH
+              <span>AVAILABLE / BENCH</span>
+              {activeKpiFilter === 'bench' && (
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" title="Active Filter" />
+              )}
             </div>
             <div
               className="text-3xl font-extrabold leading-tight my-0.5"
@@ -415,8 +574,28 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
           </button>
         </div>
       ) : filteredEmployees.length === 0 ? (
-        <div className="jira-card p-10 text-center rounded-xl" style={{ background: 'var(--color-surface-solid)', color: 'var(--color-text-3)' }}>
-          No employees match the search query.
+        <div className="jira-card p-10 text-center rounded-xl space-y-2" style={{ background: 'var(--color-surface-solid)', color: 'var(--color-text-3)' }}>
+          <Users className="w-8 h-8 mx-auto text-slate-400 dark:text-slate-600 mb-2" />
+          <p className="text-sm font-semibold" style={{ color: 'var(--color-text-1)' }}>
+            {search.trim() && activeKpiFilter !== 'all'
+              ? `No employees match "${search}" in the active ${activeKpiFilter === 'multi' ? 'Multi-Project Staff' : 'Available / Bench'} filter.`
+              : search.trim()
+              ? `No employees match "${search}".`
+              : activeKpiFilter === 'bench'
+              ? 'No available / bench employees found (all employees are currently assigned to active projects).'
+              : activeKpiFilter === 'multi'
+              ? 'No multi-project staff found (no employees are assigned to >1 project).'
+              : 'No employees found.'}
+          </p>
+          {activeKpiFilter !== 'all' && (
+            <button
+              type="button"
+              onClick={() => setActiveKpiFilter('all')}
+              className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 mt-2 cursor-pointer underline"
+            >
+              Reset filter to view all employees
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -443,21 +622,21 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
                   </span>
                 </div>
 
-                <div className="space-y-1.5 text-xs p-3 rounded-lg border border-gray-100 mb-3" style={{ background: 'var(--table-th-bg)' }}>
+                <div className="space-y-1.5 text-xs p-3 rounded-lg border border-slate-200 dark:border-slate-800/80 mb-3" style={{ background: 'var(--table-th-bg)' }}>
                   <div className="flex items-center gap-2 truncate" style={{ color: 'var(--color-text-2)' }}>
                     <Mail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                     <span className="font-mono text-[11px] truncate">{emp.email}</span>
                   </div>
-                  <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-gray-200/60" style={{ color: 'var(--color-text-3)' }}>
-                    <span>Projects: <b style={{ color: 'var(--color-text-1)' }}>{emp.project_count}</b></span>
-                    <span>Active Tasks: <b className="text-blue-600">{emp.active_task_count}</b></span>
+                  <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-slate-200/60 dark:border-slate-800/80" style={{ color: 'var(--color-text-3)' }}>
+                    <span>Projects: <b style={{ color: 'var(--color-text-1)' }}>{getEmployeeProjectCount(emp)}</b></span>
+                    <span>Active Tasks: <b className="text-blue-600">{getEmployeeActiveTaskCount(emp)}</b></span>
                   </div>
                 </div>
 
                 {/* Consistency Index */}
-                <div className="flex items-center justify-between p-2.5 rounded-lg border border-green-200 text-xs mb-4" style={{ background: 'rgba(56,221,159,0.12)' }}>
-                  <span className="font-semibold text-emerald-800">Daily Log Compliance:</span>
-                  <div className="flex items-center gap-1.5 font-bold text-emerald-700">
+                <div className="flex items-center justify-between p-2.5 rounded-lg border border-emerald-500/20 dark:border-emerald-500/30 text-xs mb-4" style={{ background: 'rgba(56,221,159,0.08)' }}>
+                  <span className="font-semibold text-emerald-800 dark:text-emerald-300">Daily Log Compliance:</span>
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-700 dark:text-emerald-400">
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     <span>{emp.consistency_score}%</span>
                   </div>

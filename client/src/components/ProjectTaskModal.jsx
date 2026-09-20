@@ -37,6 +37,20 @@ const PRIORITY_LEVELS = [
   { value: 'Low', label: 'Low', icon: null, iconClass: '', subtext: 'Low urgency' },
 ];
 
+export const PROJECT_CATEGORIES = [
+  { value: 'Finance', label: 'Finance', icon: '💳' },
+  { value: 'Sports', label: 'Sports', icon: '⚽' },
+  { value: 'Marketing', label: 'Marketing', icon: '📢' },
+  { value: 'Business', label: 'Business', icon: '💼' },
+  { value: 'Medical', label: 'Medical', icon: '🏥' },
+  { value: 'Sales', label: 'Sales', icon: '📈' },
+  { value: 'Customer Services', label: 'Customer Services', icon: '🎧' },
+  { value: 'Data Science', label: 'Data Science', icon: '📊' },
+  { value: 'AI/ML', label: 'AI/ML', icon: '🤖' },
+  { value: 'Neural Network', label: 'Neural Network', icon: '🧠' },
+  { value: 'Other', label: 'Other', icon: '📁' },
+];
+
 const inputStyle = {
   width: '100%',
   padding: '8px 12px',
@@ -88,7 +102,7 @@ function JiraTextarea({ value, onChange, placeholder, rows = 3 }) {
   );
 }
 
-function JiraSelect({ value, onChange, children }) {
+function JiraSelect({ value, onChange, children, style, ...props }) {
   const [focused, setFocused] = useState(false);
   return (
     <select
@@ -96,6 +110,7 @@ function JiraSelect({ value, onChange, children }) {
       onChange={onChange}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
+      {...props}
       style={{
         ...inputStyle,
         ...(focused ? inputFocusStyle : {}),
@@ -105,6 +120,7 @@ function JiraSelect({ value, onChange, children }) {
         backgroundRepeat: 'no-repeat',
         backgroundPosition: 'right 12px center',
         paddingRight: 32,
+        ...style,
       }}
     >
       {children}
@@ -145,6 +161,8 @@ function ModalOverlay({ onClose, children }) {
 export function NewProjectModal({ onClose, onSuccess }) {
   const [title, setTitle]                         = useState('');
   const [description, setDescription]             = useState('');
+  const [category, setCategory]                   = useState('AI/ML');
+  const [customCategory, setCustomCategory]       = useState('');
   const [startDate, setStartDate]                 = useState('2026-09-01');
   const [endDate, setEndDate]                     = useState('2026-09-10');
   const [priority, setPriority]                   = useState('High');
@@ -179,9 +197,18 @@ export function NewProjectModal({ onClose, onSuccess }) {
       alert('Please enter a project title and timeline dates.');
       return;
     }
+    const finalCategory = category === 'Other' && customCategory.trim() ? customCategory.trim() : category;
     setSubmitting(true);
     try {
-      await api.projects.create({ title, description, start_date: startDate, end_date: endDate, member_ids: selectedMemberIds, priority });
+      await api.projects.create({
+        title,
+        description,
+        category: finalCategory,
+        start_date: startDate,
+        end_date: endDate,
+        member_ids: selectedMemberIds,
+        priority
+      });
       window.dispatchEvent(new CustomEvent('pmpulse_projects_updated'));
       alert(`Project "${title}" created successfully!`);
       onSuccess(); onClose();
@@ -248,6 +275,51 @@ export function NewProjectModal({ onClose, onSuccess }) {
               placeholder="Core goals, client specs, and deliverable targets..."
               rows={3}
             />
+          </div>
+
+          {/* Project Category */}
+          <div>
+            <label style={fieldLabel}>Project Category</label>
+            <JiraSelect
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+            >
+              {PROJECT_CATEGORIES.map(cat => (
+                <option key={cat.value} value={cat.value} style={{ background: DARK_BG, color: TEXT_PRIMARY }}>
+                  {cat.icon ? `${cat.icon}  ` : ''}{cat.label}
+                </option>
+              ))}
+            </JiraSelect>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {PROJECT_CATEGORIES.map(cat => {
+                const isSel = category === cat.value;
+                return (
+                  <button
+                    key={cat.value}
+                    type="button"
+                    onClick={() => setCategory(cat.value)}
+                    className={`text-[11px] px-2.5 py-1 rounded-md transition-all font-medium flex items-center gap-1 cursor-pointer select-none ${
+                      isSel
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 font-semibold shadow-xs'
+                        : 'bg-slate-800/60 text-slate-400 border border-slate-700/60 hover:text-slate-200 hover:border-slate-600'
+                    }`}
+                  >
+                    <span>{cat.icon}</span>
+                    <span>{cat.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {category === 'Other' && (
+              <div className="mt-2">
+                <JiraInput
+                  value={customCategory}
+                  onChange={e => setCustomCategory(e.target.value)}
+                  placeholder="Specify custom project category..."
+                  required
+                />
+              </div>
+            )}
           </div>
 
           {/* Project Priority Level */}

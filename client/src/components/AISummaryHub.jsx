@@ -59,16 +59,64 @@ const DIMENSIONS = [
   }
 ];
 
-export default function AISummaryHub() {
+const formatDateISO = (d) => {
+  if (!d) return '';
+  const date = (d instanceof Date) ? d : new Date(d);
+  if (isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getSprintDates = (workspaceId) => {
+  const now = new Date();
+  const fourteenDaysAgo = new Date(now.getTime() - 14 * 86400000);
+  let defaultRange = {
+    start: formatDateISO(fourteenDaysAgo),
+    end: formatDateISO(now),
+    label: 'Current Sprint'
+  };
+
+  if (workspaceId) {
+    try {
+      const stored = localStorage.getItem(`pmpulse_sprintConfig_${workspaceId}`);
+      if (stored) {
+        const config = JSON.parse(stored);
+        if (config.startDateISO && config.endDateISO) {
+          return { start: config.startDateISO, end: config.endDateISO, label: `${config.start || config.startDateISO} — ${config.end || config.endDateISO}` };
+        }
+        if (config.start && config.end) {
+          const parseSprintDate = (str) => {
+            if (!str) return null;
+            const direct = new Date(String(str).replace(/Sept/i, 'Sep'));
+            if (!isNaN(direct.getTime())) return formatDateISO(direct);
+            return null;
+          };
+          const s = parseSprintDate(config.start);
+          const e = parseSprintDate(config.end);
+          if (s && e) {
+            return { start: s, end: e, label: `${config.start} — ${config.end}` };
+          }
+        }
+      }
+    } catch (e) {}
+  }
+  return defaultRange;
+};
+
+export default function AISummaryHub({ selectedWorkspace }) {
   const [selectedDimension, setSelectedDimension] = useState('project_based');
   const [loading, setLoading] = useState(false);
   const [summaryData, setSummaryData] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  // Filter state
+  // Dynamic filter state
+  const initialSprint = getSprintDates(selectedWorkspace?.id);
   const [dateRangePreset, setDateRangePreset] = useState('full_sprint');
-  const [dateFrom, setDateFrom] = useState('2026-08-27');
-  const [dateTo, setDateTo] = useState('2026-09-06');
+  const [dateFrom, setDateFrom] = useState(initialSprint.start);
+  const [dateTo, setDateTo] = useState(initialSprint.end);
+  const [sprintLabel, setSprintLabel] = useState(initialSprint.label);
   const [statusFilter, setStatusFilter] = useState('all');
 
   // Multi-select entities
@@ -76,6 +124,24 @@ export default function AISummaryHub() {
   const [employees, setEmployees] = useState([]);
   const [selectedProjectIds, setSelectedProjectIds] = useState([]);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState([]);
+
+  // Sync with selectedWorkspace changes
+  useEffect(() => {
+    if (selectedWorkspace?.id) {
+      const sp = getSprintDates(selectedWorkspace.id);
+      setSprintLabel(sp.label);
+      if (dateRangePreset === 'full_sprint') {
+        setDateFrom(sp.start);
+        setDateTo(sp.end);
+      }
+      if (projects.length > 0) {
+        const match = projects.find(p => p.id === selectedWorkspace.id || String(p.id) === String(selectedWorkspace.id));
+        if (match) {
+          setSelectedProjectIds([match.id]);
+        }
+      }
+    }
+  }, [selectedWorkspace?.id]);
 
   // Load projects and employees for filter dropdowns
   useEffect(() => {
@@ -85,13 +151,24 @@ export default function AISummaryHub() {
           api.projects.getAll(),
           api.employees.getAll()
         ]);
-        setProjects(projRes.projects || []);
-        setEmployees(empRes.employees || []);
-        if (projRes.projects?.length > 0) {
-          setSelectedProjectIds([projRes.projects[0].id]);
+        const projectList = projRes.projects || [];
+        const empList = empRes.employees || [];
+        setProjects(projectList);
+        setEmployees(empList);
+
+        if (selectedWorkspace?.id) {
+          const match = projectList.find(p => p.id === selectedWorkspace.id || String(p.id) === String(selectedWorkspace.id));
+          if (match) {
+            setSelectedProjectIds([match.id]);
+          } else if (projectList.length > 0) {
+            setSelectedProjectIds([projectList[0].id]);
+          }
+        } else if (projectList.length > 0) {
+          setSelectedProjectIds([projectList[0].id]);
         }
-        if (empRes.employees?.length > 0) {
-          setSelectedEmployeeIds([empRes.employees[0].id]);
+
+        if (empList.length > 0) {
+          setSelectedEmployeeIds([empList[0].id]);
         }
       } catch (err) {
         console.error('Failed to load filter options:', err);
@@ -102,18 +179,27 @@ export default function AISummaryHub() {
 
   const handleDatePresetChange = (preset) => {
     setDateRangePreset(preset);
+    const now = new Date();
+    const todayStr = formatDateISO(now);
+    const yesterdayStr = formatDateISO(new Date(now.getTime() - 86400000));
+    const sevenDaysAgoStr = formatDateISO(new Date(now.getTime() - 7 * 86400000));
+
     if (preset === 'today') {
-      setDateFrom('2026-09-01');
-      setDateTo('2026-09-01');
+      setDateFrom(todayStr);
+      setDateTo(todayStr);
     } else if (preset === 'yesterday') {
-      setDateFrom('2026-08-31');
-      setDateTo('2026-08-31');
+      setDateFrom(yesterdayStr);
+      setDateTo(yesterdayStr);
     } else if (preset === 'this_week') {
-      setDateFrom('2026-08-30');
-      setDateTo('2026-09-03');
+      setDateFrom(sevenDaysAgoStr);
+      setDateTo(todayStr);
     } else if (preset === 'full_sprint') {
-      setDateFrom('2026-08-27');
-      setDateTo('2026-09-06');
+      const sp = getSprintDates(selectedWorkspace?.id);
+      setDateFrom(sp.start);
+      setDateTo(sp.end);
+    } else if (preset === 'all_time') {
+      setDateFrom('2026-01-01');
+      setDateTo(todayStr);
     }
   };
 
@@ -138,10 +224,12 @@ export default function AISummaryHub() {
     }
   };
 
-  // Run initial synthesis on mount
+  // Run synthesis when dimension or selectedProjectIds changes (after initial load)
   useEffect(() => {
-    handleGenerateSummary();
-  }, [selectedDimension]);
+    if (selectedProjectIds.length > 0 || selectedDimension === 'fleet_level') {
+      handleGenerateSummary();
+    }
+  }, [selectedDimension, selectedProjectIds]);
 
   const copyExecutiveSummary = () => {
     if (!summaryData?.summary) return;
@@ -205,22 +293,53 @@ export default function AISummaryHub() {
         {/* Filter Controls Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
           
-          {/* 1. Date Range Preset */}
+          {/* 1. Date Range Preset & Custom Range */}
           <div className="p-3 rounded-lg border border-gray-200 space-y-1.5" style={{ background: 'var(--table-th-bg)' }}>
-            <label className="font-semibold flex items-center gap-1.5" style={{ color: 'var(--color-text-2)' }}>
-              <Calendar className="w-3.5 h-3.5 text-blue-600" />
-              <span>Timeframe Window:</span>
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="font-semibold flex items-center gap-1.5" style={{ color: 'var(--color-text-2)' }}>
+                <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                <span>Timeframe Window:</span>
+              </label>
+              <span className="text-[10px] font-mono text-blue-600 font-bold">{dateFrom} → {dateTo}</span>
+            </div>
             <select
               value={dateRangePreset}
               onChange={(e) => handleDatePresetChange(e.target.value)}
               className="jira-select"
             >
-              <option value="full_sprint">Full Sprint (Aug 27 – Sep 6)</option>
-              <option value="this_week">This Week (Aug 30 – Sep 3)</option>
-              <option value="today">Today Only (Sep 1)</option>
-              <option value="yesterday">Yesterday (Aug 31)</option>
+              <option value="full_sprint">Active Sprint ({sprintLabel})</option>
+              <option value="this_week">Last 7 Days</option>
+              <option value="today">Today Only</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="all_time">All-Time (Full History)</option>
+              <option value="custom">Custom Date Range</option>
             </select>
+            <div className="grid grid-cols-2 gap-1.5 pt-1.5 border-t border-gray-200 dark:border-gray-700">
+              <div>
+                <span className="text-[10px] block text-gray-500 font-medium">From:</span>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => {
+                    setDateFrom(e.target.value);
+                    setDateRangePreset('custom');
+                  }}
+                  className="w-full text-xs px-1.5 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                />
+              </div>
+              <div>
+                <span className="text-[10px] block text-gray-500 font-medium">To:</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => {
+                    setDateTo(e.target.value);
+                    setDateRangePreset('custom');
+                  }}
+                  className="w-full text-xs px-1.5 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                />
+              </div>
+            </div>
           </div>
 
           {/* 2. Project Filter */}
@@ -235,9 +354,14 @@ export default function AISummaryHub() {
               className="jira-select"
             >
               <option value="all">🌐 All Active Projects</option>
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>📁 {p.title}</option>
-              ))}
+              {projects.map(p => {
+                const isCurrentWs = selectedWorkspace && (p.id === selectedWorkspace.id || String(p.id) === String(selectedWorkspace.id));
+                return (
+                  <option key={p.id} value={p.id}>
+                    📁 {p.title} {isCurrentWs ? ' ★ (Active Workspace)' : ''}
+                  </option>
+                );
+              })}
             </select>
           </div>
 

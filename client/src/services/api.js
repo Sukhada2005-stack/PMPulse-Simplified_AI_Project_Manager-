@@ -163,5 +163,12 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload)
     })
+  },
+  copilot: {
+    ask: (endpoint, message, history = []) => request(endpoint, {
+      method: 'POST',
+      body: JSON.stringify({ message, history })
+    })
   }
 };
+

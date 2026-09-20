@@ -33,9 +33,12 @@ import {
   List,
   LayoutGrid,
   CheckSquare,
-  Layers
+  Layers,
+  ListFilter
 } from 'lucide-react';
 import ProjectChatModal from './ProjectChatModal';
+import AICopilotPanel from './AICopilotPanel';
+import TaskFilterPanel from './TaskFilterPanel';
 
 const parseSprintEndDate = (dateStr) => {
   if (!dateStr) return null;
@@ -362,12 +365,20 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
             );
             const activeAssignee = activeMatch?.assignee || activeMatch?.['Responsible'];
             const activeStatus = activeMatch?.status || activeMatch?.['Status'];
-            const activeDueDate = activeMatch?.dueDate || activeMatch?.['Completed'];
+            const activeDueDate = (activeMatch?.dueDate && activeMatch.dueDate !== '—') 
+              ? activeMatch.dueDate 
+              : (activeMatch?.['Completed'] && activeMatch['Completed'] !== '—' ? activeMatch['Completed'] : null);
             const activePriority = activeMatch?.priority || activeMatch?.['Priority'];
 
             const effectiveAssignee = (activeAssignee && activeAssignee !== 'Unassigned') ? activeAssignee : (t['Responsible'] || t.assignee || 'Unassigned');
             const effectiveStatus = activeStatus || t['Status'] || (t.status === 'in_progress' ? 'In Progress' : (t.status || 'To Do'));
-            const effectiveDueDate = (activeDueDate && activeDueDate !== '—') ? activeDueDate : (t['Completed'] || t.dueDate || '—');
+            const effectiveDueDate = activeDueDate 
+              ? activeDueDate 
+              : ((t.due_date && t.due_date !== '—') 
+                  ? t.due_date 
+                  : ((t.dueDate && t.dueDate !== '—') 
+                      ? t.dueDate 
+                      : ((t['Completed'] && t['Completed'] !== '—') ? t['Completed'] : '—')));
             const effectivePriority = activePriority || t['Priority'] || t.priority || 'Medium';
 
             return {
@@ -1028,6 +1039,162 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
     return ['Unassigned', pmLabel, ...uniqueTeam];
   }, [selectedWorkspace, workspaceMembers]);
 
+  // ── Jira-Style Task Filtering States (per section) ────────────────────────
+  const [activeListFilters, setActiveListFilters] = useState({
+    priorities: [],
+    dueDate: '',
+    types: [],
+    statuses: [],
+    assignees: []
+  });
+  const [isActiveListFilterOpen, setIsActiveListFilterOpen] = useState(false);
+  const activeListFilterBtnRef = useRef(null);
+
+  const [backlogListFilters, setBacklogListFilters] = useState({
+    priorities: [],
+    dueDate: '',
+    types: [],
+    statuses: [],
+    assignees: []
+  });
+  const [isBacklogListFilterOpen, setIsBacklogListFilterOpen] = useState(false);
+  const backlogListFilterBtnRef = useRef(null);
+
+  const [activeBoardFilters, setActiveBoardFilters] = useState({
+    priorities: [],
+    dueDate: '',
+    types: [],
+    statuses: [],
+    assignees: []
+  });
+  const [isActiveBoardFilterOpen, setIsActiveBoardFilterOpen] = useState(false);
+  const activeBoardFilterBtnRef = useRef(null);
+
+  const [backlogBoardFilters, setBacklogBoardFilters] = useState({
+    priorities: [],
+    dueDate: '',
+    types: [],
+    statuses: [],
+    assignees: []
+  });
+  const [isBacklogBoardFilterOpen, setIsBacklogBoardFilterOpen] = useState(false);
+  const backlogBoardFilterBtnRef = useRef(null);
+
+  const getActiveTaskFilterCount = (f) => {
+    if (!f) return 0;
+    let c = 0;
+    if (f.priorities?.length > 0) c++;
+    if (f.dueDate) c++;
+    if (f.types?.length > 0) c++;
+    if (f.statuses?.length > 0) c++;
+    if (f.assignees?.length > 0) c++;
+    return c;
+  };
+
+  const activeListFilterCount = useMemo(() => getActiveTaskFilterCount(activeListFilters), [activeListFilters]);
+  const backlogListFilterCount = useMemo(() => getActiveTaskFilterCount(backlogListFilters), [backlogListFilters]);
+  const activeBoardFilterCount = useMemo(() => getActiveTaskFilterCount(activeBoardFilters), [activeBoardFilters]);
+  const backlogBoardFilterCount = useMemo(() => getActiveTaskFilterCount(backlogBoardFilters), [backlogBoardFilters]);
+
+  const handleAddCustomType = (newType) => {
+    if (!newType) return;
+    setTaskTypes(prev => {
+      if (prev.includes(newType)) return prev;
+      const next = [...prev, newType];
+      try { window.localStorage.setItem('pmpulse_taskTypes', JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
+  };
+
+  const handleAddCustomStatus = (newStatus) => {
+    if (!newStatus) return;
+    setTaskStatuses(prev => {
+      if (prev.includes(newStatus)) return prev;
+      const next = [...prev, newStatus];
+      try { window.localStorage.setItem('pmpulse_taskStatuses', JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
+  };
+
+  const applyTaskFilter = (tasks, filter) => {
+    if (!tasks || tasks.length === 0) return [];
+    if (!filter) return tasks;
+
+    const hasPriorities = filter.priorities && filter.priorities.length > 0;
+    const hasDueDate = filter.dueDate && filter.dueDate.trim() !== '';
+    const hasTypes = filter.types && filter.types.length > 0;
+    const hasStatuses = filter.statuses && filter.statuses.length > 0;
+    const hasAssignees = filter.assignees && filter.assignees.length > 0;
+
+    if (!hasPriorities && !hasDueDate && !hasTypes && !hasStatuses && !hasAssignees) {
+      return tasks;
+    }
+
+    return tasks.filter(task => {
+      // 1. Priority
+      if (hasPriorities) {
+        const taskPriority = (task.priority || task.Priority || 'Medium').trim().toLowerCase();
+        const match = filter.priorities.some(p => p.trim().toLowerCase() === taskPriority);
+        if (!match) return false;
+      }
+
+      // 2. Due Date
+      if (hasDueDate) {
+        const rawDue = (task.dueDate || task.due_date || task.Completed || '').trim();
+        if (!rawDue || rawDue === '—') return false;
+
+        const target = filter.dueDate.trim(); // YYYY-MM-DD
+        let normalized = rawDue;
+        if (rawDue.includes('/')) {
+          const parts = rawDue.split('/');
+          if (parts.length === 3) {
+            normalized = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+          }
+        }
+        if (normalized !== target) return false;
+      }
+
+      // 3. Type
+      if (hasTypes) {
+        const taskType = (task.type || task.Type || 'Task').trim().toLowerCase();
+        const match = filter.types.some(t => t.trim().toLowerCase() === taskType);
+        if (!match) return false;
+      }
+
+      // 4. Status
+      if (hasStatuses) {
+        const taskStatus = (task.status || task.Status || 'To Do').trim().toLowerCase();
+        const match = filter.statuses.some(s => s.trim().toLowerCase() === taskStatus);
+        if (!match) return false;
+      }
+
+      // 5. Assignee
+      if (hasAssignees) {
+        const rawAssignee = (task.assignee || task.Responsible || 'Unassigned').trim();
+        const isUnassigned = !rawAssignee || rawAssignee.toLowerCase() === 'unassigned';
+
+        const match = filter.assignees.some(sel => {
+          if (sel === 'Unassigned') {
+            return isUnassigned;
+          }
+          if (isUnassigned) return false;
+
+          const cleanSel = sel.replace(/\s*\(pm\)$/i, '').trim().toLowerCase();
+          const cleanTask = rawAssignee.replace(/\s*\(pm\)$/i, '').trim().toLowerCase();
+          return cleanSel === cleanTask || rawAssignee.toLowerCase() === sel.toLowerCase();
+        });
+        if (!match) return false;
+      }
+
+      return true;
+    });
+  };
+
+  const filteredListTasks = useMemo(() => applyTaskFilter(listTasks, activeListFilters), [listTasks, activeListFilters]);
+  const filteredSprintBacklogTasks = useMemo(() => applyTaskFilter(sprintBacklogTasks, backlogListFilters), [sprintBacklogTasks, backlogListFilters]);
+  const filteredBoardTasks = useMemo(() => applyTaskFilter(boardTasks, activeBoardFilters), [boardTasks, activeBoardFilters]);
+  const filteredBoardBacklogTasks = useMemo(() => applyTaskFilter(boardBacklogTasks, backlogBoardFilters), [boardBacklogTasks, backlogBoardFilters]);
+
   const handleDocsUpload = (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -1283,6 +1450,42 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm flex flex-col min-h-[400px]">
             <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Active tasks</h2>
+
+              {/* Filter with Anchored Jira-style TaskFilterPanel */}
+              <div className="relative">
+                <button
+                  ref={activeListFilterBtnRef}
+                  type="button"
+                  onClick={() => setIsActiveListFilterOpen(prev => !prev)}
+                  className={`border rounded-md px-3.5 py-1.5 text-sm font-medium flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer select-none ${
+                    isActiveListFilterOpen || activeListFilterCount > 0
+                      ? 'bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 border-blue-500 dark:border-blue-500 shadow-sm'
+                      : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                  }`}
+                  title={isActiveListFilterOpen ? "Close filters" : "Open filter panel"}
+                >
+                  <ListFilter className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                  <span>Filter</span>
+                  {activeListFilterCount > 0 && (
+                    <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center -mr-0.5">
+                      {activeListFilterCount}
+                    </span>
+                  )}
+                </button>
+
+                <TaskFilterPanel
+                  isOpen={isActiveListFilterOpen}
+                  onClose={() => setIsActiveListFilterOpen(false)}
+                  filters={activeListFilters}
+                  onChange={setActiveListFilters}
+                  buttonRef={activeListFilterBtnRef}
+                  taskTypes={taskTypes}
+                  taskStatuses={taskStatuses}
+                  onAddType={handleAddCustomType}
+                  onAddStatus={handleAddCustomStatus}
+                  dynamicAssignees={dynamicAssignees}
+                />
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
@@ -1299,14 +1502,14 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                  {listTasks.length === 0 ? (
+                  {filteredListTasks.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
                         There are no active tasks in this sprint.
                       </td>
                     </tr>
                   ) : (
-                    listTasks.map((task) => (
+                    filteredListTasks.map((task) => (
                       <tr key={task.id || task.key} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group ${editingTaskId === task.id ? 'editing-active' : ''}`}>
                         
                         {/* Type: Dynamic Dropdown */}
@@ -1456,6 +1659,42 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
           <div className="mt-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm flex flex-col min-h-[300px]">
             <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Backlog tasks from previous sprints</h2>
+
+              {/* Filter with Anchored Jira-style TaskFilterPanel */}
+              <div className="relative">
+                <button
+                  ref={backlogListFilterBtnRef}
+                  type="button"
+                  onClick={() => setIsBacklogListFilterOpen(prev => !prev)}
+                  className={`border rounded-md px-3.5 py-1.5 text-sm font-medium flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer select-none ${
+                    isBacklogListFilterOpen || backlogListFilterCount > 0
+                      ? 'bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 border-blue-500 dark:border-blue-500 shadow-sm'
+                      : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                  }`}
+                  title={isBacklogListFilterOpen ? "Close filters" : "Open filter panel"}
+                >
+                  <ListFilter className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                  <span>Filter</span>
+                  {backlogListFilterCount > 0 && (
+                    <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center -mr-0.5">
+                      {backlogListFilterCount}
+                    </span>
+                  )}
+                </button>
+
+                <TaskFilterPanel
+                  isOpen={isBacklogListFilterOpen}
+                  onClose={() => setIsBacklogListFilterOpen(false)}
+                  filters={backlogListFilters}
+                  onChange={setBacklogListFilters}
+                  buttonRef={backlogListFilterBtnRef}
+                  taskTypes={taskTypes}
+                  taskStatuses={taskStatuses}
+                  onAddType={handleAddCustomType}
+                  onAddStatus={handleAddCustomStatus}
+                  dynamicAssignees={dynamicAssignees}
+                />
+              </div>
             </div>
             
             <div className="overflow-x-auto">
@@ -1473,14 +1712,14 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                  {sprintBacklogTasks.length === 0 ? (
+                  {filteredSprintBacklogTasks.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
                         There are no incomplete tasks from previous sprints yet.
                       </td>
                     </tr>
                   ) : (
-                    sprintBacklogTasks.map((task, index) => (
+                    filteredSprintBacklogTasks.map((task, index) => (
                       <tr key={task.id || task.key || `backlog-${index}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                         <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">{task.type || 'Task'}</td>
                         <td className="px-4 py-3 text-blue-600 dark:text-blue-400">{task.key}</td>
@@ -1555,7 +1794,11 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                       ? activeMatch.dueDate
                       : (activeMatch?.['Completed'] && activeMatch['Completed'] !== '—')
                         ? activeMatch['Completed']
-                        : (task['Completed'] || task.dueDate || task.end_date || '—');
+                        : ((task.due_date && task.due_date !== '—') 
+                            ? task.due_date 
+                            : ((task.dueDate && task.dueDate !== '—') 
+                                ? task.dueDate 
+                                : ((task['Completed'] && task['Completed'] !== '—') ? task['Completed'] : '—')));
                     const displayPriority = activeMatch?.priority || activeMatch?.['Priority'] || task['Priority'] || task.priority || 'Medium';
 
                     return (
@@ -1672,6 +1915,46 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
               </button>
             </div>
           </div>
+
+          {/* Filter just below the Active Sprint div in the board view */}
+          <div className="flex items-center justify-start mb-4">
+            <div className="relative">
+              <button
+                ref={activeBoardFilterBtnRef}
+                type="button"
+                onClick={() => setIsActiveBoardFilterOpen(prev => !prev)}
+                className={`border rounded-md px-3.5 py-1.5 text-sm font-medium flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer select-none ${
+                  isActiveBoardFilterOpen || activeBoardFilterCount > 0
+                    ? 'bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 border-blue-500 dark:border-blue-500 shadow-sm'
+                    : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                }`}
+                title={isActiveBoardFilterOpen ? "Close filters" : "Open filter panel"}
+              >
+                <ListFilter className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                <span>Filter</span>
+                {activeBoardFilterCount > 0 && (
+                  <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center -mr-0.5">
+                    {activeBoardFilterCount}
+                  </span>
+                )}
+              </button>
+
+              <TaskFilterPanel
+                isOpen={isActiveBoardFilterOpen}
+                onClose={() => setIsActiveBoardFilterOpen(false)}
+                filters={activeBoardFilters}
+                onChange={setActiveBoardFilters}
+                buttonRef={activeBoardFilterBtnRef}
+                taskTypes={taskTypes}
+                taskStatuses={taskStatuses}
+                onAddType={handleAddCustomType}
+                onAddStatus={handleAddCustomStatus}
+                dynamicAssignees={dynamicAssignees}
+                align="left"
+              />
+            </div>
+          </div>
+
           <div className="flex flex-col gap-6">
             <div className="flex gap-4 overflow-x-auto pb-4 pt-2 h-full min-h-[600px] items-start">
             {boardColumns.map(column => (
@@ -1679,11 +1962,11 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">{column}</h3>
                   <span className="bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 text-xs px-2 py-0.5 rounded-full">
-                    {boardTasks.filter(t => t.status === column).length}
+                    {filteredBoardTasks.filter(t => t.status === column).length}
                   </span>
                 </div>
                 
-                {boardTasks.filter(t => t.status === column).length === 0 ? (
+                {filteredBoardTasks.filter(t => t.status === column).length === 0 ? (
                   <div className="flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg">
                     <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-3">
                       <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
@@ -1692,7 +1975,7 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
                     <p className="text-xs text-slate-500 dark:text-slate-400">Create a work item to get started. Work will appear here.</p>
                   </div>
                 ) : (
-                  boardTasks.filter(t => t.status === column).map(task => (
+                  filteredBoardTasks.filter(t => t.status === column).map(task => (
                     <div
                       key={task.id}
                       draggable
@@ -1790,9 +2073,48 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
           {/* --- START BACKLOG BOARD UI --- */}
           <div className="mt-12">
             {/* Backlog Header */}
-            <div className="flex items-center justify-between px-5 py-3 mb-6 bg-slate-100 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-700/50 rounded-lg">
-              <h2 className="text-md font-semibold text-slate-800 dark:text-slate-300">Project Backlog</h2>
-              <span className="text-xs text-slate-500 dark:text-slate-400">Staging area for upcoming sprints</span>
+            <div className="w-full max-w-full box-border flex flex-col md:flex-row md:items-center justify-between px-5 py-3 mb-4 bg-slate-100 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-lg shadow-sm">
+              <div>
+                <h2 className="text-md font-semibold text-slate-900 dark:text-white">Project Backlog</h2>
+                <span className="text-xs text-slate-500 dark:text-slate-400">Staging area for upcoming sprints</span>
+              </div>
+
+              {/* Filter at opposite end of Project Backlog div */}
+              <div className="relative">
+                <button
+                  ref={backlogBoardFilterBtnRef}
+                  type="button"
+                  onClick={() => setIsBacklogBoardFilterOpen(prev => !prev)}
+                  className={`border rounded-md px-3.5 py-1.5 text-sm font-medium flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer select-none ${
+                    isBacklogBoardFilterOpen || backlogBoardFilterCount > 0
+                      ? 'bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 border-blue-500 dark:border-blue-500 shadow-sm'
+                      : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                  }`}
+                  title={isBacklogBoardFilterOpen ? "Close filters" : "Open filter panel"}
+                >
+                  <ListFilter className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                  <span>Filter</span>
+                  {backlogBoardFilterCount > 0 && (
+                    <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center -mr-0.5">
+                      {backlogBoardFilterCount}
+                    </span>
+                  )}
+                </button>
+
+                <TaskFilterPanel
+                  isOpen={isBacklogBoardFilterOpen}
+                  onClose={() => setIsBacklogBoardFilterOpen(false)}
+                  filters={backlogBoardFilters}
+                  onChange={setBacklogBoardFilters}
+                  buttonRef={backlogBoardFilterBtnRef}
+                  taskTypes={taskTypes}
+                  taskStatuses={taskStatuses}
+                  onAddType={handleAddCustomType}
+                  onAddStatus={handleAddCustomStatus}
+                  dynamicAssignees={dynamicAssignees}
+                  align="left"
+                />
+              </div>
             </div>
 
             {/* Backlog Columns Container */}
@@ -1800,7 +2122,7 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
               {boardColumns.map(column => {
                 // CRITICAL: Prefix ID to prevent drag-and-drop collision
                 const dropId = `backlog-${column.toLowerCase().replace(' ', '')}`;
-                const columnTasks = boardBacklogTasks.filter(task => task.status === column);
+                const columnTasks = filteredBoardBacklogTasks.filter(task => task.status === column);
 
                 return (
                   <div 
@@ -2536,6 +2858,21 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
           </div>
         </div>
       )}
+
+      {/* Role-Scoped Conversational AI Copilot */}
+      <AICopilotPanel
+        role="employee"
+        title="Employee AI Copilot"
+        subtitle="Personal Deliverables & Daily Logs"
+        endpoint="/copilot/employee"
+        userName={user?.full_name || user?.fullName || user?.name || 'Contributor'}
+        suggestedInquiries={[
+          "What tasks are assigned to me that are due this week?",
+          "Summarize my submitted daily logs from the last 7 days.",
+          "Are there any blockers mentioned in my recent work logs?",
+          "What is my task completion rate across my assigned projects?"
+        ]}
+      />
     </div>
   );
 }

@@ -414,7 +414,7 @@ function MainApp() {
                       AI Executive Summary Hub
                     </h1>
                   </div>
-                  <AISummaryHub />
+                  <AISummaryHub selectedWorkspace={selectedWorkspace} />
                 </div>
               )}
             </>

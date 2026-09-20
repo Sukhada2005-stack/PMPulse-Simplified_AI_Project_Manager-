@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS projects (
     end_date DATE,
     status TEXT NOT NULL DEFAULT 'active', -- 'active', 'in-review', 'completed', 'archived'
     priority TEXT DEFAULT 'Medium', -- 'Critical', 'High', 'Medium', 'Low'
+    category TEXT DEFAULT 'General',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE CASCADE
 );

@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { NewTaskModal } from './ProjectTaskModal';
 import ProjectChatModal from './ProjectChatModal';
-import { PriorityBadge } from './OtherWorkspaces';
+import { PriorityBadge, CategoryBadge } from './OtherWorkspaces';
 
 /* ── Status badge colour mapping (mirrors OtherWorkspaces / PMDashboard tokens) ── */
 function StatusBadge({ status }) {
@@ -94,8 +94,9 @@ export default function ActiveProjectContainers({ projects = [], allProjects = [
                   {proj.description || 'No description provided.'}
                 </p>
 
-                {/* Members count */}
-                <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-end">
+                {/* Category KPI & Members count */}
+                <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
+                  <CategoryBadge category={proj.category} />
                   <span
                     className="text-xs font-semibold flex items-center gap-1"
                     style={{ color: '#eeb20d' }}
@@ -108,18 +109,6 @@ export default function ActiveProjectContainers({ projects = [], allProjects = [
 
               {/* Quick-action footer */}
               <div className="mt-4 pt-3 border-t border-white/10 flex items-center gap-2">
-                {/* + Task */}
-                <button
-                  onClick={() => {
-                    setSelectedProjectIdForTask(proj.id);
-                    setShowNewTaskModal(true);
-                  }}
-                  className="btn-secondary flex-1 justify-center text-xs px-2"
-                  title="Provision New Task in Project"
-                >
-                  <Plus className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Task</span>
-                </button>
 
                 {/* 💬 Chat */}
                 <button
