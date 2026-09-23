@@ -63,3 +63,124 @@ export const deletePM = (req, res) => {
         res.status(500).json({ error: err.message });
     }
 };
+
+export const updatePM = (req, res) => {
+    try {
+        const { id } = req.params;
+        const { full_name, email, status, role_title } = req.body;
+
+        const pm = db.prepare('SELECT id, user_type FROM users WHERE id = ?').get(id);
+        if (!pm) return res.status(404).json({ error: 'User not found' });
+        if (pm.user_type !== 'pm') return res.status(400).json({ error: 'User is not a Project Manager' });
+
+        if (email) {
+            const existing = db.prepare('SELECT id FROM users WHERE email = ? COLLATE NOCASE AND id != ?').get(email, id);
+            if (existing) {
+                return res.status(409).json({ error: 'A user with this email already exists' });
+            }
+        }
+
+        const updates = [];
+        const params = [];
+
+        if (full_name !== undefined) {
+            updates.push('full_name = ?');
+            params.push(String(full_name).trim());
+        }
+        if (email !== undefined) {
+            updates.push('email = ?');
+            params.push(String(email).trim());
+        }
+        if (status !== undefined) {
+            const normStatus = String(status).trim().toLowerCase() === 'inactive' ? 'inactive' : 'active';
+            updates.push('status = ?');
+            params.push(normStatus);
+        }
+        if (role_title !== undefined) {
+            updates.push('role_title = ?');
+            params.push(String(role_title).trim());
+        }
+
+        if (updates.length > 0) {
+            params.push(id);
+            db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+        }
+
+        const updatedPM = db.prepare(`
+            SELECT id, email, full_name, role_title, user_type, status, created_at 
+            FROM users WHERE id = ?
+        `).get(id);
+
+        res.json({ message: 'Project Manager updated successfully', pm: updatedPM });
+    } catch (err) {
+        console.error('Update PM error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+export const getPMProjects = (req, res) => {
+    try {
+        const { id } = req.params;
+        const pm = db.prepare('SELECT id, full_name, user_type FROM users WHERE id = ?').get(id);
+        if (!pm) return res.status(404).json({ error: 'Project Manager not found' });
+
+        const projects = db.prepare(`
+            SELECT 
+                p.*,
+                (SELECT COUNT(*) FROM project_members pm_members WHERE pm_members.project_id = p.id) as member_count,
+                (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) as task_count,
+                (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.status = 'in_progress') as active_task_count
+            FROM projects p
+            WHERE p.manager_id = ?
+            ORDER BY p.created_at DESC
+        `).all(id);
+
+        const projectIds = projects.map(p => p.id);
+        let allTasks = [];
+        if (projectIds.length > 0) {
+            const placeholders = projectIds.map(() => '?').join(',');
+            allTasks = db.prepare(`SELECT * FROM tasks WHERE project_id IN (${placeholders})`).all(...projectIds);
+        }
+
+        const tasksByProject = new Map();
+        allTasks.forEach(t => {
+            if (!tasksByProject.has(t.project_id)) {
+                tasksByProject.set(t.project_id, []);
+            }
+            tasksByProject.get(t.project_id).push(t);
+        });
+
+        const enrichedProjects = projects.map(p => ({
+            ...p,
+            tasks: tasksByProject.get(p.id) || []
+        }));
+
+        res.json({ projects: enrichedProjects });
+    } catch (err) {
+        console.error('Get PM projects error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+export const getPMWorkforce = (req, res) => {
+    try {
+        const { id } = req.params;
+        const pm = db.prepare('SELECT id, full_name, user_type FROM users WHERE id = ?').get(id);
+        if (!pm) return res.status(404).json({ error: 'Project Manager not found' });
+
+        const employees = db.prepare(`
+            SELECT 
+                u.id, u.email, u.full_name, u.role_title, u.employment_type, u.user_type, u.status, u.avatar_url, u.created_at,
+                (SELECT COUNT(*) FROM project_members pm_members JOIN projects p ON pm_members.project_id = p.id WHERE pm_members.user_id = u.id AND p.manager_id = ?) as project_count,
+                (SELECT COUNT(*) FROM task_assignees ta JOIN tasks t ON ta.task_id = t.id WHERE ta.user_id = u.id AND t.manager_id = ? AND LOWER(TRIM(t.status)) NOT IN ('completed', 'done', 'archived', 'closed', 'remove')) as active_task_count
+            FROM users u
+            WHERE u.user_type = 'employee' AND u.manager_id = ?
+            ORDER BY u.full_name ASC
+        `).all(id, id, id);
+
+        res.json({ employees });
+    } catch (err) {
+        console.error('Get PM workforce error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};

@@ -58,4 +58,14 @@ try {
   console.error('Migration notice (tasks columns):', e.message);
 }
 
+// Migration: Ensure users table has employment_type column
+try {
+  const userCols = db.pragma('table_info(users)').map(col => col.name);
+  if (!userCols.includes('employment_type')) {
+    db.exec("ALTER TABLE users ADD COLUMN employment_type TEXT DEFAULT 'Full Time Contributor'");
+  }
+} catch (e) {
+  console.error('Migration notice (users.employment_type):', e.message);
+}
+
 export default db;

@@ -26,9 +26,9 @@ export default function SessionReauthModal() {
 
   useEffect(() => {
     const handleSessionExpired = () => {
-      // Clear token proactively just in case
+      // Only show modal if there is an active established user session
+      if (!user) return;
       localStorage.removeItem('pulsepm_token');
-      // Show modal without page reload
       setIsOpen(true);
       setAuthError('');
       setPassword('');
@@ -42,11 +42,13 @@ export default function SessionReauthModal() {
   }, [user]);
 
   useEffect(() => {
-    if (sessionExpired) {
+    if (sessionExpired && user) {
       setIsOpen(true);
       setAuthError('');
       setPassword('');
       populateEmail();
+    } else if (!sessionExpired) {
+      setIsOpen(false);
     }
   }, [sessionExpired, user]);
 
@@ -83,7 +85,7 @@ export default function SessionReauthModal() {
     }
   };
 
-  const isModalOpen = isOpen || sessionExpired;
+  const isModalOpen = (isOpen || sessionExpired) && !!user;
   if (!isModalOpen) return null;
 
   return (

@@ -4,7 +4,7 @@ import db from '../db/database.js';
 // Create new employee (PM only)
 export const createEmployee = (req, res) => {
     try {
-        const { full_name, email, role_title, password, avatar_url } = req.body;
+        const { full_name, email, role_title, password, avatar_url, employment_type } = req.body;
         if (!full_name || !email || !role_title || !password) {
             return res.status(400).json({ error: 'Full name, email, role title, and initial password are required' });
         }
@@ -16,15 +16,18 @@ export const createEmployee = (req, res) => {
 
         const password_hash = bcrypt.hashSync(password, 10);
         const avatar = avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(full_name)}`;
+        const empType = (employment_type && String(employment_type).trim().toLowerCase().includes('intern'))
+            ? 'Intern'
+            : 'Full Time Contributor';
 
         const stmt = db.prepare(`
-            INSERT INTO users (email, password_hash, full_name, role_title, user_type, status, avatar_url, manager_id)
-            VALUES (?, ?, ?, ?, 'employee', 'active', ?, ?)
+            INSERT INTO users (email, password_hash, full_name, role_title, employment_type, user_type, status, avatar_url, manager_id)
+            VALUES (?, ?, ?, ?, ?, 'employee', 'active', ?, ?)
         `);
-        const result = stmt.run(email, password_hash, full_name, role_title, avatar, req.user.id);
+        const result = stmt.run(email, password_hash, full_name, role_title, empType, avatar, req.user.id);
 
         const newUser = db.prepare(`
-            SELECT id, email, full_name, role_title, user_type, status, avatar_url, created_at 
+            SELECT id, email, full_name, role_title, employment_type, user_type, status, avatar_url, created_at 
             FROM users WHERE id = ?
         `).get(result.lastInsertRowid);
 
@@ -40,7 +43,7 @@ export const getEmployees = (req, res) => {
     try {
         const employees = db.prepare(`
             SELECT 
-                u.id, u.email, u.full_name, u.role_title, u.user_type, u.status, u.avatar_url, u.created_at,
+                u.id, u.email, u.full_name, u.role_title, u.employment_type, u.user_type, u.status, u.avatar_url, u.created_at,
                 (SELECT COUNT(*) FROM project_members pm WHERE pm.user_id = u.id) as project_count,
                 (SELECT COUNT(*) FROM task_assignees ta JOIN tasks t ON ta.task_id = t.id WHERE ta.user_id = u.id AND LOWER(TRIM(t.status)) NOT IN ('completed', 'done', 'archived', 'closed', 'remove')) as active_task_count,
                 (SELECT COUNT(*) FROM daily_logs dl WHERE dl.user_id = u.id AND dl.has_worked = 1) as green_logs_count,
@@ -156,7 +159,7 @@ export const getEmployeeAnalytics = async (req, res) => {
         const employeeId = parseInt(req.params.id, 10);
         // Verify the employee belongs to this PM's team
         const employee = db.prepare(`
-            SELECT id, email, full_name, role_title, user_type, status, avatar_url, created_at
+            SELECT id, email, full_name, role_title, employment_type, user_type, status, avatar_url, created_at
             FROM users WHERE id = ? AND manager_id = ?
         `).get(employeeId, req.user.id);
 

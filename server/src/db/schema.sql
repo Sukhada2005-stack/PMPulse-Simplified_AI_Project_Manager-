@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     full_name TEXT NOT NULL,
     role_title TEXT NOT NULL, -- e.g. 'Frontend Dev', 'QA Lead', 'UI Designer', 'Project Director'
+    employment_type TEXT DEFAULT 'Full Time Contributor', -- 'Full Time Contributor', 'Intern'
     user_type TEXT CHECK(user_type IN ('superuser', 'pm', 'employee')) NOT NULL DEFAULT 'employee',
     status TEXT NOT NULL DEFAULT 'active', -- 'active', 'inactive'
     is_first_login INTEGER NOT NULL DEFAULT 0,

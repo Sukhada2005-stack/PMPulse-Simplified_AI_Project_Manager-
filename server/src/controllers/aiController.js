@@ -92,17 +92,56 @@ export const generateSummary = async (req, res) => {
 
         // Handle empty corpus gracefully
         if (totalLogs === 0) {
-            let emptyScopeName = 'the selected criteria';
-            if (dimension === 'fleet_level') {
-                emptyScopeName = 'all managed projects';
-            } else if (project_ids.length > 0) {
-                const prj = db.prepare('SELECT title FROM projects WHERE id = ?').get(project_ids[0]);
-                emptyScopeName = prj ? `project "${prj.title}"` : `project ID ${project_ids[0]}`;
+            let emptyTitle = 'Executive Report: the selected criteria';
+            let emptyExecutiveSummary = `No daily work logs or blocker reports were recorded for the selected criteria between ${date_from} and ${date_to}. Ensure team members submit their daily updates in the Employee Dashboard for active sprint deliverables.`;
+            let emptyDimensionName = getDimensionName(dimension);
+
+            if (dimension === 'single_employee') {
+                emptyDimensionName = 'Single Employee Summary (Individual Drilldown)';
+                const targetEmpId = employee_ids[0];
+                const emp = targetEmpId ? db.prepare('SELECT full_name, role_title FROM users WHERE id = ?').get(targetEmpId) : null;
+                const empName = emp ? `${emp.full_name.trim()} (${emp.role_title})` : 'Selected Contributor';
+                
+                let prjClause = '';
+                if (project_ids.length > 0) {
+                    const prj = db.prepare('SELECT title FROM projects WHERE id = ?').get(project_ids[0]);
+                    if (prj) prjClause = ` on project "${prj.title}"`;
+                }
+
+                // Check if this contributor has any logs at all in the database to provide helpful context
+                const anyLog = targetEmpId 
+                    ? db.prepare('SELECT log_date FROM daily_logs WHERE user_id = ? ORDER BY log_date DESC LIMIT 1').get(targetEmpId)
+                    : null;
+                
+                const latestHint = anyLog 
+                    ? ` (Latest logged update on record was on ${anyLog.log_date}. Select "All-Time" or adjust the date range to review it).`
+                    : '';
+
+                emptyTitle = `Executive Contributor Profile: ${empName}`;
+                emptyExecutiveSummary = `No daily work logs or blocker reports were recorded for ${empName}${prjClause} between ${date_from} and ${date_to}.${latestHint}`;
+            } else if (dimension === 'fleet_level') {
+                emptyTitle = 'Fleet-Wide Executive Digest: All Managed Projects';
+                emptyExecutiveSummary = `No daily work logs or blocker reports were recorded across all managed projects between ${date_from} and ${date_to}. Ensure team members submit their daily updates in the Employee Dashboard for active sprint deliverables.`;
+            } else if (dimension === 'multi_employee') {
+                emptyTitle = 'Team Output & Velocity Cohort Analysis';
+                emptyExecutiveSummary = `No daily work logs or blocker reports were recorded for the selected team members between ${date_from} and ${date_to}. Ensure team members submit their daily updates in the Employee Dashboard.`;
+            } else if (dimension === 'task_based') {
+                emptyTitle = 'Milestone Deep-Dive Report';
+                emptyExecutiveSummary = `No daily work logs or blocker reports were recorded for the selected tasks between ${date_from} and ${date_to}.`;
+            } else {
+                // project_based
+                let prjTitle = 'the selected project';
+                if (project_ids.length > 0) {
+                    const prj = db.prepare('SELECT title FROM projects WHERE id = ?').get(project_ids[0]);
+                    if (prj) prjTitle = `project "${prj.title}"`;
+                }
+                emptyTitle = `Executive Health & Status Report: ${prjTitle}`;
+                emptyExecutiveSummary = `No daily work logs or blocker reports were recorded for ${prjTitle} between ${date_from} and ${date_to}. Ensure team members submit their daily updates in the Employee Dashboard for active sprint deliverables.`;
             }
 
             const emptyResult = {
-                dimension: getDimensionName(dimension),
-                title: `Executive Report: ${emptyScopeName}`,
+                dimension: emptyDimensionName,
+                title: emptyTitle,
                 timeframe: `${date_from} to ${date_to}`,
                 metrics: {
                     total_active_projects: 0,
@@ -111,7 +150,7 @@ export const generateSummary = async (req, res) => {
                     consistency_score: 'N/A (0 logs)',
                     blocker_ratio: '0%'
                 },
-                executive_summary: `No daily work logs or blocker reports were recorded for ${emptyScopeName} between ${date_from} and ${date_to}. Ensure team members submit their daily updates in the Employee Dashboard for active sprint deliverables.`,
+                executive_summary: emptyExecutiveSummary,
                 key_accomplishments: ['No progress submissions recorded in this date window.'],
                 critical_impediments: ['No active blockers reported in this date window.'],
                 delivery_forecast: 'Awaiting team submissions to establish milestone velocity and trajectory.'
@@ -378,7 +417,7 @@ export const generateSummary = async (req, res) => {
 
                 const aiNarrative = await Promise.race([
                     callGeminiAPI(prompt, aiContext, "Generate executive synthesis narrative"),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('AI generation timeout')), 4000))
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('AI generation timeout')), 12000))
                 ]);
 
                 if (aiNarrative && typeof aiNarrative === 'string' && !aiNarrative.startsWith('⚠️') && !aiNarrative.startsWith('Error')) {

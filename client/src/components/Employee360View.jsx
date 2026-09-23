@@ -154,6 +154,15 @@ export default function Employee360View({ employeeId, onBack }) {
                   <div className="flex items-center gap-2 flex-wrap">
                     <h2 className="text-xl font-black" style={{ color: 'var(--color-text-1)' }}>{emp.full_name}</h2>
                     <span className="lozenge font-bold text-slate-950 dark:text-slate-900" style={{ background: 'var(--acube-gold)' }}>{emp.role_title}</span>
+                    {emp.employment_type && (
+                      <span className={`lozenge font-semibold text-xs ${
+                        emp.employment_type.toLowerCase().includes('intern')
+                          ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
+                          : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+                      }`}>
+                        {emp.employment_type}
+                      </span>
+                    )}
                     <span className="lozenge lozenge-success font-mono uppercase">{emp.status || 'Active'}</span>
                   </div>
                   <p className="text-xs font-mono mt-1 text-slate-500 dark:text-slate-400">{emp.email}</p>

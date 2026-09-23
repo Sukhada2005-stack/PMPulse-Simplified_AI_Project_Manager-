@@ -188,12 +188,7 @@ function MainApp() {
   }
 
   if (!user) {
-    return (
-      <>
-        <LandingPage />
-        <SessionReauthModal />
-      </>
-    );
+    return <LandingPage />;
   }
 
   if (user.is_first_login === 1) {
@@ -452,8 +447,8 @@ function MainApp() {
         </footer>
       </div>
       
-      {/* Global Session Re-auth Modal */}
-      <SessionReauthModal />
+      {/* Global Session Re-auth Modal - only for established sessions */}
+      {user && <SessionReauthModal />}
     </div>
   );
 }

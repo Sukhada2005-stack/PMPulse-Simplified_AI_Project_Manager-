@@ -13,7 +13,6 @@ import {
   ArrowRight,
   Clock,
   AlertTriangle,
-  SearchCheck,
   ListFilter,
 } from 'lucide-react';
 import { NewProjectModal, NewTaskModal } from './ProjectTaskModal';
@@ -151,6 +150,7 @@ export default function OtherWorkspaces({ onNavigateTab }) {
 
   const [projects, setProjects]   = useState([]);
   const [allTasks, setAllTasks]   = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -183,13 +183,17 @@ export default function OtherWorkspaces({ onNavigateTab }) {
   const fetchProjectsAndTasks = async () => {
     try {
       setLoading(true);
-      const [projRes, tasksRes] = await Promise.all([
+      const [projRes, tasksRes, empRes] = await Promise.all([
         api.projects.getAll(),
-        api.projects.getAllTasks().catch(() => ({ tasks: [] }))
+        api.projects.getAllTasks().catch(() => ({ tasks: [] })),
+        api.employees.getAll().catch(() => ({ employees: [] }))
       ]);
       setProjects(projRes.projects || []);
       if (tasksRes?.tasks) {
         setAllTasks(tasksRes.tasks);
+      }
+      if (empRes?.employees) {
+        setEmployees(empRes.employees);
       }
     } catch (err) {
       console.error('Failed to load projects and tasks:', err);
@@ -357,9 +361,143 @@ export default function OtherWorkspaces({ onNavigateTab }) {
     return {
       overdueTasks,
       escalatedTasks,
-      inReviewTasks
+      inReviewTasks,
+      totalProjects: (projects || []).length
     };
   }, [allTasks, projects]);
+
+  /* ── Dynamic Project Archives KPI (Total / Active / Completed / Custom) ── */
+  const projectKpi = useMemo(() => {
+    const selectedStatuses = panelFilters?.status?.selected || [];
+    const customStatuses = panelFilters?.status?.custom || [];
+
+    const isPredefinedActive = (s) =>
+      s.toLowerCase() === 'active' && !customStatuses.some(c => c.toLowerCase() === 'active');
+    const isPredefinedInactive = (s) =>
+      (s.toLowerCase() === 'inactive' || s.toLowerCase() === 'completed') &&
+      !customStatuses.some(c => c.toLowerCase() === s.toLowerCase());
+
+    const hasActivePredefined = selectedStatuses.some(isPredefinedActive);
+    const hasInactivePredefined = selectedStatuses.some(isPredefinedInactive);
+
+    const customSelected = selectedStatuses.filter(
+      s => customStatuses.some(c => c.toLowerCase() === s.toLowerCase()) ||
+           (!isPredefinedActive(s) && !isPredefinedInactive(s))
+    );
+
+    const isActiveProject = (proj) => {
+      const s = (proj.status || 'active').toLowerCase();
+      return s === 'active' || s === 'in-review' || s === 'in_progress' || s === 'in-progress';
+    };
+
+    const isCompletedProject = (proj) => {
+      const s = (proj.status || '').toLowerCase();
+      return s === 'completed' || s === 'archived' || s === 'inactive' || s === 'complete';
+    };
+
+    // Case A: Custom-created status(es) are selected without predefined statuses
+    if (customSelected.length > 0 && !hasActivePredefined && !hasInactivePredefined) {
+      const matchingCount = (projects || []).filter(proj => {
+        const s = (proj.status || 'active').toLowerCase();
+        return customSelected.some(c => c.toLowerCase() === s);
+      }).length;
+
+      // If no project is included in that particular custom created status, do NOT change name or value!
+      if (matchingCount === 0) {
+        return {
+          title: 'Total Projects',
+          value: (projects || []).length,
+        };
+      }
+
+      const label = customSelected.length === 1
+        ? customSelected[0].split(/[-_\s]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join('-') + ' Projects'
+        : 'Filtered Projects';
+
+      return {
+        title: label,
+        value: matchingCount,
+      };
+    }
+
+    // Case B: Predefined Active status filter
+    if (hasActivePredefined && !hasInactivePredefined) {
+      const count = (projects || []).filter(isActiveProject).length;
+      return {
+        title: 'Active Projects',
+        value: count,
+      };
+    }
+
+    // Case C: Predefined Inactive status filter
+    if (hasInactivePredefined && !hasActivePredefined) {
+      const count = (projects || []).filter(isCompletedProject).length;
+      return {
+        title: 'Completed Projects',
+        value: count,
+      };
+    }
+
+    // Default: Total Projects
+    return {
+      title: 'Total Projects',
+      value: (projects || []).length,
+    };
+  }, [projects, panelFilters?.status?.selected, panelFilters?.status?.custom]);
+
+  /* ── Team Utilization % KPI ────────────────────────────────────────── */
+  const teamUtilization = useMemo(() => {
+    if (!employees || employees.length === 0) {
+      return 0;
+    }
+
+    // Reconcile project counts combining DB records and workspace members from localStorage
+    const getEmployeeProjectCount = (emp) => {
+      let storageCount = 0;
+      try {
+        const storageProjects = new Set();
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('pmpulse_workspaceMembers_')) {
+            const wsId = key.replace('pmpulse_workspaceMembers_', '');
+            const raw = localStorage.getItem(key);
+            if (raw) {
+              const list = JSON.parse(raw);
+              if (Array.isArray(list)) {
+                const found = list.some(m => {
+                  if (m.id && emp.id && String(m.id) === String(emp.id)) return true;
+                  const mName = (m.name || m.full_name || '').trim().toLowerCase();
+                  const eName = (emp.full_name || '').trim().toLowerCase();
+                  if (mName && eName && mName === eName) return true;
+                  const mEmail = (m.email || '').trim().toLowerCase();
+                  const eEmail = (emp.email || '').trim().toLowerCase();
+                  if (mEmail && eEmail && mEmail === eEmail) return true;
+                  return false;
+                });
+                if (found) {
+                  storageProjects.add(wsId);
+                }
+              }
+            }
+          }
+        }
+        storageCount = storageProjects.size;
+      } catch (err) {
+        console.error('Error computing local workspace memberships for utilization:', err);
+      }
+      const dbCount = Number(emp.project_count) || 0;
+      return Math.max(dbCount, storageCount);
+    };
+
+    // Active contributors are those assigned to at least 1 project or with active tasks
+    const activeContributors = employees.filter(emp => {
+      const projCount = getEmployeeProjectCount(emp);
+      const activeTasks = Number(emp.active_task_count) || 0;
+      return projCount > 0 || activeTasks > 0;
+    }).length;
+
+    return Math.round((activeContributors / employees.length) * 100);
+  }, [employees, projects]);
 
   /* ── Client-side search & multi-dimensional filters ─────────────────── */
   const filteredProjects = useMemo(() => {
@@ -457,8 +595,8 @@ export default function OtherWorkspaces({ onNavigateTab }) {
         </div>
       </div>
 
-      {/* ── Global KPIs (Overdue, Escalated, In-Review) ────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      {/* ── Global KPIs (Overdue, Escalated, Total Projects, Team Utilization %) ──── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <div className="bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-xl p-5 hover:bg-slate-50 dark:hover:bg-slate-800/60 shadow-sm transition-colors">
           <div className="flex justify-between items-start">
             <div>
@@ -484,11 +622,23 @@ export default function OtherWorkspaces({ onNavigateTab }) {
         <div className="bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-xl p-5 hover:bg-slate-50 dark:hover:bg-slate-800/60 shadow-sm transition-colors">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Global In-Review / QA</p>
-              <h3 className="text-3xl font-bold text-blue-500">{globalKpis.inReviewTasks}</h3>
+              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">{projectKpi.title}</p>
+              <h3 className="text-3xl font-bold text-blue-500">{projectKpi.value}</h3>
             </div>
             <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500">
-              <SearchCheck size={20} />
+              <FolderGit2 size={20} />
+            </div>
+          </div>
+        </div>
+        {/* Team Utilization % KPI (in succession of Total projects) */}
+        <div className="bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-xl p-5 hover:bg-slate-50 dark:hover:bg-slate-800/60 shadow-sm transition-colors">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Team Utilization %</p>
+              <h3 className="text-3xl font-bold text-emerald-500">{teamUtilization}%</h3>
+            </div>
+            <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-500">
+              <Users size={20} />
             </div>
           </div>
         </div>
@@ -504,7 +654,7 @@ export default function OtherWorkspaces({ onNavigateTab }) {
             style={{ color: 'var(--color-text-2)' }}
           >
             <FolderGit2 className="w-4 h-4 text-blue-600" />
-            <span>Active Project Containers ({projects.length})</span>
+            <span>Project Archives ({projects.length})</span>
           </h2>
 
           {/* Controls */}

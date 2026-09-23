@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Layout, Upload, Loader2, Inbox, Trash2, Plus, Users, X, FileText, UploadCloud, File, UserCheck, DownloadCloud, Folder, Target, AlertTriangle, SearchCheck, Bug, Clock, LayoutList, ChevronDown, Calendar, User, CornerDownLeft, MoreHorizontal, Edit2, Grid2x2, ArrowRight, CheckCircle2, List, LayoutGrid, CheckSquare, Layers, TrendingUp, ListFilter } from 'lucide-react';
+import { Layout, Upload, Loader2, Inbox, Trash2, Plus, Users, X, FileText, UploadCloud, File, UserCheck, DownloadCloud, Folder, Target, AlertTriangle, SearchCheck, Bug, Clock, LayoutList, Calendar, User, CornerDownLeft, MoreHorizontal, Edit2, Grid2x2, ArrowRight, CheckCircle2, List, LayoutGrid, CheckSquare, Layers, TrendingUp, ListFilter, Filter } from 'lucide-react';
 import TaskFilterPanel from './TaskFilterPanel';
 import AICopilotPanel from './AICopilotPanel';
 const getSafeStorage = (key, fallback) => {
@@ -145,6 +145,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     window.addEventListener('pmpulse_listTasks_updated', handleSyncGlobal);
     window.addEventListener('pmpulse_boardTasks_updated', handleSyncGlobal);
     window.addEventListener('pmpulse_boardBacklogTasks_updated', handleSyncGlobal);
+    window.addEventListener('pmpulse_sprintBacklogTasks_updated', handleSyncGlobal);
     window.addEventListener('pmpulse_projects_updated', handleSyncGlobal);
 
     return () => {
@@ -152,6 +153,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       window.removeEventListener('pmpulse_listTasks_updated', handleSyncGlobal);
       window.removeEventListener('pmpulse_boardTasks_updated', handleSyncGlobal);
       window.removeEventListener('pmpulse_boardBacklogTasks_updated', handleSyncGlobal);
+      window.removeEventListener('pmpulse_sprintBacklogTasks_updated', handleSyncGlobal);
       window.removeEventListener('pmpulse_projects_updated', handleSyncGlobal);
     };
   }, [user?.id, overviewFilter]);
@@ -390,6 +392,188 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
   const filteredSprintBacklogTasks = useMemo(() => applyTaskFilter(sprintBacklogTasks, backlogListFilters), [sprintBacklogTasks, backlogListFilters]);
   const filteredBoardTasks = useMemo(() => applyTaskFilter(boardTasks, activeBoardFilters), [boardTasks, activeBoardFilters]);
   const filteredBoardBacklogTasks = useMemo(() => applyTaskFilter(boardBacklogTasks, backlogBoardFilters), [boardBacklogTasks, backlogBoardFilters]);
+
+  // ── Overall Tasks Priority & KPI Filter State & Calculations ───────────────
+  const OVERALL_PRIORITY_OPTIONS = [
+    { id: 'all', label: 'All Priorities' },
+    { id: 'Highest', label: 'Highest' },
+    { id: 'High', label: 'High' },
+    { id: 'Medium', label: 'Medium' },
+    { id: 'Low', label: 'Low' },
+    { id: 'Lowest', label: 'Lowest' },
+  ];
+  const [overallFilter, setOverallFilter] = useState(null); // null, 'unassigned', 'undated'
+  const [overallPriorityFilter, setOverallPriorityFilter] = useState('all'); // 'all', 'Highest', 'High', 'Medium', 'Low', 'Lowest'
+
+  const getResolvedTaskDetails = useMemo(() => {
+    const normalizeTitle = (str) => !str ? '' : String(str).trim().replace(/[\u2010-\u2015]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/\s+/g, ' ').toLowerCase();
+    const activeSprintAndBacklog = [
+      ...(listTasks || []),
+      ...(boardTasks || []),
+      ...(sprintBacklogTasks || []),
+      ...(boardBacklogTasks || [])
+    ];
+
+    return (task) => {
+      if (!task) return {};
+      const tTitle = normalizeTitle(task['Issue / Task / Enhancement'] || task.title || task.description || '');
+      
+      const activeMatch = activeSprintAndBacklog.find(at => 
+        (at.id && String(at.id) === String(task.id)) ||
+        (at.key && task.key && at.key === task.key) ||
+        (tTitle && normalizeTitle(at.task || at.title || at.description || at.taskName || '') === tTitle)
+      );
+
+      const displayAssignee = (activeMatch?.assignee && activeMatch.assignee !== 'Unassigned')
+        ? activeMatch.assignee
+        : (activeMatch?.['Responsible'] && activeMatch['Responsible'] !== 'Unassigned')
+          ? activeMatch['Responsible']
+          : (task['Responsible'] || task.assignee || task['Added by'] || 'Unassigned');
+
+      const displayStatus = activeMatch?.status || activeMatch?.['Status'] || task['Status'] || task.status || 'To Do';
+      const displayDueDate = (activeMatch?.dueDate && activeMatch.dueDate !== '—') 
+        ? activeMatch.dueDate 
+        : (activeMatch?.['Completed'] && activeMatch['Completed'] !== '—')
+          ? activeMatch['Completed']
+          : ((task.due_date && task.due_date !== '—') 
+              ? task.due_date 
+              : ((task.dueDate && task.dueDate !== '—') 
+                  ? task.dueDate 
+                  : ((task['Completed'] && task['Completed'] !== '—') ? task['Completed'] : '—')));
+      const displayPriority = activeMatch?.priority || activeMatch?.['Priority'] || task['Priority'] || task.priority || 'Medium';
+
+      const isUnassigned = !displayAssignee || displayAssignee === 'Unassigned' || String(displayAssignee).trim() === '';
+      const isUndated = !displayDueDate || displayDueDate === '—' || displayDueDate === '-' || String(displayDueDate).trim() === '';
+
+      return {
+        displayAssignee,
+        displayStatus,
+        displayDueDate,
+        displayPriority,
+        isUnassigned,
+        isUndated
+      };
+    };
+  }, [listTasks, boardTasks, sprintBacklogTasks, boardBacklogTasks]);
+
+  const overallKpis = useMemo(() => {
+    let unassignedCount = 0;
+    let undatedCount = 0;
+
+    (workspaceTasks || []).forEach(task => {
+      const details = getResolvedTaskDetails(task);
+      if (details.isUnassigned) unassignedCount++;
+      if (details.isUndated) undatedCount++;
+    });
+
+    return {
+      unassignedCount,
+      undatedCount,
+      totalCount: (workspaceTasks || []).length
+    };
+  }, [workspaceTasks, getResolvedTaskDetails]);
+
+  // Dynamic Metadata for the 3rd KPI block based on selected priority filter
+  const priorityKpiMeta = useMemo(() => {
+    const key = String(overallPriorityFilter || 'all').toLowerCase();
+    switch (key) {
+      case 'highest':
+        return {
+          title: 'Escalated tasks',
+          subtext: 'Showing highest priority tasks',
+          filterLabel: 'Highest'
+        };
+      case 'high':
+        return {
+          title: 'Escalated tasks',
+          subtext: 'Showing high priority tasks',
+          filterLabel: 'High'
+        };
+      case 'medium':
+        return {
+          title: 'Neutral Priority tasks',
+          subtext: 'Showing medium priority tasks',
+          filterLabel: 'Medium'
+        };
+      case 'low':
+        return {
+          title: 'Low Priority tasks',
+          subtext: 'Showing low priority tasks',
+          filterLabel: 'Low'
+        };
+      case 'lowest':
+        return {
+          title: 'Lowest Priority tasks',
+          subtext: 'Showing lowest priority tasks',
+          filterLabel: 'Lowest'
+        };
+      default:
+        return {
+          title: 'Priority tasks',
+          subtext: 'Select a priority below to filter',
+          filterLabel: 'All'
+        };
+    }
+  }, [overallPriorityFilter]);
+
+  // Calculated count of tasks matching the selected priority filter
+  const priorityKpiCount = useMemo(() => {
+    if (!overallPriorityFilter || overallPriorityFilter === 'all') {
+      return (workspaceTasks || []).length;
+    }
+    const target = String(overallPriorityFilter).trim().toLowerCase();
+    return (workspaceTasks || []).filter(task => {
+      const details = getResolvedTaskDetails(task);
+      const p = String(details.displayPriority || task['Priority'] || task.priority || 'Medium').trim().toLowerCase();
+      if (target === 'highest') {
+        return p === 'highest' || p === 'critical' || p === 'urgent';
+      }
+      if (target === 'high') {
+        return p === 'high' || p === 'high priority';
+      }
+      if (target === 'medium') {
+        return p === 'medium';
+      }
+      if (target === 'low') {
+        return p === 'low';
+      }
+      if (target === 'lowest') {
+        return p === 'lowest';
+      }
+      return p === target;
+    }).length;
+  }, [workspaceTasks, overallPriorityFilter, getResolvedTaskDetails]);
+
+  const displayedWorkspaceTasks = useMemo(() => {
+    return (workspaceTasks || []).filter(task => {
+      const details = getResolvedTaskDetails(task);
+      
+      // 1. KPI Filter (unassigned / undated)
+      if (overallFilter === 'unassigned' && !details.isUnassigned) return false;
+      if (overallFilter === 'undated' && !details.isUndated) return false;
+
+      // 2. Priority Filter (all / Highest / High / Medium / Low / Lowest)
+      if (overallPriorityFilter && overallPriorityFilter !== 'all') {
+        const p = String(details.displayPriority || task['Priority'] || task.priority || 'Medium').trim().toLowerCase();
+        const target = String(overallPriorityFilter).trim().toLowerCase();
+        if (target === 'highest') {
+          if (p !== 'highest' && p !== 'critical' && p !== 'urgent') return false;
+        } else if (target === 'high') {
+          if (p !== 'high' && p !== 'high priority') return false;
+        } else if (target === 'medium') {
+          if (p !== 'medium') return false;
+        } else if (target === 'low') {
+          if (p !== 'low') return false;
+        } else if (target === 'lowest') {
+          if (p !== 'lowest') return false;
+        } else {
+          if (p !== target) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [workspaceTasks, overallFilter, overallPriorityFilter, getResolvedTaskDetails]);
 
   // Inline Creation State
   const [draftTask, setDraftTask] = useState({ 
@@ -962,6 +1146,8 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
 
   // 1) Wipe & Reload Context Loader on Project Change
   useEffect(() => {
+    setOverallFilter(null);
+    setOverallPriorityFilter('all');
     const wsId = selectedWorkspace?.id;
     if (!wsId) {
       activeWsIdRef.current = null;
@@ -1744,6 +1930,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       ...(workspaceTasks || []),
       ...(listTasks || []),
       ...(boardTasks || []),
+      ...(sprintBacklogTasks || []),
       ...(boardBacklogTasks || [])
     ]);
 
@@ -1853,7 +2040,29 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     if (overviewFilter !== 'all') {
       bugCount     = fullTasks.filter(t => (t.type === 'Bug' || t.Type === 'Bug')).length;
       featureCount = fullTasks.filter(t => (t.type && t.type !== 'Bug') || (t.Type && t.Type !== 'Bug')).length;
-      backlogSize  = (boardBacklogTasks || []).length;
+      
+      // Backlog Size: considers tasks in the list backlog (sprintBacklogTasks) AND board backlog pool (boardBacklogTasks)
+      const currentBoardBacklog = String(selectedWorkspace?.id) === String(overviewFilter)
+        ? (boardBacklogTasks || [])
+        : getSafeStorage(`pmpulse_boardBacklogTasks_${overviewFilter}`, []);
+      const currentListBacklog = String(selectedWorkspace?.id) === String(overviewFilter)
+        ? (sprintBacklogTasks || [])
+        : getSafeStorage(`pmpulse_sprintBacklogTasks_${overviewFilter}`, []);
+
+      const combinedBacklog = [...currentListBacklog];
+      currentBoardBacklog.forEach(item => {
+        const itemTitle = (item.title || item.task || item.taskName || item.description || item['Issue / Task / Enhancement'] || '').trim().toLowerCase();
+        const isDuplicate = combinedBacklog.some(c => {
+          if (c.id != null && item.id != null && String(c.id) === String(item.id)) return true;
+          if (c.key && item.key && String(c.key).trim().toLowerCase() === String(item.key).trim().toLowerCase()) return true;
+          const cTitle = (c.title || c.task || c.taskName || c.description || c['Issue / Task / Enhancement'] || '').trim().toLowerCase();
+          return Boolean(cTitle && itemTitle && cTitle === itemTitle);
+        });
+        if (!isDuplicate) {
+          combinedBacklog.push(item);
+        }
+      });
+      backlogSize = combinedBacklog.length;
 
       // tasks completed-out-of-total-tasks: Taking reference of the Status column of the overall task list
       const activeSprintAndBacklog = [
@@ -2103,34 +2312,18 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       {sidebarView === 'overview' && (
         <div className="overview-container space-y-8">
           
-          {/* Overview Header & Dropdown */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 bg-transparent">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setSidebarView('workspace')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors shadow-sm"
-                title="Back to Workspace"
-              >
-                <ArrowRight size={14} className="rotate-180 text-slate-400" />
-                <span>Back to Workspace</span>
-              </button>
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Performance Overview</h2>
-            </div>
-              <div className="relative mt-4 sm:mt-0">
-                <select 
-                  value={overviewFilter}
-                  onChange={(e) => setOverviewFilter(e.target.value)}
-                  className="appearance-none bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm rounded-lg pl-4 pr-10 py-2 focus:outline-none focus:border-yellow-500 shadow-sm transition-colors cursor-pointer min-w-[200px]"
-                >
-                  {workspaces && workspaces.map((workspace) => (
-                    <option key={workspace.id} value={workspace.id}>
-                      {workspace.name || workspace.title}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={16} className="absolute right-3 top-2.5 text-slate-500 dark:text-slate-400 pointer-events-none" />
-              </div>
-            </div>
+          {/* Overview Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 bg-transparent gap-4">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Performance Overview</h2>
+            <button
+              onClick={() => setSidebarView('workspace')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors shadow-sm self-start sm:self-auto"
+              title="Back to Workspace"
+            >
+              <ArrowRight size={14} className="rotate-180 text-slate-400" />
+              <span>Back to Workspace</span>
+            </button>
+          </div>
 
 
             {/* PROJECT SPECIFIC KPIs (Render if a specific project is selected) */}
@@ -2339,61 +2532,241 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
 
           {/* The 'OverallTasks' Render Block */}
           {activeView === 'overall' && (
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-6">
-              
-              {/* File Input Integration */}
-              <input 
-                type="file" 
-                accept=".xlsx" 
-                className="hidden" 
-                ref={fileInputRef}
-                onChange={handleFileUpload}
-              />
+            <div className="space-y-6">
 
-              {/* Condition A (No Data) */}
-              {workspaceTasks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <Inbox className="w-12 h-12 text-slate-300 dark:text-slate-600 mb-4" />
-                  <p className="text-slate-500 dark:text-slate-400 mb-6">
-                    No overall tasks available for this workspace
-                  </p>
-                  <button 
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
-                    className="flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-medium rounded-md transition-colors disabled:opacity-50"
+              {/* Overall Tasks KPI Filter Cards (below the secondary header and above the imported tasks table) */}
+              {workspaceTasks.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* 1. Unassigned tasks KPI */}
+                  <div 
+                    onClick={() => setOverallFilter(prev => prev === 'unassigned' ? null : 'unassigned')}
+                    className={`relative p-5 rounded-xl border transition-all cursor-pointer shadow-sm select-none ${
+                      overallFilter === 'unassigned'
+                        ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-500 dark:border-amber-500 ring-2 ring-amber-500/20'
+                        : 'bg-white dark:bg-slate-800/40 border-slate-200 dark:border-slate-700/60 hover:border-slate-300 dark:hover:border-slate-600'
+                    }`}
                   >
-                    {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                    Import data
-                  </button>
-                </div>
-              ) : (
-                /* Condition B (Data Exists) */
-                <div>
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Imported Tasks</h3>
-                    <div className="flex flex-col items-end gap-1.5">
-                      <span className="text-[11px] font-medium italic text-red-500/90 dark:text-red-400/90 tracking-wide">
-                        *Clicking the Button Deletes Entire Imported Data*
-                      </span>
-                      <div className="flex items-center gap-3">
-                        <button 
-                          onClick={handleRemoveData}
-                          className="px-3 py-1.5 text-sm font-medium rounded-md text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-800/30 transition-colors flex items-center gap-2"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Remove Imported Data
-                        </button>
-                        <button 
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={isUploading}
-                          className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-md transition-colors disabled:opacity-50"
-                        >
-                          {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                          Import More
-                        </button>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Unassigned tasks</p>
+                        <h3 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
+                          {overallKpis.unassignedCount}
+                          <span className="text-xs font-normal text-slate-400 dark:text-slate-500 ml-2">
+                            of {overallKpis.totalCount} total
+                          </span>
+                        </h3>
+                      </div>
+                      <div className="p-2.5 bg-amber-500/10 rounded-lg text-amber-500">
+                        <Users size={20} />
                       </div>
                     </div>
+
+                    <div className="flex justify-between items-center mt-3 pt-2 border-t border-slate-100 dark:border-slate-700/30 min-h-[32px]">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        {overallFilter === 'unassigned' ? 'Showing only unassigned tasks' : 'Click to filter unassigned tasks'}
+                      </span>
+                      {overallFilter === 'unassigned' && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOverallFilter(null);
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-800/40 transition-colors shadow-sm cursor-pointer"
+                          title="Remove filter to view all overall tasks"
+                        >
+                          <X size={12} />
+                          <span>Remove filter</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
+
+                  {/* 2. Undated tasks KPI */}
+                  <div 
+                    onClick={() => setOverallFilter(prev => prev === 'undated' ? null : 'undated')}
+                    className={`relative p-5 rounded-xl border transition-all cursor-pointer shadow-sm select-none ${
+                      overallFilter === 'undated'
+                        ? 'bg-blue-50/50 dark:bg-blue-950/20 border-blue-500 dark:border-blue-500 ring-2 ring-blue-500/20'
+                        : 'bg-white dark:bg-slate-800/40 border-slate-200 dark:border-slate-700/60 hover:border-slate-300 dark:hover:border-slate-600'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Undated tasks</p>
+                        <h3 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
+                          {overallKpis.undatedCount}
+                          <span className="text-xs font-normal text-slate-400 dark:text-slate-500 ml-2">
+                            of {overallKpis.totalCount} total
+                          </span>
+                        </h3>
+                      </div>
+                      <div className="p-2.5 bg-blue-500/10 rounded-lg text-blue-500">
+                        <Calendar size={20} />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center mt-3 pt-2 border-t border-slate-100 dark:border-slate-700/30 min-h-[32px]">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        {overallFilter === 'undated' ? 'Showing only undated tasks' : 'Click to filter undated tasks'}
+                      </span>
+                      {overallFilter === 'undated' && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOverallFilter(null);
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-800/40 transition-colors shadow-sm cursor-pointer"
+                          title="Remove filter to view all overall tasks"
+                        >
+                          <X size={12} />
+                          <span>Remove filter</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 3. Priority tasks KPI (in succession of Undated tasks) */}
+                  <div 
+                    onClick={() => {
+                      if (overallPriorityFilter !== 'all') {
+                        setOverallPriorityFilter('all');
+                      }
+                    }}
+                    className={`relative p-5 rounded-xl border transition-all cursor-pointer shadow-sm select-none ${
+                      overallPriorityFilter !== 'all'
+                        ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-500 dark:border-indigo-500 ring-2 ring-indigo-500/20'
+                        : 'bg-white dark:bg-slate-800/40 border-slate-200 dark:border-slate-700/60 hover:border-slate-300 dark:hover:border-slate-600'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">
+                          {priorityKpiMeta.title}
+                        </p>
+                        <h3 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
+                          {priorityKpiCount}
+                          <span className="text-xs font-normal text-slate-400 dark:text-slate-500 ml-2">
+                            of {overallKpis.totalCount} total
+                          </span>
+                        </h3>
+                      </div>
+                      <div className="p-2.5 bg-indigo-500/10 rounded-lg text-indigo-500">
+                        <Target size={20} />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center mt-3 pt-2 border-t border-slate-100 dark:border-slate-700/30 min-h-[32px]">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        {overallPriorityFilter !== 'all' 
+                          ? `Showing only ${priorityKpiMeta.filterLabel.toLowerCase()} priority tasks` 
+                          : 'Select a priority below to filter'}
+                      </span>
+                      {overallPriorityFilter !== 'all' && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOverallPriorityFilter('all');
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-800/40 transition-colors shadow-sm cursor-pointer"
+                          title="Remove priority filter to view all priorities"
+                        >
+                          <X size={12} />
+                          <span>Remove filter</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Priority Filter Bar (below the KPIs and above the imported tasks table container) */}
+              {workspaceTasks.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-400 select-none mr-1">
+                    <Filter size={14} className="text-slate-400 dark:text-slate-400" />
+                    <span className="text-xs font-bold tracking-wider uppercase">PRIORITY:</span>
+                  </div>
+                  {OVERALL_PRIORITY_OPTIONS.map((opt) => {
+                    const isActive = overallPriorityFilter === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setOverallPriorityFilter(prev => prev === opt.id ? 'all' : opt.id)}
+                        className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm transition-all duration-150 rounded-xl cursor-pointer select-none ${
+                          isActive
+                            ? 'bg-[#6366f1] text-white font-bold shadow-sm border border-[#6366f1]'
+                            : 'bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-600 font-medium'
+                        }`}
+                      >
+                        {opt.icon && <span>{opt.icon}</span>}
+                        <span>{opt.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* The Imported Tasks Container */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-6">
+                
+                {/* File Input Integration */}
+                <input 
+                  type="file" 
+                  accept=".xlsx" 
+                  className="hidden" 
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                />
+
+                {/* Condition A (No Data) */}
+                {workspaceTasks.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <Inbox className="w-12 h-12 text-slate-300 dark:text-slate-600 mb-4" />
+                    <p className="text-slate-500 dark:text-slate-400 mb-6">
+                      No overall tasks available for this workspace
+                    </p>
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-medium rounded-md transition-colors disabled:opacity-50"
+                    >
+                      {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                      Import data
+                    </button>
+                  </div>
+                ) : (
+                  /* Condition B (Data Exists) */
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Imported Tasks</h3>
+                      <div className="flex flex-col items-end gap-1.5">
+                        <span className="text-[11px] font-medium italic text-red-500/90 dark:text-red-400/90 tracking-wide">
+                          *Clicking the Button Deletes Entire Imported Data*
+                        </span>
+                        <div className="flex items-center gap-3">
+                          <button 
+                            onClick={handleRemoveData}
+                            className="px-3 py-1.5 text-sm font-medium rounded-md text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-800/30 transition-colors flex items-center gap-2"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Remove Imported Data
+                          </button>
+                          <button 
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isUploading}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-md transition-colors disabled:opacity-50"
+                          >
+                            {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                            Import More
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
                   <div className="overflow-x-auto rounded-md border border-slate-200 dark:border-slate-700">
                     <table className="w-full text-sm text-left">
                       <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
@@ -2407,51 +2780,43 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                        {workspaceTasks.map((task, idx) => {
-                          const normalizeTitle = (str) => !str ? '' : str.trim().replace(/[\u2010-\u2015]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/\s+/g, ' ').toLowerCase();
-                          const tTitle = normalizeTitle(task['Issue / Task / Enhancement'] || task.title || task.description || '');
-                          
-                          const activeMatch = [...listTasks, ...boardTasks, ...sprintBacklogTasks, ...boardBacklogTasks].find(at => 
-                            (at.id && String(at.id) === String(task.id)) ||
-                            (at.key && task.key && at.key === task.key) ||
-                            (tTitle && normalizeTitle(at.task || at.title || at.description || at.taskName || '') === tTitle)
-                          );
+                        {displayedWorkspaceTasks.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
+                              No {overallFilter === 'unassigned' ? 'unassigned ' : overallFilter === 'undated' ? 'undated ' : ''}{overallPriorityFilter !== 'all' ? `${OVERALL_PRIORITY_OPTIONS.find(o => o.id === overallPriorityFilter)?.label || overallPriorityFilter} ` : ''}tasks found in overall tasks.
+                              {(overallFilter || overallPriorityFilter !== 'all') && (
+                                <button
+                                  type="button"
+                                  onClick={() => { setOverallFilter(null); setOverallPriorityFilter('all'); }}
+                                  className="ml-2 text-yellow-500 hover:text-yellow-600 dark:text-yellow-400 font-medium underline cursor-pointer"
+                                >
+                                  View all tasks
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ) : (
+                          displayedWorkspaceTasks.map((task, idx) => {
+                            const { displayAssignee, displayStatus, displayDueDate, displayPriority } = getResolvedTaskDetails(task);
 
-                          const displayAssignee = (activeMatch?.assignee && activeMatch.assignee !== 'Unassigned')
-                            ? activeMatch.assignee
-                            : (activeMatch?.['Responsible'] && activeMatch['Responsible'] !== 'Unassigned')
-                              ? activeMatch['Responsible']
-                              : (task['Responsible'] || task.assignee || task['Added by'] || 'Unassigned');
-
-                          const displayStatus = activeMatch?.status || activeMatch?.['Status'] || task['Status'] || task.status || 'To Do';
-                          const displayDueDate = (activeMatch?.dueDate && activeMatch.dueDate !== '—') 
-                            ? activeMatch.dueDate 
-                            : (activeMatch?.['Completed'] && activeMatch['Completed'] !== '—')
-                              ? activeMatch['Completed']
-                              : ((task.due_date && task.due_date !== '—') 
-                                  ? task.due_date 
-                                  : ((task.dueDate && task.dueDate !== '—') 
-                                      ? task.dueDate 
-                                      : ((task['Completed'] && task['Completed'] !== '—') ? task['Completed'] : '—')));
-                          const displayPriority = activeMatch?.priority || activeMatch?.['Priority'] || task['Priority'] || task.priority || 'Medium';
-
-                          return (
-                            <tr 
-                              key={task.id || idx} 
-                              onClick={() => { if (isMultiSelectMode) { setSelectedTasks(prev => prev.some(t => t === task) ? prev.filter(t => t !== task) : [...prev, task]); } else { setActionModalTasks([task]); } }}
-                              className={`border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors ${selectedTasks.some(t => t === task) ? 'bg-yellow-500/10 dark:bg-yellow-500/20' : ''}`}
-                            >
-                              <td className="px-4 py-3 text-slate-900 dark:text-white">{task['Issue / Task / Enhancement'] || 'Untitled Task'}</td>
-                              <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{displayStatus}</td>
-                              <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{displayAssignee}</td>
-                              <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{displayDueDate}</td>
-                              <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
-                                <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-md text-xs">{displayPriority}</span>
-                              </td>
-                              <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{task['Added '] || '—'}</td>
-                            </tr>
-                          );
-                        })}
+                            return (
+                              <tr 
+                                key={task.id || idx} 
+                                onClick={() => { if (isMultiSelectMode) { setSelectedTasks(prev => prev.some(t => t === task) ? prev.filter(t => t !== task) : [...prev, task]); } else { setActionModalTasks([task]); } }}
+                                className={`border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors ${selectedTasks.some(t => t === task) ? 'bg-yellow-500/10 dark:bg-yellow-500/20' : ''}`}
+                              >
+                                <td className="px-4 py-3 text-slate-900 dark:text-white">{task['Issue / Task / Enhancement'] || 'Untitled Task'}</td>
+                                <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{displayStatus}</td>
+                                <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{displayAssignee}</td>
+                                <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{displayDueDate}</td>
+                                <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
+                                  <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-md text-xs">{displayPriority}</span>
+                                </td>
+                                <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{task['Added '] || '—'}</td>
+                              </tr>
+                            );
+                          })
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -2470,7 +2835,8 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
                 </div>
               )}
             </div>
-          )}
+          </div>
+        )}
 
           {/* The 'List' Render Block */}
           {activeView === 'list' && (

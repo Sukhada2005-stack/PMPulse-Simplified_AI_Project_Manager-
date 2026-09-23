@@ -32,8 +32,10 @@
   --color-text-3:      #94a3b8;
   --color-success:     #34d399;
   --color-success-bg:  rgba(52, 211, 153, 0.12);
+  --color-success-text: #a7f3d0;
   --color-danger:      #f87171;
   --color-danger-bg:   rgba(248, 113, 113, 0.12);
+  --color-danger-text:  #fecdd3;
   --color-warn:        #fbbf24;
   --color-warn-bg:     rgba(251, 191, 36, 0.12);
   --color-neutral-bg:  rgba(30, 41, 59, 0.3);
@@ -98,8 +100,10 @@
   --color-text-3:      #64748b;
   --color-success:     #1a7a50;
   --color-success-bg:  rgba(26,122,80,0.12);
+  --color-success-text: #065f46;
   --color-danger:      #b83030;
   --color-danger-bg:   rgba(184,48,48,0.10);
+  --color-danger-text:  #9f1239;
   --color-warn:        #c8890a;
   --color-warn-bg:     rgba(200,137,10,0.10);
   --color-neutral-bg:  #ffffff;

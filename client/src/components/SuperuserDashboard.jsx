@@ -10,10 +10,13 @@ import {
   Search,
   X,
   ShieldAlert,
-  Trash2
+  Trash2,
+  Edit2,
+  ArrowRight
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import AICopilotPanel from './AICopilotPanel';
+import PMDetailsPage from './PMDetailsPage';
 
 export default function SuperuserDashboard() {
   const { user } = useAuth();
@@ -22,12 +25,21 @@ export default function SuperuserDashboard() {
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedPM, setSelectedPM] = useState(null);
+  const [selectedPMForDetails, setSelectedPMForDetails] = useState(null);
 
   // New PM form
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('password123');
   const [submitting, setSubmitting] = useState(false);
+
+  // Edit PM form & status toggle
+  const [editingPM, setEditingPM] = useState(null);
+  const [editFullName, setEditFullName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editRoleTitle, setEditRoleTitle] = useState('');
+  const [editStatus, setEditStatus] = useState('active');
+  const [editSubmitting, setEditSubmitting] = useState(false);
 
   const fetchPMs = async () => {
     try {
@@ -47,7 +59,7 @@ export default function SuperuserDashboard() {
 
   // Lock body scroll whenever modal is open
   useEffect(() => {
-    if (showAddModal) {
+    if (showAddModal || editingPM || selectedPM) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -55,7 +67,7 @@ export default function SuperuserDashboard() {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [showAddModal]);
+  }, [showAddModal, editingPM, selectedPM]);
 
   const handleRemovePM = async (id, name) => {
     if (!window.confirm(`Are you sure you want to remove ${name}? This action cannot be undone.`)) {
@@ -67,6 +79,41 @@ export default function SuperuserDashboard() {
       setPMs(pms.filter(pm => pm.id !== id));
     } catch (err) {
       alert(`Failed to remove PM: ${err.message}`);
+    }
+  };
+
+  const handleOpenEdit = (pm) => {
+    setEditingPM(pm);
+    setEditFullName(pm.full_name || '');
+    setEditEmail(pm.email || '');
+    setEditRoleTitle(pm.role_title || 'Project Manager');
+    setEditStatus((pm.status || 'active').toLowerCase());
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (!editFullName || !editEmail) {
+      alert('Please fill out full name and email.');
+      return;
+    }
+
+    setEditSubmitting(true);
+    try {
+      const res = await api.pms.update(editingPM.id, {
+        full_name: editFullName,
+        email: editEmail,
+        role_title: editRoleTitle,
+        status: editStatus
+      });
+      setPMs(prev => prev.map(p => p.id === editingPM.id ? { ...p, ...res.pm } : p));
+      if (selectedPM && selectedPM.id === editingPM.id) {
+        setSelectedPM(res.pm);
+      }
+      setEditingPM(null);
+    } catch (err) {
+      alert(`Failed to update PM: ${err.message}`);
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -104,6 +151,31 @@ export default function SuperuserDashboard() {
       pm.email.toLowerCase().includes(term)
     );
   });
+
+  // If a PM is selected for the Details Page, render the dedicated Details Page
+  if (selectedPMForDetails) {
+    return (
+      <>
+        <PMDetailsPage
+          pm={selectedPMForDetails}
+          onBack={() => setSelectedPMForDetails(null)}
+        />
+        <AICopilotPanel
+          role="superuser"
+          title="Superuser Fleet Copilot"
+          subtitle="Fleet Health & Cross-Project Telemetry"
+          endpoint="/copilot/superuser"
+          userName={user?.full_name || user?.fullName || 'Administrator'}
+          suggestedInquiries={[
+            "Provide a fleet-wide health summary of all project managers and their workspaces.",
+            "Which project managers have projects with stalled tasks or low activity?",
+            "What is the total headcount and project distribution across the organization?",
+            "Which PM accounts were recently created and how many teams do they oversee?"
+          ]}
+        />
+      </>
+    );
+  }
 
   return (
     <>
@@ -164,7 +236,7 @@ export default function SuperuserDashboard() {
                 key={pm.id}
                 className="jira-card p-5 flex flex-col justify-between group transition-all cursor-pointer hover:border-[var(--accent-gold)]"
                 style={{ background: 'var(--color-surface-solid)' }}
-                onClick={() => setSelectedPM(pm)}
+                onClick={() => setSelectedPMForDetails(pm)}
               >
                 <div>
                   <div className="flex items-start justify-between gap-3 mb-3.5">
@@ -177,9 +249,30 @@ export default function SuperuserDashboard() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="lozenge lozenge-success">
-                        Active
+                      <span className={`lozenge ${pm.status === 'inactive' ? 'bg-slate-700/60 text-slate-300 border border-slate-600' : 'lozenge-success'}`}>
+                        {pm.status === 'inactive' ? 'Inactive' : 'Active'}
                       </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedPMForDetails(pm);
+                        }}
+                        className="btn-secondary py-1 px-2.5 text-xs font-semibold flex items-center gap-1.5 hover:border-[var(--accent-gold)] hover:text-[var(--accent-gold)] transition-all cursor-pointer"
+                        title="View Details Page"
+                      >
+                        <span>Details</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenEdit(pm);
+                        }}
+                        className="text-gray-400 hover:text-[var(--accent-gold)] p-1 rounded transition-colors"
+                        title="Edit Project Manager"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -287,6 +380,135 @@ export default function SuperuserDashboard() {
                 >
                   {submitting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
                   <span>Create PM Profile</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit PM Modal */}
+      {editingPM && (
+        <div
+          className="fixed inset-0 w-screen h-screen z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={e => e.target === e.currentTarget && setEditingPM(null)}
+        >
+          <div
+            className="w-full max-w-md jira-card p-6 border shadow-2xl space-y-4 animate-fade-up"
+            style={{ background: 'var(--color-surface-solid)' }}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded bg-[var(--accent-gold)] text-[#1a1814]">
+                  <Edit2 className="w-4 h-4" />
+                </div>
+                <h3 className="font-bold text-sm" style={{ color: 'var(--color-text-1)' }}>
+                  Edit Project Manager
+                </h3>
+              </div>
+              <button
+                onClick={() => setEditingPM(null)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold mb-1 uppercase tracking-wider text-[11px]" style={{ color: 'var(--color-text-2)' }}>Full Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editFullName}
+                  onChange={(e) => setEditFullName(e.target.value)}
+                  placeholder="e.g. Alex Mercer"
+                  className="jira-input"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 uppercase tracking-wider text-[11px]" style={{ color: 'var(--color-text-2)' }}>Work Email *</label>
+                <input
+                  type="email"
+                  required
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  placeholder="e.g. alex.mercer@pulsepm.internal"
+                  className="jira-input"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 uppercase tracking-wider text-[11px]" style={{ color: 'var(--color-text-2)' }}>Role Title</label>
+                <input
+                  type="text"
+                  value={editRoleTitle}
+                  onChange={(e) => setEditRoleTitle(e.target.value)}
+                  placeholder="e.g. Project Manager"
+                  className="jira-input"
+                />
+              </div>
+
+              {/* Status Toggle (Active / Inactive) */}
+              <div>
+                <label className="block font-bold mb-1.5 uppercase tracking-wider text-[11px]" style={{ color: 'var(--color-text-2)' }}>
+                  Status *
+                </label>
+                <div className="p-3 rounded-lg border border-slate-700/50 bg-slate-900/40 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-300">
+                      Project Manager Status:
+                    </span>
+                    <span className={`lozenge ${editStatus === 'active' ? 'lozenge-success' : 'bg-slate-700/60 text-slate-300 border border-slate-600'}`}>
+                      {editStatus === 'active' ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setEditStatus('active')}
+                      className={`py-2 px-3 rounded-md text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        editStatus === 'active'
+                          ? 'bg-emerald-600 text-white shadow-sm border border-emerald-500'
+                          : 'bg-transparent text-slate-400 border border-slate-700 hover:bg-slate-800'
+                      }`}
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Active</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditStatus('inactive')}
+                      className={`py-2 px-3 rounded-md text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        editStatus === 'inactive'
+                          ? 'bg-amber-600 text-white shadow-sm border border-amber-500'
+                          : 'bg-transparent text-slate-400 border border-slate-700 hover:bg-slate-800'
+                      }`}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Inactive</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingPM(null)}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSubmitting}
+                  className="btn-primary"
+                >
+                  {editSubmitting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Edit2 className="w-3.5 h-3.5" />}
+                  <span>Save Changes</span>
                 </button>
               </div>
             </form>

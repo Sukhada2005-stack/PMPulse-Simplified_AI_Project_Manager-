@@ -156,20 +156,29 @@ export default function AISummaryHub({ selectedWorkspace }) {
         setProjects(projectList);
         setEmployees(empList);
 
+        let initialProjIds = [];
         if (selectedWorkspace?.id) {
           const match = projectList.find(p => p.id === selectedWorkspace.id || String(p.id) === String(selectedWorkspace.id));
           if (match) {
-            setSelectedProjectIds([match.id]);
+            initialProjIds = [match.id];
           } else if (projectList.length > 0) {
-            setSelectedProjectIds([projectList[0].id]);
+            initialProjIds = [projectList[0].id];
           }
         } else if (projectList.length > 0) {
-          setSelectedProjectIds([projectList[0].id]);
+          initialProjIds = [projectList[0].id];
+        }
+        setSelectedProjectIds(initialProjIds);
+
+        let initialEmpIds = [];
+        if (empList.length > 0) {
+          initialEmpIds = [empList[0].id];
+          setSelectedEmployeeIds(initialEmpIds);
         }
 
-        if (empList.length > 0) {
-          setSelectedEmployeeIds([empList[0].id]);
-        }
+        handleGenerateSummary({
+          project_ids: initialProjIds,
+          employee_ids: initialEmpIds
+        });
       } catch (err) {
         console.error('Failed to load filter options:', err);
       }
@@ -183,36 +192,48 @@ export default function AISummaryHub({ selectedWorkspace }) {
     const todayStr = formatDateISO(now);
     const yesterdayStr = formatDateISO(new Date(now.getTime() - 86400000));
     const sevenDaysAgoStr = formatDateISO(new Date(now.getTime() - 7 * 86400000));
+    let newFrom = dateFrom;
+    let newTo = dateTo;
 
     if (preset === 'today') {
-      setDateFrom(todayStr);
-      setDateTo(todayStr);
+      newFrom = todayStr;
+      newTo = todayStr;
     } else if (preset === 'yesterday') {
-      setDateFrom(yesterdayStr);
-      setDateTo(yesterdayStr);
+      newFrom = yesterdayStr;
+      newTo = yesterdayStr;
     } else if (preset === 'this_week') {
-      setDateFrom(sevenDaysAgoStr);
-      setDateTo(todayStr);
+      newFrom = sevenDaysAgoStr;
+      newTo = todayStr;
     } else if (preset === 'full_sprint') {
       const sp = getSprintDates(selectedWorkspace?.id);
-      setDateFrom(sp.start);
-      setDateTo(sp.end);
+      newFrom = sp.start;
+      newTo = sp.end;
     } else if (preset === 'all_time') {
-      setDateFrom('2026-01-01');
-      setDateTo(todayStr);
+      newFrom = '2026-01-01';
+      newTo = todayStr;
     }
+    setDateFrom(newFrom);
+    setDateTo(newTo);
+    handleGenerateSummary({ date_from: newFrom, date_to: newTo });
   };
 
-  const handleGenerateSummary = async () => {
+  const handleGenerateSummary = async (overrides = {}) => {
     setLoading(true);
     try {
+      const activeDim = overrides.dimension !== undefined ? overrides.dimension : selectedDimension;
+      const activeFrom = overrides.date_from !== undefined ? overrides.date_from : dateFrom;
+      const activeTo = overrides.date_to !== undefined ? overrides.date_to : dateTo;
+      const activeStatus = overrides.status_filter !== undefined ? overrides.status_filter : statusFilter;
+      const activeProjIds = overrides.project_ids !== undefined ? overrides.project_ids : selectedProjectIds;
+      const activeEmpIds = overrides.employee_ids !== undefined ? overrides.employee_ids : selectedEmployeeIds;
+
       const payload = {
-        dimension: selectedDimension,
-        date_from: dateFrom,
-        date_to: dateTo,
-        status_filter: statusFilter,
-        project_ids: selectedDimension === 'fleet_level' ? [] : selectedProjectIds,
-        employee_ids: selectedEmployeeIds
+        dimension: activeDim,
+        date_from: activeFrom,
+        date_to: activeTo,
+        status_filter: activeStatus,
+        project_ids: activeDim === 'fleet_level' ? [] : activeProjIds,
+        employee_ids: activeEmpIds
       };
 
       const res = await api.ai.summarize(payload);
@@ -223,13 +244,6 @@ export default function AISummaryHub({ selectedWorkspace }) {
       setLoading(false);
     }
   };
-
-  // Run synthesis when dimension or selectedProjectIds changes (after initial load)
-  useEffect(() => {
-    if (selectedProjectIds.length > 0 || selectedDimension === 'fleet_level') {
-      handleGenerateSummary();
-    }
-  }, [selectedDimension, selectedProjectIds]);
 
   const copyExecutiveSummary = () => {
     if (!summaryData?.summary) return;
@@ -253,7 +267,10 @@ export default function AISummaryHub({ selectedWorkspace }) {
             return (
               <button
                 key={dim.id}
-                onClick={() => setSelectedDimension(dim.id)}
+                onClick={() => {
+                  setSelectedDimension(dim.id);
+                  handleGenerateSummary({ dimension: dim.id });
+                }}
                 className={`flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-bold transition-all ${
                   isSelected
                     ? 'bg-blue-600 text-white shadow-md'
@@ -350,7 +367,11 @@ export default function AISummaryHub({ selectedWorkspace }) {
             </label>
             <select
               value={selectedProjectIds[0] || 'all'}
-              onChange={(e) => setSelectedProjectIds(e.target.value === 'all' ? [] : [parseInt(e.target.value, 10)])}
+              onChange={(e) => {
+                const newIds = e.target.value === 'all' ? [] : [parseInt(e.target.value, 10)];
+                setSelectedProjectIds(newIds);
+                handleGenerateSummary({ project_ids: newIds });
+              }}
               className="jira-select"
             >
               <option value="all">🌐 All Active Projects</option>
@@ -373,7 +394,11 @@ export default function AISummaryHub({ selectedWorkspace }) {
             </label>
             <select
               value={selectedEmployeeIds[0] || 'all'}
-              onChange={(e) => setSelectedEmployeeIds(e.target.value === 'all' ? [] : [parseInt(e.target.value, 10)])}
+              onChange={(e) => {
+                const newIds = e.target.value === 'all' ? [] : [parseInt(e.target.value, 10)];
+                setSelectedEmployeeIds(newIds);
+                handleGenerateSummary({ employee_ids: newIds });
+              }}
               className="jira-select"
             >
               <option value="all">All Contributors</option>
@@ -391,7 +416,11 @@ export default function AISummaryHub({ selectedWorkspace }) {
             </label>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                const newStatus = e.target.value;
+                setStatusFilter(newStatus);
+                handleGenerateSummary({ status_filter: newStatus });
+              }}
               className="jira-select"
             >
               <option value="all">All Submissions (Logged + Blockers)</option>
@@ -480,11 +509,16 @@ export default function AISummaryHub({ selectedWorkspace }) {
                 {(s.key_accomplishments || s.key_achievements || s.cross_functional_dependencies || s.solved_subtasks || s.milestone_review || s.macro_productivity_trends || [])?.map((acc, idx) => (
                   <div
                     key={idx}
-                    className="p-3 rounded-lg border border-green-200 text-xs flex items-start gap-2.5"
-                    style={{ background: 'rgba(56,221,159,0.12)' }}
+                    className="p-3 rounded-lg border border-emerald-500/30 dark:border-emerald-500/40 text-xs flex items-start gap-2.5 transition-colors"
+                    style={{ background: 'var(--color-success-bg, rgba(56,221,159,0.12))' }}
                   >
-                    <Check className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                    <span className="font-medium text-emerald-900">{acc}</span>
+                    <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+                    <span
+                      className="font-medium text-emerald-950 dark:text-emerald-100 leading-relaxed"
+                      style={{ color: 'var(--color-success-text, #a7f3d0)' }}
+                    >
+                      {acc}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -493,7 +527,7 @@ export default function AISummaryHub({ selectedWorkspace }) {
             {/* Critical Impediments & Action Items */}
             <div className="jira-card p-6" style={{ background: 'var(--color-surface-solid)' }}>
               <div className="flex items-center gap-2 mb-4">
-                <AlertCircle className="w-4 h-4 text-rose-600" />
+                <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                 <h3 className="font-bold text-sm" style={{ color: 'var(--color-text-1)' }}>
                   Critical Impediments &amp; Action Items
                 </h3>
@@ -503,11 +537,16 @@ export default function AISummaryHub({ selectedWorkspace }) {
                 {(s.critical_impediments || s.logged_blockers || s.shared_impediments || s.unresolved_bugs_and_blockers || s.cumulative_blocker_analysis || (s.organizational_bottlenecks ? (Array.isArray(s.organizational_bottlenecks) ? s.organizational_bottlenecks : [s.organizational_bottlenecks]) : []))?.map((imp, idx) => (
                   <div
                     key={idx}
-                    className="p-3 rounded-lg border border-rose-200 text-xs flex items-start gap-2.5"
-                    style={{ background: 'rgba(255,107,107,0.12)' }}
+                    className="p-3 rounded-lg border border-rose-500/30 dark:border-rose-500/40 text-xs flex items-start gap-2.5 transition-colors"
+                    style={{ background: 'var(--color-danger-bg, rgba(255,107,107,0.12))' }}
                   >
-                    <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
-                    <span className="font-medium text-rose-900">{imp}</span>
+                    <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 flex-shrink-0 mt-0.5" />
+                    <span
+                      className="font-medium text-rose-950 dark:text-rose-100 leading-relaxed"
+                      style={{ color: 'var(--color-danger-text, #fecdd3)' }}
+                    >
+                      {imp}
+                    </span>
                   </div>
                 ))}
               </div>

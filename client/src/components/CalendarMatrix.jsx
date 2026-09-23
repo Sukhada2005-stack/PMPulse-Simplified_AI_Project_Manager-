@@ -14,7 +14,6 @@ import {
   TrendingUp,
   AlertCircle,
   Loader2,
-  UserPlus,
   Search,
   MessageSquare,
   Layout,
@@ -33,14 +32,6 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onN
   const [selectedCell, setSelectedCell] = useState(null);
   const [showChatModal, setShowChatModal] = useState(false);
   const [selectedTaskModal, setSelectedTaskModal] = useState(null);
-
-  // Add Member modal state
-  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
-  const [allEmployees, setAllEmployees] = useState([]);
-  const [loadingMembers, setLoadingMembers] = useState(false);
-  const [memberSearch, setMemberSearch] = useState('');
-  const [addingMember, setAddingMember] = useState(null); // id being added
-  const [addMemberMsg, setAddMemberMsg] = useState(null); // { type: 'success'|'error', text }
 
   // Date filters
   const [dateFrom, setDateFrom] = useState('');
@@ -304,55 +295,6 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onN
 
   useEffect(() => { fetchMatrix(); }, [fetchMatrix]);
 
-  // Lock body scroll when add-member modal is open
-  useEffect(() => {
-    document.body.style.overflow = showAddMemberModal ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
-  }, [showAddMemberModal]);
-
-  const openAddMemberModal = async () => {
-    if (!currentProjectId || currentProjectId === 'fleet') return;
-    setAddMemberMsg(null);
-    setMemberSearch('');
-    setShowAddMemberModal(true);
-    setLoadingMembers(true);
-    try {
-      const [empRes, projRes] = await Promise.all([
-        api.employees.getAll(),
-        api.projects.getById(currentProjectId)
-      ]);
-      const existingMembers = projRes.project?.members || [];
-      const existingIds = new Set(existingMembers.map(m => m.id));
-      const allEmps = empRes.employees || [];
-      // Show all employees from Workforce Directory who are not yet in this project
-      const available = allEmps.filter(e => !existingIds.has(e.id));
-      setAllEmployees(available);
-    } catch (err) {
-      console.error('Failed to load available employees for project:', err);
-      setAllEmployees([]);
-    } finally {
-      setLoadingMembers(false);
-    }
-  };
-
-  const handleAddMember = async (employeeId) => {
-    setAddingMember(employeeId);
-    setAddMemberMsg(null);
-    try {
-      const res = await api.projects.addMember(currentProjectId, employeeId);
-      setAddMemberMsg({ type: 'success', text: res.message });
-      // Remove from available list
-      setAllEmployees(prev => prev.filter(e => e.id !== employeeId));
-      // Refresh matrix and projects list to reflect new member immediately
-      fetchMatrix();
-      api.projects.getAll().then(r => setProjects(r.projects || [])).catch(() => { });
-    } catch (err) {
-      setAddMemberMsg({ type: 'error', text: err.message });
-    } finally {
-      setAddingMember(null);
-    }
-  };
-
   /* Stats - Dynamically computed across all scheduled matrix cells */
   let totalCells = 0, loggedCount = 0, blockerCount = 0, pendingCount = 0;
   if (matrixData?.rows) {
@@ -433,35 +375,25 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onN
                 <span>Team Chat &amp; Sync</span>
               </button>
 
-              {/* Add Member — only when a specific project is selected */}
+              {/* Delete Project — only when a specific project is selected */}
               {currentProjectId !== 'fleet' && currentProjectId && (
-                <>
-                  <button
-                    onClick={openAddMemberModal}
-                    className="flex items-center gap-2 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 px-3 py-1.5 rounded-md text-sm font-medium transition-colors shadow-sm"
-                    title="Add employee to this project"
-                  >
-                    <UserPlus className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-                    <span>+ Members</span>
-                  </button>
-                  <button
-                    onClick={async () => {
-                      if (window.confirm('Are you sure you want to delete this project? This action cannot be undone and will delete all associated tasks and logs.')) {
-                        try {
-                          await api.projects.delete(currentProjectId);
-                          if (onSelectProject) onSelectProject('fleet');
-                          setCurrentProjectId('fleet');
-                        } catch (err) {
-                          alert(err.message || 'Failed to delete project');
-                        }
+                <button
+                  onClick={async () => {
+                    if (window.confirm('Are you sure you want to delete this project? This action cannot be undone and will delete all associated tasks and logs.')) {
+                      try {
+                        await api.projects.delete(currentProjectId);
+                        if (onSelectProject) onSelectProject('fleet');
+                        setCurrentProjectId('fleet');
+                      } catch (err) {
+                        alert(err.message || 'Failed to delete project');
                       }
-                    }}
-                    className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-800/40 px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
-                    title="Delete this project"
-                  >
-                    Delete Project
-                  </button>
-                </>
+                    }
+                  }}
+                  className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-800/40 px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
+                  title="Delete this project"
+                >
+                  Delete Project
+                </button>
               )}
               <button
                 onClick={fetchMatrix}
@@ -719,11 +651,16 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onN
                           style={{ minWidth: '220px', width: '220px' }}
                         >
                           <div className="flex items-center gap-2.5">
-                            <img
-                              src={row.employee?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${row.employee?.full_name || 'Member'}`}
-                              alt={row.employee?.full_name || 'Contributor'}
-                              className="w-7 h-7 rounded-full object-cover border border-slate-200 dark:border-slate-700 shrink-0"
-                            />
+                            <div
+                              className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs uppercase shrink-0"
+                              style={{
+                                background: 'rgba(99, 102, 241, 0.2)',
+                                color: '#818cf8',
+                                border: '1px solid rgba(99, 102, 241, 0.4)'
+                              }}
+                            >
+                              {(row.employee?.full_name || row.employee?.name || '?').trim().charAt(0).toUpperCase()}
+                            </div>
                             <div className="min-w-0 flex-1">
                               <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
                                 {row.employee?.full_name || 'Project Member'}
@@ -859,128 +796,6 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onN
           days={selectedTaskModal.days}
           onClose={() => setSelectedTaskModal(null)}
         />
-      )}
-
-      {/* ── Add Member to Project Modal ───────────────────── */}
-      {showAddMemberModal && (
-        <div
-          className="fixed inset-0 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)', zIndex: 200 }}
-          onClick={e => e.target === e.currentTarget && setShowAddMemberModal(false)}
-        >
-          <div
-            className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl animate-fade-up flex flex-col overflow-hidden"
-            style={{ maxHeight: '80vh' }}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-yellow-500/10 text-yellow-500">
-                  <UserPlus className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">
-                    Add Member to Project
-                  </h3>
-                  <p className="text-[11px] mt-0.5 text-slate-500 dark:text-slate-400">
-                    {projects.find(p => String(p.id) === String(currentProjectId))?.title || 'Current Project'}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowAddMemberModal(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Search */}
-            <div className="px-5 pt-4 pb-2">
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={memberSearch}
-                  onChange={e => setMemberSearch(e.target.value)}
-                  placeholder="Search employees..."
-                  className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-200 pl-9 pr-3 py-2 text-xs rounded-lg w-full focus:ring-2 focus:ring-yellow-500 outline-none"
-                  autoFocus
-                />
-              </div>
-            </div>
-
-            {/* Status message */}
-            {addMemberMsg && (
-              <div
-                className="mx-5 mb-2 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-2"
-                style={{
-                  background: addMemberMsg.type === 'success' ? 'rgba(56,221,159,0.12)' : 'rgba(255,107,107,0.12)',
-                  color: addMemberMsg.type === 'success' ? '#38dd9f' : '#ff6b6b',
-                  border: `1px solid ${addMemberMsg.type === 'success' ? 'rgba(56,221,159,0.3)' : 'rgba(255,107,107,0.3)'}`
-                }}
-              >
-                {addMemberMsg.type === 'success'
-                  ? <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
-                  : <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />}
-                {addMemberMsg.text}
-              </div>
-            )}
-
-            {/* Employee list */}
-            <div className="flex-1 overflow-y-auto px-5 pb-5 space-y-2 mt-1">
-              {loadingMembers ? (
-                <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-500 dark:text-slate-400">
-                  <Loader2 className="w-6 h-6 animate-spin text-yellow-500" />
-                  <p className="text-xs">Fetching available workforce members...</p>
-                </div>
-              ) : allEmployees.length === 0 ? (
-                <div className="text-center py-10 text-xs text-slate-500 dark:text-slate-400">
-                  {memberSearch
-                    ? 'No available contributors match your search.'
-                    : 'All workforce contributors are already members of this project.'}
-                </div>
-              ) : (
-                allEmployees
-                  .filter(e =>
-                    !memberSearch ||
-                    e.full_name.toLowerCase().includes(memberSearch.toLowerCase()) ||
-                    e.role_title.toLowerCase().includes(memberSearch.toLowerCase())
-                  )
-                  .map(emp => (
-                    <div
-                      key={emp.id}
-                      className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/40 hover:border-yellow-500/30 transition-colors"
-                    >
-                      <img
-                        src={emp.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.full_name}`}
-                        alt={emp.full_name}
-                        className="w-9 h-9 rounded-full border border-slate-200 dark:border-slate-700 object-cover flex-shrink-0"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-xs text-slate-900 dark:text-white truncate">
-                          {emp.full_name}
-                        </div>
-                        <div className="text-[11px] text-yellow-600 dark:text-yellow-500 font-medium truncate">
-                          {emp.role_title}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleAddMember(emp.id)}
-                        disabled={addingMember === emp.id}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-950 bg-yellow-500 hover:bg-yellow-600 disabled:opacity-50 transition-all shadow-sm"
-                      >
-                        {addingMember === emp.id
-                          ? <RefreshCw className="w-3 h-3 animate-spin" />
-                          : <UserPlus className="w-3 h-3" />}
-                        {addingMember === emp.id ? 'Adding...' : 'Add to Project'}
-                      </button>
-                    </div>
-                  ))
-              )}
-            </div>
-          </div>
-        </div>
       )}
 
       {/* ── Project Team Chat & Meeting Scheduler Modal ─── */}

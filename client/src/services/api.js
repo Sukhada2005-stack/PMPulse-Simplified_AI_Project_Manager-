@@ -27,7 +27,9 @@ async function request(endpoint, options = {}) {
     
     if (res.status === 401) {
       localStorage.removeItem('pulsepm_token');
-      window.dispatchEvent(new CustomEvent('session_expired'));
+      if (!options.skipSessionExpired && endpoint !== '/auth/me' && endpoint !== '/auth/login') {
+        window.dispatchEvent(new CustomEvent('session_expired'));
+      }
       // Throw a specific error to allow components to silently fail
       throw new Error('session_expired');
     }
@@ -48,7 +50,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ email, password })
     }),
-    getMe: () => request('/auth/me'),
+    getMe: () => request('/auth/me', { skipSessionExpired: true }),
     getUsers: () => request('/auth/users'),
     changePassword: (password) => request('/auth/change-password', {
       method: 'POST',
@@ -75,8 +77,14 @@ export const api = {
   },
   pms: {
     getAll: () => request('/pms'),
+    getProjects: (id) => request(`/pms/${id}/projects`),
+    getWorkforce: (id) => request(`/pms/${id}/workforce`),
     create: (data) => request('/pms', {
       method: 'POST',
+      body: JSON.stringify(data)
+    }),
+    update: (id, data) => request(`/pms/${id}`, {
+      method: 'PUT',
       body: JSON.stringify(data)
     }),
     remove: (id) => request(`/pms/${id}`, { method: 'DELETE' })

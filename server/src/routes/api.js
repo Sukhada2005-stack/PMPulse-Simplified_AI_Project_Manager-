@@ -5,7 +5,7 @@ import { createProject, getProjects, getProjectById, createTask, getMyTasks, add
 import { submitDailyLog, getMyDailyLogs, getProjectMatrix, getFleetMatrix } from '../controllers/dailyLogController.js';
 import { generateSummary } from '../controllers/aiController.js';
 import { getProjectMessages, sendProjectMessage } from '../controllers/chatController.js';
-import { createPM, getPMs, deletePM } from '../controllers/superuserController.js';
+import { createPM, getPMs, deletePM, updatePM, getPMProjects, getPMWorkforce } from '../controllers/superuserController.js';
 import { handleEmployeeCopilot, handlePMCopilot, handleSuperuserCopilot } from '../controllers/copilotController.js';
 import { authenticateToken, requirePM, requireSuperuser } from '../middleware/auth.js';
 import multer from 'multer';
@@ -33,6 +33,10 @@ router.delete('/employees/:id', authenticateToken, requirePM, deleteEmployee);
 // --- Superuser Operations ---
 router.post('/pms', authenticateToken, requireSuperuser, createPM);
 router.get('/pms', authenticateToken, requireSuperuser, getPMs);
+router.get('/pms/:id/projects', authenticateToken, requireSuperuser, getPMProjects);
+router.get('/pms/:id/workforce', authenticateToken, requireSuperuser, getPMWorkforce);
+router.put('/pms/:id', authenticateToken, requireSuperuser, updatePM);
+router.patch('/pms/:id', authenticateToken, requireSuperuser, updatePM);
 router.delete('/pms/:id', authenticateToken, requireSuperuser, deletePM);
 
 // --- Project Operations ---

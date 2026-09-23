@@ -108,6 +108,7 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [roleTitle, setRoleTitle] = useState('Senior Frontend Developer');
+  const [employmentType, setEmploymentType] = useState('Full Time Contributor');
   const [password, setPassword] = useState('password123');
   const [submitting, setSubmitting] = useState(false);
 
@@ -170,12 +171,14 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
         full_name: fullName,
         email,
         role_title: roleTitle,
+        employment_type: employmentType,
         password
       });
       alert(`Employee profile for ${fullName} created successfully! Credentials generated.`);
       setShowAddModal(false);
       setFullName('');
       setEmail('');
+      setEmploymentType('Full Time Contributor');
       fetchDirectory();
     } catch (err) {
       alert(`Failed to onboard employee: ${err.message}`);
@@ -337,6 +340,12 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
   // 3. Available / Bench: members not present in any project (0 assigned projects)
   const availableMembers = employees.filter(emp => getEmployeeProjectCount(emp) === 0).length;
 
+  // 4. Full Time Contributor: members with category 'Full Time Contributor'
+  const fullTimeContributors = employees.filter(emp => !emp.employment_type || !emp.employment_type.toLowerCase().includes('intern')).length;
+
+  // 5. Intern: members with category 'Intern'
+  const internContributors = employees.filter(emp => emp.employment_type && emp.employment_type.toLowerCase().includes('intern')).length;
+
   // ── Filtered Employees (Search + KPI Click Filter) ─────────────────
   const filteredEmployees = useMemo(() => {
     return employees.filter(e => {
@@ -345,6 +354,10 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
         if (getEmployeeProjectCount(e) <= 1) return false;
       } else if (activeKpiFilter === 'bench') {
         if (getEmployeeProjectCount(e) !== 0) return false;
+      } else if (activeKpiFilter === 'fulltime') {
+        if (e.employment_type && e.employment_type.toLowerCase().includes('intern')) return false;
+      } else if (activeKpiFilter === 'intern') {
+        if (!e.employment_type || !e.employment_type.toLowerCase().includes('intern')) return false;
       }
 
       // 2. Search query filter
@@ -403,14 +416,14 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
       </div>
 
       {/* ── Workforce Summary KPIs ────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
         {/* KPI 1: Total Headcount */}
         <div
           onClick={() => setActiveKpiFilter('all')}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveKpiFilter('all'); } }}
-          className={`jira-card p-5 rounded-2xl flex items-center gap-4 border shadow-sm cursor-pointer select-none transition-all ${
+          className={`jira-card p-4 sm:p-4.5 rounded-2xl flex items-center gap-3.5 border shadow-sm cursor-pointer select-none transition-all ${
             activeKpiFilter === 'all'
               ? 'border-indigo-500 dark:border-indigo-400 ring-2 ring-indigo-500/25 bg-indigo-50/15 dark:bg-indigo-950/20'
               : 'border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700/80 hover:shadow-md'
@@ -419,7 +432,7 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
           title="Click to view all employees (reset filter)"
         >
           <div
-            className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border"
+            className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center shrink-0 border"
             style={{
               background: 'rgba(99, 102, 241, 0.12)',
               borderColor: 'rgba(99, 102, 241, 0.25)',
@@ -428,24 +441,24 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
           >
             <Users className="w-5 h-5" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div
-              className="text-[11px] font-bold font-mono tracking-wider uppercase flex items-center gap-2"
+              className="text-[11px] font-bold font-mono tracking-wider uppercase flex items-center gap-1.5 truncate"
               style={{ color: 'var(--color-text-3)' }}
             >
               <span>TOTAL HEADCOUNT</span>
               {activeKpiFilter === 'all' && (
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 inline-block" title="Active Filter" />
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 inline-block shrink-0" title="Active Filter" />
               )}
             </div>
             <div
-              className="text-3xl font-extrabold leading-tight my-0.5"
+              className="text-2xl sm:text-3xl font-extrabold leading-tight my-0.5"
               style={{ color: 'var(--color-text-1)' }}
             >
               {totalHeadcount}
             </div>
             <div
-              className="text-xs"
+              className="text-xs truncate"
               style={{ color: 'var(--color-text-3)' }}
             >
               Actual company employees
@@ -459,7 +472,7 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
           role="button"
           tabIndex={0}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveKpiFilter(prev => prev === 'multi' ? 'all' : 'multi'); } }}
-          className={`jira-card p-5 rounded-2xl flex items-center gap-4 border shadow-sm cursor-pointer select-none transition-all ${
+          className={`jira-card p-4 sm:p-4.5 rounded-2xl flex items-center gap-3.5 border shadow-sm cursor-pointer select-none transition-all ${
             activeKpiFilter === 'multi'
               ? 'border-amber-500 dark:border-amber-400 ring-2 ring-amber-500/25 bg-amber-50/15 dark:bg-amber-950/20'
               : 'border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700/80 hover:shadow-md'
@@ -468,7 +481,7 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
           title={activeKpiFilter === 'multi' ? "Active filter. Click to reset to all employees." : "Click to filter employees working on >1 project"}
         >
           <div
-            className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border"
+            className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center shrink-0 border"
             style={{
               background: 'rgba(238, 178, 13, 0.12)',
               borderColor: 'rgba(238, 178, 13, 0.3)',
@@ -477,24 +490,24 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
           >
             <Layers className="w-5 h-5" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div
-              className="text-[11px] font-bold font-mono tracking-wider uppercase flex items-center gap-2"
+              className="text-[11px] font-bold font-mono tracking-wider uppercase flex items-center gap-1.5 truncate"
               style={{ color: 'var(--color-text-3)' }}
             >
               <span>MULTI-PROJECT STAFF</span>
               {activeKpiFilter === 'multi' && (
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" title="Active Filter" />
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block shrink-0" title="Active Filter" />
               )}
             </div>
             <div
-              className="text-3xl font-extrabold leading-tight my-0.5"
+              className="text-2xl sm:text-3xl font-extrabold leading-tight my-0.5"
               style={{ color: '#eeb20d' }}
             >
               {multiProjectStaff}
             </div>
             <div
-              className="text-xs"
+              className="text-xs truncate"
               style={{ color: 'var(--color-text-3)' }}
             >
               Working on &gt;1 project
@@ -508,7 +521,7 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
           role="button"
           tabIndex={0}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveKpiFilter(prev => prev === 'bench' ? 'all' : 'bench'); } }}
-          className={`jira-card p-5 rounded-2xl flex items-center gap-4 border shadow-sm cursor-pointer select-none transition-all ${
+          className={`jira-card p-4 sm:p-4.5 rounded-2xl flex items-center gap-3.5 border shadow-sm cursor-pointer select-none transition-all ${
             activeKpiFilter === 'bench'
               ? 'border-blue-500 dark:border-blue-400 ring-2 ring-blue-500/25 bg-blue-50/15 dark:bg-blue-950/20'
               : 'border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700/80 hover:shadow-md'
@@ -517,7 +530,7 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
           title={activeKpiFilter === 'bench' ? "Active filter. Click to reset to all employees." : "Click to filter available / bench employees (0 projects)"}
         >
           <div
-            className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border"
+            className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center shrink-0 border"
             style={{
               background: 'rgba(148, 163, 184, 0.12)',
               borderColor: 'rgba(148, 163, 184, 0.25)',
@@ -526,27 +539,123 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
           >
             <AlertCircle className="w-5 h-5" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div
-              className="text-[11px] font-bold font-mono tracking-wider uppercase flex items-center gap-2"
+              className="text-[11px] font-bold font-mono tracking-wider uppercase flex items-center gap-1.5 truncate"
               style={{ color: 'var(--color-text-3)' }}
             >
               <span>AVAILABLE / BENCH</span>
               {activeKpiFilter === 'bench' && (
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" title="Active Filter" />
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block shrink-0" title="Active Filter" />
               )}
             </div>
             <div
-              className="text-3xl font-extrabold leading-tight my-0.5"
+              className="text-2xl sm:text-3xl font-extrabold leading-tight my-0.5"
               style={{ color: 'var(--color-text-2)' }}
             >
               {availableMembers}
             </div>
             <div
-              className="text-xs"
+              className="text-xs truncate"
               style={{ color: 'var(--color-text-3)' }}
             >
               0 assigned projects
+            </div>
+          </div>
+        </div>
+
+        {/* KPI 4: Full Time Contributor */}
+        <div
+          onClick={() => setActiveKpiFilter(prev => prev === 'fulltime' ? 'all' : 'fulltime')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveKpiFilter(prev => prev === 'fulltime' ? 'all' : 'fulltime'); } }}
+          className={`jira-card p-4 sm:p-4.5 rounded-2xl flex items-center gap-3.5 border shadow-sm cursor-pointer select-none transition-all ${
+            activeKpiFilter === 'fulltime'
+              ? 'border-blue-500 dark:border-blue-400 ring-2 ring-blue-500/25 bg-blue-50/15 dark:bg-blue-950/20'
+              : 'border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700/80 hover:shadow-md'
+          }`}
+          style={{ background: 'var(--color-surface-solid)' }}
+          title={activeKpiFilter === 'fulltime' ? "Active filter. Click to reset to all employees." : "Click to filter full time contributors"}
+        >
+          <div
+            className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center shrink-0 border"
+            style={{
+              background: 'rgba(59, 130, 246, 0.12)',
+              borderColor: 'rgba(59, 130, 246, 0.3)',
+              color: '#3b82f6',
+            }}
+          >
+            <Briefcase className="w-5 h-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div
+              className="text-[11px] font-bold font-mono tracking-wider uppercase flex items-center gap-1.5 truncate"
+              style={{ color: 'var(--color-text-3)' }}
+            >
+              <span>FULL TIME CONTRIBUTOR</span>
+              {activeKpiFilter === 'fulltime' && (
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block shrink-0" title="Active Filter" />
+              )}
+            </div>
+            <div
+              className="text-2xl sm:text-3xl font-extrabold leading-tight my-0.5 text-blue-600 dark:text-blue-400"
+            >
+              {fullTimeContributors}
+            </div>
+            <div
+              className="text-xs truncate"
+              style={{ color: 'var(--color-text-3)' }}
+            >
+              Full time workforce
+            </div>
+          </div>
+        </div>
+
+        {/* KPI 5: Intern */}
+        <div
+          onClick={() => setActiveKpiFilter(prev => prev === 'intern' ? 'all' : 'intern')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveKpiFilter(prev => prev === 'intern' ? 'all' : 'intern'); } }}
+          className={`jira-card p-4 sm:p-4.5 rounded-2xl flex items-center gap-3.5 border shadow-sm cursor-pointer select-none transition-all ${
+            activeKpiFilter === 'intern'
+              ? 'border-purple-500 dark:border-purple-400 ring-2 ring-purple-500/25 bg-purple-50/15 dark:bg-purple-950/20'
+              : 'border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700/80 hover:shadow-md'
+          }`}
+          style={{ background: 'var(--color-surface-solid)' }}
+          title={activeKpiFilter === 'intern' ? "Active filter. Click to reset to all employees." : "Click to filter intern contributors"}
+        >
+          <div
+            className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center shrink-0 border"
+            style={{
+              background: 'rgba(168, 85, 247, 0.12)',
+              borderColor: 'rgba(168, 85, 247, 0.3)',
+              color: '#a855f7',
+            }}
+          >
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div
+              className="text-[11px] font-bold font-mono tracking-wider uppercase flex items-center gap-1.5 truncate"
+              style={{ color: 'var(--color-text-3)' }}
+            >
+              <span>INTERN</span>
+              {activeKpiFilter === 'intern' && (
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-500 inline-block shrink-0" title="Active Filter" />
+              )}
+            </div>
+            <div
+              className="text-2xl sm:text-3xl font-extrabold leading-tight my-0.5 text-purple-600 dark:text-purple-400"
+            >
+              {internContributors}
+            </div>
+            <div
+              className="text-xs truncate"
+              style={{ color: 'var(--color-text-3)' }}
+            >
+              Intern contributors
             </div>
           </div>
         </div>
@@ -578,13 +687,23 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
           <Users className="w-8 h-8 mx-auto text-slate-400 dark:text-slate-600 mb-2" />
           <p className="text-sm font-semibold" style={{ color: 'var(--color-text-1)' }}>
             {search.trim() && activeKpiFilter !== 'all'
-              ? `No employees match "${search}" in the active ${activeKpiFilter === 'multi' ? 'Multi-Project Staff' : 'Available / Bench'} filter.`
+              ? `No employees match "${search}" in the active ${
+                  activeKpiFilter === 'multi' ? 'Multi-Project Staff' :
+                  activeKpiFilter === 'bench' ? 'Available / Bench' :
+                  activeKpiFilter === 'fulltime' ? 'Full Time Contributor' :
+                  activeKpiFilter === 'intern' ? 'Intern' :
+                  'selected'
+                } filter.`
               : search.trim()
               ? `No employees match "${search}".`
               : activeKpiFilter === 'bench'
               ? 'No available / bench employees found (all employees are currently assigned to active projects).'
               : activeKpiFilter === 'multi'
               ? 'No multi-project staff found (no employees are assigned to >1 project).'
+              : activeKpiFilter === 'fulltime'
+              ? 'No full time contributors found in the directory.'
+              : activeKpiFilter === 'intern'
+              ? 'No interns found in the directory.'
               : 'No employees found.'}
           </p>
           {activeKpiFilter !== 'all' && (
@@ -613,7 +732,18 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
                       <h3 className="font-bold text-sm" style={{ color: 'var(--color-text-1)' }}>
                         {emp.full_name}
                       </h3>
-                      <p className="text-xs font-medium text-blue-600 mt-0.5">{emp.role_title}</p>
+                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                        <p className="text-xs font-medium text-blue-600">{emp.role_title}</p>
+                        {emp.employment_type && (
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                            emp.employment_type.toLowerCase().includes('intern')
+                              ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+                              : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                          }`}>
+                            {emp.employment_type}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -809,6 +939,40 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
                   placeholder="e.g. Fullstack Engineer, QA Lead, UI Designer"
                   className="jira-input"
                 />
+              </div>
+
+              {/* Contributor Role Type Option / Toggle Switch (Full Time Contributor / Intern) */}
+              <div>
+                <label className="block font-bold mb-1.5 uppercase tracking-wider text-[11px]" style={{ color: 'var(--color-text-2)' }}>
+                  Role Type / Category *
+                </label>
+
+                <div className="grid grid-cols-2 gap-2 p-1 rounded-lg border border-slate-700/50 bg-slate-900/40">
+                  <button
+                    type="button"
+                    onClick={() => setEmploymentType('Full Time Contributor')}
+                    className={`py-2 px-3 rounded-md text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      employmentType === 'Full Time Contributor'
+                        ? 'bg-blue-600 text-white shadow-sm border border-blue-500'
+                        : 'bg-transparent text-slate-400 border border-transparent hover:bg-slate-800'
+                    }`}
+                  >
+                    <Briefcase className="w-3.5 h-3.5" />
+                    <span>Full Time Contributor</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEmploymentType('Intern')}
+                    className={`py-2 px-3 rounded-md text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      employmentType === 'Intern'
+                        ? 'bg-purple-600 text-white shadow-sm border border-purple-500'
+                        : 'bg-transparent text-slate-400 border border-transparent hover:bg-slate-800'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Intern</span>
+                  </button>
+                </div>
               </div>
 
               <div>

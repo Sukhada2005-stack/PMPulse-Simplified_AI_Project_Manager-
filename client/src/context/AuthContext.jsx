@@ -1,18 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('pulsepm_token') || null);
-  const [user, setUser] = useState(() => {
-    try {
-      const stored = localStorage.getItem('pulsepm_user');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [user, setUser] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -27,12 +20,10 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Initialize session or validate existing session
+  // Initialize session or validate existing session on app boot
   useEffect(() => {
     const initAuth = async () => {
-      await fetchAllUsers();
       const savedToken = localStorage.getItem('pulsepm_token');
-      const savedUser = localStorage.getItem('pulsepm_user');
 
       if (savedToken) {
         try {
@@ -42,63 +33,84 @@ export function AuthProvider({ children }) {
             setToken(savedToken);
             setSessionExpired(false);
             localStorage.setItem('pulsepm_user', JSON.stringify(res.user));
+          } else {
+            throw new Error('User not found');
           }
         } catch (err) {
-          console.warn('Session expired or inactive on refresh:', err);
+          console.warn('Initial session validation failed (fresh request or server restart):', err);
+          // When a server is freshly hosted or a fresh request is made with an invalid/expired token,
+          // cleanly clear session and direct user to login home page without session expired modal.
           localStorage.removeItem('pulsepm_token');
+          localStorage.removeItem('pulsepm_user');
           setToken(null);
-          setSessionExpired(true);
-          if (savedUser) {
-            try {
-              setUser(JSON.parse(savedUser));
-            } catch {}
-          }
-          window.dispatchEvent(new CustomEvent('session_expired'));
+          setUser(null);
+          setSessionExpired(false);
         }
-      } else if (savedUser) {
-        // User was previously logged in, but token has expired/cleared
+      } else {
+        // No saved token (fresh request / unauthenticated)
+        localStorage.removeItem('pulsepm_token');
+        localStorage.removeItem('pulsepm_user');
         setToken(null);
-        setSessionExpired(true);
-        window.dispatchEvent(new CustomEvent('session_expired'));
+        setUser(null);
+        setSessionExpired(false);
       }
 
+      await fetchAllUsers();
       setLoading(false);
     };
     initAuth();
   }, []);
 
   // Inactivity Timer (1 hour = 3600000 ms)
+  // Only triggers when the application is actively open and an established session exists,
+  // but the user is not interacting with it.
+  const lastActivityRef = useRef(Date.now());
+
   useEffect(() => {
     let timeoutId;
 
+    const expireSession = () => {
+      console.warn('Session expired due to inactivity while application was open');
+      localStorage.removeItem('pulsepm_token');
+      setToken(null);
+      setSessionExpired(true);
+      window.dispatchEvent(new CustomEvent('session_expired'));
+    };
+
     const resetTimer = () => {
+      lastActivityRef.current = Date.now();
       clearTimeout(timeoutId);
-      // Only set timer if user is logged in
-      if (token) {
-        timeoutId = setTimeout(() => {
-          console.warn('Session expired due to inactivity');
-          localStorage.removeItem('pulsepm_token');
-          setToken(null);
-          setSessionExpired(true);
-          window.dispatchEvent(new CustomEvent('session_expired'));
-        }, 3600000);
+      if (token && user && !loading) {
+        timeoutId = setTimeout(expireSession, 3600000);
       }
     };
 
-    // Listen to user activity
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && token && user && !loading) {
+        const inactiveDuration = Date.now() - lastActivityRef.current;
+        if (inactiveDuration >= 3600000) {
+          expireSession();
+        } else {
+          resetTimer();
+        }
+      }
+    };
+
     const events = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll'];
     const handleActivity = () => resetTimer();
 
-    if (token) {
+    if (token && user && !loading) {
       events.forEach(event => window.addEventListener(event, handleActivity));
-      resetTimer(); // Initialize timer
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      resetTimer(); // Initialize timer for the established active session
     }
 
     return () => {
       clearTimeout(timeoutId);
       events.forEach(event => window.removeEventListener(event, handleActivity));
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [token]);
+  }, [token, user, loading]);
 
   const loginAsDefaultPM = async () => {
     try {
