@@ -1212,10 +1212,26 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
             );
             return found ? { ...item, id: found.id, serverId: found.id, priority: item.priority || found.priority || 'Medium', type: item.type || found.type || 'Task' } : item;
           });
-          setListTasks(prev => matchRealId(prev));
-          setBoardTasks(prev => matchRealId(prev));
-          setBoardBacklogTasks(prev => matchRealId(prev));
-          setSprintBacklogTasks(prev => matchRealId(prev));
+          setListTasks(prev => {
+            const next = matchRealId(prev);
+            try { window.localStorage.setItem(`pmpulse_listTasks_${targetWsId}`, JSON.stringify(next)); } catch (e) {}
+            return next;
+          });
+          setBoardTasks(prev => {
+            const next = matchRealId(prev);
+            try { window.localStorage.setItem(`pmpulse_boardTasks_${targetWsId}`, JSON.stringify(next)); } catch (e) {}
+            return next;
+          });
+          setBoardBacklogTasks(prev => {
+            const next = matchRealId(prev);
+            try { window.localStorage.setItem(`pmpulse_boardBacklogTasks_${targetWsId}`, JSON.stringify(next)); } catch (e) {}
+            return next;
+          });
+          setSprintBacklogTasks(prev => {
+            const next = matchRealId(prev);
+            try { window.localStorage.setItem(`pmpulse_sprintBacklogTasks_${targetWsId}`, JSON.stringify(next)); } catch (e) {}
+            return next;
+          });
 
           // 2. Option A: Identify local tasks not yet persisted in SQLite and silently batch-sync them
           const unsyncedTasks = activeTasks.filter(at => {
@@ -1247,16 +1263,34 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
                     const mappedId = idMap.get(String(item.id));
                     return mappedId ? { ...item, id: mappedId, serverId: mappedId, syncStatus: 'synced' } : item;
                   });
-                  setListTasks(prev => updateIds(prev));
-                  setBoardTasks(prev => updateIds(prev));
-                  setBoardBacklogTasks(prev => updateIds(prev));
-                  setSprintBacklogTasks(prev => updateIds(prev));
+                  setListTasks(prev => {
+                    const next = updateIds(prev);
+                    try { window.localStorage.setItem(`pmpulse_listTasks_${targetWsId}`, JSON.stringify(next)); } catch (e) {}
+                    return next;
+                  });
+                  setBoardTasks(prev => {
+                    const next = updateIds(prev);
+                    try { window.localStorage.setItem(`pmpulse_boardTasks_${targetWsId}`, JSON.stringify(next)); } catch (e) {}
+                    return next;
+                  });
+                  setBoardBacklogTasks(prev => {
+                    const next = updateIds(prev);
+                    try { window.localStorage.setItem(`pmpulse_boardBacklogTasks_${targetWsId}`, JSON.stringify(next)); } catch (e) {}
+                    return next;
+                  });
+                  setSprintBacklogTasks(prev => {
+                    const next = updateIds(prev);
+                    try { window.localStorage.setItem(`pmpulse_sprintBacklogTasks_${targetWsId}`, JSON.stringify(next)); } catch (e) {}
+                    return next;
+                  });
 
                   fetch(`/api/workspaces/${targetWsId}/tasks`, { headers: { 'Authorization': `Bearer ${token}` } })
                     .then(r => r.json())
                     .then(freshData => {
                       if (freshData && Array.isArray(freshData.tasks)) {
                         setWorkspaceTasks(freshData.tasks);
+                        try { window.localStorage.setItem(`pmpulse_workspaceTasks_${targetWsId}`, JSON.stringify(freshData.tasks)); } catch (e) {}
+                        window.dispatchEvent(new Event('pmpulse_workspaceTasks_updated'));
                       }
                     })
                     .catch(() => {});
@@ -1618,19 +1652,24 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       year: 'numeric'
     });
     
-    const newTask = {
+    let newTask = {
       'Issue / Task / Enhancement': newTaskName,
+      'title': newTaskName,
       'Added ': todayDate,
       'Status': 'In Progress',
+      'status': 'In Progress',
       'Priority': 'Medium',
+      'priority': 'Medium',
       'Responsible': user?.full_name || 'Unassigned',
+      'assignee': user?.full_name || 'Unassigned',
       'Completed': '—'
     };
 
-    if (selectedWorkspace) {
+    const wsId = selectedWorkspace?.id;
+    if (wsId) {
       try {
         const token = localStorage.getItem('pulsepm_token');
-        const res = await fetch(`/api/workspaces/${selectedWorkspace.id}/tasks`, {
+        const res = await fetch(`/api/workspaces/${wsId}/tasks`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1641,6 +1680,8 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
         const data = await res.json();
         if (data.task) {
           newTask.id = data.task.id;
+          newTask.key = data.task.task_key || data.task.key;
+          newTask.task_key = data.task.task_key || data.task.key;
         }
       } catch (err) {
         console.error('Failed to persist task to database:', err);
@@ -1651,8 +1692,16 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     setWorkspaceTasks(prev => {
       // Ensure we don't duplicate if a cross-tab sync already caught it
       if (prev.some(t => t.id === newTask.id)) return prev;
-      return [...prev, newTask]; 
+      const next = [...prev, newTask];
+      try {
+        if (wsId) {
+          window.localStorage.setItem(`pmpulse_workspaceTasks_${wsId}`, JSON.stringify(next));
+        }
+      } catch (e) {}
+      return next; 
     });
+    window.dispatchEvent(new Event('pmpulse_workspaceTasks_updated'));
+
     setNewTaskName('');
     setIsAddTaskModalOpen(false);
   };
@@ -1661,10 +1710,10 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     e.preventDefault();
     const newKey = `VVM-${workspaceTasks.length + 1}`;
     const newId = Date.now();
-    const sprintTask = { ...listTaskForm, id: newId, key: newKey, task_key: newKey };
+    let sprintTask = { ...listTaskForm, id: newId, key: newKey, task_key: newKey };
     
     const todayDate = new Date().toLocaleDateString('en-GB');
-    const backlogTask = {
+    let backlogTask = {
         'Issue / Task / Enhancement': listTaskForm.description,
         'title': listTaskForm.description,
         'Status': listTaskForm.status,
@@ -1691,54 +1740,59 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       sprintTask.assignee_id = matchedMember.id;
     }
 
-    // 1. Instant, synchronous local state updates (zero delay for snappy UI)
+    const wsId = selectedWorkspace?.id;
+
+    // Persist directly to backend database
+    if (wsId) {
+      try {
+        const data = await api.projects.createWorkspaceTask(wsId, backlogTask);
+        if (data && data.task && data.task.id) {
+          const realId = data.task.id;
+          const realKey = data.task.task_key || data.task.key || newKey;
+          sprintTask = { ...sprintTask, id: realId, serverId: realId, key: realKey, task_key: realKey, syncStatus: 'synced' };
+          backlogTask = { ...backlogTask, id: realId, serverId: realId, key: realKey, task_key: realKey, syncStatus: 'synced' };
+        }
+      } catch (error) {
+        console.error('Failed to persist task to database:', error);
+        sprintTask.syncStatus = 'failed';
+        backlogTask.syncStatus = 'failed';
+      }
+    }
+
+    // Synchronous state & localStorage updates with the finalized task (using real database ID)
     if (pullOrigin === 'boardBacklog' || pullOrigin === 'backlog') {
       setBoardBacklogTasks(prev => {
         const next = [...prev, sprintTask];
-        try { if (selectedWorkspace?.id) window.localStorage.setItem(`pmpulse_boardBacklogTasks_${selectedWorkspace.id}`, JSON.stringify(next)); } catch (e) {}
+        try { if (wsId) window.localStorage.setItem(`pmpulse_boardBacklogTasks_${wsId}`, JSON.stringify(next)); } catch (e) {}
         return next;
       });
+      window.dispatchEvent(new Event('pmpulse_boardBacklogTasks_updated'));
     } else if (activeView === 'board' || pullOrigin === 'board') { 
       const boardItem = { ...sprintTask, status: targetBoardColumn || sprintTask.status || 'To Do' };
       setBoardTasks(prev => {
         const next = [...prev, boardItem];
-        try { if (selectedWorkspace?.id) window.localStorage.setItem(`pmpulse_boardTasks_${selectedWorkspace.id}`, JSON.stringify(next)); } catch (e) {}
+        try { if (wsId) window.localStorage.setItem(`pmpulse_boardTasks_${wsId}`, JSON.stringify(next)); } catch (e) {}
         return next;
       }); 
+      window.dispatchEvent(new Event('pmpulse_boardTasks_updated'));
     } else { 
       setListTasks(prev => {
         const next = [...prev, sprintTask];
-        try { if (selectedWorkspace?.id) window.localStorage.setItem(`pmpulse_listTasks_${selectedWorkspace.id}`, JSON.stringify(next)); } catch (e) {}
+        try { if (wsId) window.localStorage.setItem(`pmpulse_listTasks_${wsId}`, JSON.stringify(next)); } catch (e) {}
         return next;
       }); 
+      window.dispatchEvent(new Event('pmpulse_listTasks_updated'));
     }
-    setWorkspaceTasks(prev => [backlogTask, ...prev]);
+
+    setWorkspaceTasks(prev => {
+      const next = [backlogTask, ...prev];
+      try { if (wsId) window.localStorage.setItem(`pmpulse_workspaceTasks_${wsId}`, JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
+    window.dispatchEvent(new Event('pmpulse_workspaceTasks_updated'));
 
     setListTaskForm({ type: 'Task', description: '', status: 'To Do', assignee: '', dueDate: '', priority: 'Medium' }); 
     setIsCreateListTaskOpen(false);
-
-    // 2. Fire-and-forget sync to SQLite backend
-    if (selectedWorkspace?.id) {
-      api.projects.createWorkspaceTask(selectedWorkspace.id, backlogTask)
-        .then(data => {
-          if (data && data.task && data.task.id) {
-            const realId = data.task.id;
-            const updateTaskWithId = (t) => (t.id === newId || (t.key && t.key === newKey)) ? { ...t, id: realId, serverId: realId, syncStatus: 'synced' } : t;
-            setListTasks(prev => prev.map(updateTaskWithId));
-            setBoardTasks(prev => prev.map(updateTaskWithId));
-            setBoardBacklogTasks(prev => prev.map(updateTaskWithId));
-            setWorkspaceTasks(prev => prev.map(updateTaskWithId));
-          }
-        })
-        .catch(error => {
-          console.error('Failed to persist task to database:', error);
-          const updateTaskFail = (t) => (t.id === newId || (t.key && t.key === newKey)) ? { ...t, syncStatus: 'failed' } : t;
-          setListTasks(prev => prev.map(updateTaskFail));
-          setBoardTasks(prev => prev.map(updateTaskFail));
-          setBoardBacklogTasks(prev => prev.map(updateTaskFail));
-          setWorkspaceTasks(prev => prev.map(updateTaskFail));
-        });
-    }
   };
 
   const handleDragStart = (e, id, sourceDroppableId = 'active') => {
@@ -1981,8 +2035,20 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
 
     const dbMerged = rawTasks.map(mergeTask);
     const dbIds = new Set(rawTasks.map(t => String(t.id)));
+    const dbKeys = new Set(rawTasks.map(t => (t.key || t.task_key || '').trim().toLowerCase()).filter(Boolean));
+    const normalizeTaskTitle = (str) => !str ? '' : String(str).trim().replace(/[\u2010-\u2015]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/\s+/g, ' ').toLowerCase();
+    const dbTitles = new Set(rawTasks.map(t => normalizeTaskTitle(t.title || t['Issue / Task / Enhancement'] || t.task || t.description || '')).filter(Boolean));
+
     const localOnlyTasks = allLocalTasks
-      .filter(t => t.id != null && !dbIds.has(String(t.id)))
+      .filter(t => {
+        if (!t || t.id == null) return false;
+        if (dbIds.has(String(t.id))) return false;
+        const tKey = (t.key || t.task_key || '').trim().toLowerCase();
+        if (tKey && dbKeys.has(tKey)) return false;
+        const tTitle = normalizeTaskTitle(t.title || t['Issue / Task / Enhancement'] || t.task || t.description || '');
+        if (tTitle && dbTitles.has(tTitle)) return false;
+        return true;
+      })
       .map(mergeTask);
 
     const fullTasks = dedupeById([...dbMerged, ...localOnlyTasks]);
@@ -2168,7 +2234,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     return ['Unassigned', pmLabel, ...uniqueTeam];
   }, [user, currentUser, workspaceMembers]);
 
-  const handleSaveDraftTask = () => {
+  const handleSaveDraftTask = async () => {
     if (!draftTask.title.trim()) {
       setDraftTask({ columnId: null, boardType: null, title: '', assignee: 'Unassigned', dueDate: '' });
       return;
@@ -2177,7 +2243,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     const newKey = `VVM-${workspaceTasks.length + 1}`;
     const newId = Date.now();
 
-    const newTask = {
+    let newTask = {
       id: newId,
       key: newKey,
       task_key: newKey,
@@ -2193,7 +2259,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
     };
 
     const todayDate = new Date().toLocaleDateString('en-GB');
-    const newOverallEntry = {
+    let newOverallEntry = {
       'Issue / Task / Enhancement': draftTask.title,
       'title': draftTask.title,
       'Status': draftTask.columnId || 'To Do',
@@ -2220,53 +2286,59 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
       newTask.assignee_id = matchedMember.id;
     }
 
-    // 1. Instant optimistic state update (snappy UI with zero latency)
-    if (draftTask.boardType === 'active') {
-      setBoardTasks(prev => {
-        const next = [...prev, newTask];
-        try { if (selectedWorkspace?.id) window.localStorage.setItem(`pmpulse_boardTasks_${selectedWorkspace.id}`, JSON.stringify(next)); } catch (e) {}
-        return next;
-      });
-    } else {
-      setBoardBacklogTasks(prev => {
-        const next = [...prev, newTask];
-        try { if (selectedWorkspace?.id) window.localStorage.setItem(`pmpulse_boardBacklogTasks_${selectedWorkspace.id}`, JSON.stringify(next)); } catch (e) {}
-        return next;
-      });
-    }
-    setWorkspaceTasks(prev => [newOverallEntry, ...prev]);
+    const wsId = selectedWorkspace?.id;
 
     // Reset Draft immediately
     setDraftTask({ columnId: null, boardType: null, title: '', assignee: 'Unassigned', dueDate: '' });
 
-    // 2. Fire-and-forget sync to SQLite database
-    if (selectedWorkspace?.id) {
-      api.projects.createWorkspaceTask(selectedWorkspace.id, newOverallEntry)
-        .then(data => {
-          if (data && data.task && data.task.id) {
-            const realId = data.task.id;
-            const updateTaskWithId = (t) => (t.id === newId || (t.key && t.key === newKey)) ? { ...t, id: realId, serverId: realId, syncStatus: 'synced' } : t;
-            setBoardTasks(prev => prev.map(updateTaskWithId));
-            setBoardBacklogTasks(prev => prev.map(updateTaskWithId));
-            setWorkspaceTasks(prev => prev.map(updateTaskWithId));
-          }
-        })
-        .catch(error => {
-          console.error('Failed to persist board task to database:', error);
-          const updateTaskFail = (t) => (t.id === newId || (t.key && t.key === newKey)) ? { ...t, syncStatus: 'failed' } : t;
-          setBoardTasks(prev => prev.map(updateTaskFail));
-          setBoardBacklogTasks(prev => prev.map(updateTaskFail));
-          setWorkspaceTasks(prev => prev.map(updateTaskFail));
-        });
+    // Persist directly to backend database
+    if (wsId) {
+      try {
+        const data = await api.projects.createWorkspaceTask(wsId, newOverallEntry);
+        if (data && data.task && data.task.id) {
+          const realId = data.task.id;
+          const realKey = data.task.task_key || data.task.key || newKey;
+          newTask = { ...newTask, id: realId, serverId: realId, key: realKey, task_key: realKey, syncStatus: 'synced' };
+          newOverallEntry = { ...newOverallEntry, id: realId, serverId: realId, key: realKey, task_key: realKey, syncStatus: 'synced' };
+        }
+      } catch (error) {
+        console.error('Failed to persist board task to database:', error);
+        newTask.syncStatus = 'failed';
+        newOverallEntry.syncStatus = 'failed';
+      }
     }
+
+    if (draftTask.boardType === 'active') {
+      setBoardTasks(prev => {
+        const next = [...prev, newTask];
+        try { if (wsId) window.localStorage.setItem(`pmpulse_boardTasks_${wsId}`, JSON.stringify(next)); } catch (e) {}
+        return next;
+      });
+      window.dispatchEvent(new Event('pmpulse_boardTasks_updated'));
+    } else {
+      setBoardBacklogTasks(prev => {
+        const next = [...prev, newTask];
+        try { if (wsId) window.localStorage.setItem(`pmpulse_boardBacklogTasks_${wsId}`, JSON.stringify(next)); } catch (e) {}
+        return next;
+      });
+      window.dispatchEvent(new Event('pmpulse_boardBacklogTasks_updated'));
+    }
+
+    setWorkspaceTasks(prev => {
+      const next = [newOverallEntry, ...prev];
+      try { if (wsId) window.localStorage.setItem(`pmpulse_workspaceTasks_${wsId}`, JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
+    window.dispatchEvent(new Event('pmpulse_workspaceTasks_updated'));
   };
 
   const handleRetryTaskSync = (e, task) => {
     e?.stopPropagation();
     if (!selectedWorkspace?.id || !task) return;
+    const wsId = selectedWorkspace.id;
     const targetId = task.serverId || task.id;
     if (typeof targetId === 'number' && targetId < 1000000000) {
-      api.projects.updateWorkspaceTask(selectedWorkspace.id, targetId, {
+      api.projects.updateWorkspaceTask(wsId, targetId, {
         status: task.status,
         title: task.taskName || task.description || task.title || task.task,
         dueDate: task.dueDate,
@@ -2277,10 +2349,27 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
         assignee_id: task.assignee_id
       }).then(res => {
         const updateSync = t => (t.id === task.id || (t.key && t.key === task.key)) ? { ...t, syncStatus: 'synced' } : t;
-        setListTasks(prev => prev.map(updateSync));
-        setBoardTasks(prev => prev.map(updateSync));
-        setBoardBacklogTasks(prev => prev.map(updateSync));
-        setWorkspaceTasks(prev => prev.map(updateSync));
+        setListTasks(prev => {
+          const next = prev.map(updateSync);
+          try { window.localStorage.setItem(`pmpulse_listTasks_${wsId}`, JSON.stringify(next)); } catch (e) {}
+          return next;
+        });
+        setBoardTasks(prev => {
+          const next = prev.map(updateSync);
+          try { window.localStorage.setItem(`pmpulse_boardTasks_${wsId}`, JSON.stringify(next)); } catch (e) {}
+          return next;
+        });
+        setBoardBacklogTasks(prev => {
+          const next = prev.map(updateSync);
+          try { window.localStorage.setItem(`pmpulse_boardBacklogTasks_${wsId}`, JSON.stringify(next)); } catch (e) {}
+          return next;
+        });
+        setWorkspaceTasks(prev => {
+          const next = prev.map(updateSync);
+          try { window.localStorage.setItem(`pmpulse_workspaceTasks_${wsId}`, JSON.stringify(next)); } catch (e) {}
+          return next;
+        });
+        window.dispatchEvent(new Event('pmpulse_workspaceTasks_updated'));
       }).catch(err => console.error("Retry sync failed:", err));
     } else {
       const payload = {
@@ -2293,15 +2382,33 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
         type: task.type || 'Task',
         key: task.key || task.task_key
       };
-      api.projects.createWorkspaceTask(selectedWorkspace.id, payload)
+      api.projects.createWorkspaceTask(wsId, payload)
         .then(res => {
           if (res?.task?.id) {
             const realId = res.task.id;
-            const updateSync = t => (t.id === task.id || (t.key && t.key === task.key)) ? { ...t, id: realId, serverId: realId, syncStatus: 'synced' } : t;
-            setListTasks(prev => prev.map(updateSync));
-            setBoardTasks(prev => prev.map(updateSync));
-            setBoardBacklogTasks(prev => prev.map(updateSync));
-            setWorkspaceTasks(prev => prev.map(updateSync));
+            const realKey = res.task.task_key || res.task.key || task.key;
+            const updateSync = t => (t.id === task.id || (t.key && t.key === task.key)) ? { ...t, id: realId, serverId: realId, key: realKey, task_key: realKey, syncStatus: 'synced' } : t;
+            setListTasks(prev => {
+              const next = prev.map(updateSync);
+              try { window.localStorage.setItem(`pmpulse_listTasks_${wsId}`, JSON.stringify(next)); } catch (e) {}
+              return next;
+            });
+            setBoardTasks(prev => {
+              const next = prev.map(updateSync);
+              try { window.localStorage.setItem(`pmpulse_boardTasks_${wsId}`, JSON.stringify(next)); } catch (e) {}
+              return next;
+            });
+            setBoardBacklogTasks(prev => {
+              const next = prev.map(updateSync);
+              try { window.localStorage.setItem(`pmpulse_boardBacklogTasks_${wsId}`, JSON.stringify(next)); } catch (e) {}
+              return next;
+            });
+            setWorkspaceTasks(prev => {
+              const next = prev.map(updateSync);
+              try { window.localStorage.setItem(`pmpulse_workspaceTasks_${wsId}`, JSON.stringify(next)); } catch (e) {}
+              return next;
+            });
+            window.dispatchEvent(new Event('pmpulse_workspaceTasks_updated'));
           }
         }).catch(err => console.error("Retry sync failed:", err));
     }

@@ -4,6 +4,7 @@ server/data.db
 server/data.db-shm
 server/data.db-wal
 server/*.sqlite
+server/data.db.backup*
 scratch/
 .DS_Store
 dist/

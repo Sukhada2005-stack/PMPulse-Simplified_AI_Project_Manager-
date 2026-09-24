@@ -474,3 +474,56 @@ export const getFleetMatrix = (req, res) => {
         res.status(500).json({ error: err.message });
     }
 };
+
+// Retrieve active / unresolved blockers for PM (Last 24-48h or active impediments)
+export const getActiveBlockers = (req, res) => {
+    try {
+        const pmId = req.user.id;
+        let query = `
+            SELECT dl.*, 
+                   u.full_name as employee_name, 
+                   u.avatar_url, 
+                   u.role_title,
+                   t.title as task_title, 
+                   t.status as task_status, 
+                   p.title as project_title, 
+                   p.id as project_id
+            FROM daily_logs dl
+            JOIN tasks t ON dl.task_id = t.id
+            JOIN projects p ON t.project_id = p.id
+            JOIN users u ON dl.user_id = u.id
+            WHERE dl.has_worked = 0
+        `;
+        const params = [];
+        if (req.user.user_type !== 'superuser') {
+            query += ` AND (p.manager_id = ? OR dl.manager_id = ? OR u.manager_id = ?)`;
+            params.push(pmId, pmId, pmId);
+        }
+        query += ` ORDER BY dl.created_at DESC, dl.log_date DESC`;
+
+        const allBlockers = db.prepare(query).all(...params);
+
+        const isDone = (status) => ['done', 'completed', 'archived', 'closed', 'remove'].includes(String(status || '').trim().toLowerCase());
+
+        const unresolved = allBlockers.filter(b => {
+            if (isDone(b.task_status)) return false;
+
+            // Check if there is any subsequent log for this task_id and user_id where has_worked = 1
+            const newerLog = db.prepare(`
+                SELECT 1 FROM daily_logs 
+                WHERE task_id = ? AND user_id = ? AND has_worked = 1 AND (log_date > ? OR (log_date = ? AND created_at > ?))
+            `).get(b.task_id, b.user_id, b.log_date, b.log_date, b.created_at);
+
+            return !newerLog;
+        });
+
+        res.json({
+            count: unresolved.length,
+            blockers: unresolved
+        });
+    } catch (err) {
+        console.error('getActiveBlockers error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+

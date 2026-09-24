@@ -637,6 +637,7 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
         } catch (e) {}
         return updated;
       });
+      window.dispatchEvent(new Event('pmpulse_boardBacklogTasks_updated'));
     } else if (activeView === 'board' || pullOrigin === 'board') { 
       const boardItem = { ...sprintTask, status: targetBoardColumn || sprintTask.status || 'To Do' };
       setBoardTasks(prev => {
@@ -648,6 +649,7 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
         } catch (e) {}
         return updated;
       }); 
+      window.dispatchEvent(new Event('pmpulse_boardTasks_updated'));
     } else { 
       setListTasks(prev => {
         const updated = [...prev, sprintTask];
@@ -658,6 +660,7 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
         } catch (e) {}
         return updated;
       }); 
+      window.dispatchEvent(new Event('pmpulse_listTasks_updated'));
     }
     setWorkspaceTasks(prev => {
       const updated = [backlogTask, ...prev];
@@ -668,6 +671,7 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
       } catch (e) {}
       return updated;
     });
+    window.dispatchEvent(new Event('pmpulse_workspaceTasks_updated'));
 
     setListTaskForm({ type: 'Task', description: '', status: 'To Do', assignee: '', dueDate: '', priority: 'Medium' }); 
     setIsCreateListTaskOpen(false);

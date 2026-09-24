@@ -164,7 +164,8 @@ export const api = {
       if (dateTo) params.append('date_to', dateTo);
       const query = params.toString() ? `?${params.toString()}` : '';
       return request(`/matrix/fleet${query}`);
-    }
+    },
+    getActiveBlockers: () => request('/daily-logs/active-blockers')
   },
   ai: {
     summarize: (payload) => request('/ai/summarize', {

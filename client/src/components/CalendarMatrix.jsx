@@ -375,26 +375,6 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onN
                 <span>Team Chat &amp; Sync</span>
               </button>
 
-              {/* Delete Project — only when a specific project is selected */}
-              {currentProjectId !== 'fleet' && currentProjectId && (
-                <button
-                  onClick={async () => {
-                    if (window.confirm('Are you sure you want to delete this project? This action cannot be undone and will delete all associated tasks and logs.')) {
-                      try {
-                        await api.projects.delete(currentProjectId);
-                        if (onSelectProject) onSelectProject('fleet');
-                        setCurrentProjectId('fleet');
-                      } catch (err) {
-                        alert(err.message || 'Failed to delete project');
-                      }
-                    }
-                  }}
-                  className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-800/40 px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
-                  title="Delete this project"
-                >
-                  Delete Project
-                </button>
-              )}
               <button
                 onClick={fetchMatrix}
                 className="flex items-center gap-2 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 px-3 py-1.5 rounded-md text-sm font-medium transition-colors shadow-sm"

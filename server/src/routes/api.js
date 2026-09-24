@@ -2,7 +2,7 @@ import express from 'express';
 import { login, getMe, listAllUsers, checkRole, changePassword, setPermanentPassword } from '../controllers/authController.js';
 import { createEmployee, getEmployees, getEmployeeAnalytics, deleteEmployee, sendWarning, getMyWarnings } from '../controllers/employeeController.js';
 import { createProject, getProjects, getProjectById, createTask, getMyTasks, addProjectMember, updateProject, deleteProject, removeProjectMember, getProjectTasks, getAllProjectsTasks, createWorkspaceTask, updateWorkspaceTask, syncWorkspaceTasks, importProjectTasks, deleteProjectTasks, deleteWorkspaceTask, getProjectDocs, createProjectDoc, deleteProjectDoc } from '../controllers/projectController.js';
-import { submitDailyLog, getMyDailyLogs, getProjectMatrix, getFleetMatrix } from '../controllers/dailyLogController.js';
+import { submitDailyLog, getMyDailyLogs, getProjectMatrix, getFleetMatrix, getActiveBlockers } from '../controllers/dailyLogController.js';
 import { generateSummary } from '../controllers/aiController.js';
 import { getProjectMessages, sendProjectMessage } from '../controllers/chatController.js';
 import { createPM, getPMs, deletePM, updatePM, getPMProjects, getPMWorkforce } from '../controllers/superuserController.js';
@@ -72,6 +72,7 @@ router.post('/projects/:id/messages', authenticateToken, sendProjectMessage);
 // --- Daily Submissions & Interactive Calendar Matrix ---
 router.post('/tasks/:id/daily-log', authenticateToken, submitDailyLog);
 router.get('/daily-logs/my', authenticateToken, getMyDailyLogs);
+router.get('/daily-logs/active-blockers', authenticateToken, requirePM, getActiveBlockers);
 router.get('/projects/:id/matrix', authenticateToken, requirePM, getProjectMatrix);
 router.get('/matrix/fleet', authenticateToken, requirePM, getFleetMatrix);
 
