@@ -26,7 +26,6 @@ export default function Sidebar({ activeTab, onSelectTab }) {
 
   const pmNavItems = [
     { id: 'other_workspaces', label: 'Dashboard',               icon: FolderKanban },
-    { id: 'pm_daily_logs',    label: 'Daily Logs',              icon: FileText },
     { id: 'workforce',        label: 'Workforce Directory',     icon: Users },
     { id: 'employee_360',     label: 'Employee 360° Analytics', icon: BarChart3 },
     { id: 'ai_summary',       label: 'AI Summary Hub',          icon: Sparkles, highlight: true },

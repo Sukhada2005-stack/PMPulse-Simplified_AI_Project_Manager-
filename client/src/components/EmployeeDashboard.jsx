@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import confetti from 'canvas-confetti';
@@ -93,6 +93,82 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
   const [submissionFeedback, setSubmissionFeedback] = useState(null);
   const [showChatModal, setShowChatModal] = useState(false);
   const [selectedChatProjectId, setSelectedChatProjectId] = useState(null);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const [resolvedProjectId, setResolvedProjectId] = useState(null);
+
+  useEffect(() => {
+    if (!selectedWorkspace?.id && !selectedChatProjectId && !tasks[0]?.project_id) {
+      api.projects.getAll().then(res => {
+        const pjs = res?.projects || [];
+        if (pjs.length > 0) {
+          setResolvedProjectId(pjs[0].id);
+        }
+      }).catch(() => {});
+    }
+  }, [selectedWorkspace?.id, selectedChatProjectId, tasks]);
+
+  const effectiveChatProjectId = selectedChatProjectId || selectedWorkspace?.id || tasks[0]?.project_id || resolvedProjectId || null;
+
+  // WhatsApp-style: Count unreviewed messages from other contributors / PM in project chat
+  const fetchUnreadCount = useCallback(async () => {
+    if (!effectiveChatProjectId || !user?.id) return;
+    try {
+      const res = await api.projects.getMessages(effectiveChatProjectId);
+      const msgs = res.messages || [];
+      const storageKey = `pmpulse_chat_last_read_${user.id}_${effectiveChatProjectId}`;
+      const savedLastRead = localStorage.getItem(storageKey);
+
+      // If user currently has the chat modal open, mark everything read
+      if (showChatModal) {
+        if (msgs.length > 0) {
+          const maxId = Math.max(...msgs.map(m => m.id || 0));
+          if (maxId > 0) localStorage.setItem(storageKey, String(maxId));
+        }
+        setUnreadChatCount(0);
+        return;
+      }
+
+      if (savedLastRead !== null) {
+        const lastReadId = parseInt(savedLastRead, 10) || 0;
+        const unread = msgs.filter(m => m.user_id !== user.id && (m.id || 0) > lastReadId).length;
+        setUnreadChatCount(unread);
+      } else {
+        // If never opened before, count unreviewed messages from others
+        const unread = msgs.filter(m => m.user_id !== user.id).length;
+        setUnreadChatCount(unread);
+      }
+    } catch {
+      // Quietly ignore network/polling errors
+    }
+  }, [effectiveChatProjectId, user?.id, showChatModal]);
+
+  // Polling for unread messages (every 3.5s)
+  useEffect(() => {
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 3500);
+    return () => clearInterval(interval);
+  }, [fetchUnreadCount]);
+
+  // Listen for real-time chat read and new message broadcast events
+  useEffect(() => {
+    const handleChatRead = (e) => {
+      if (Number(e.detail?.projectId) === Number(effectiveChatProjectId)) {
+        setUnreadChatCount(0);
+      }
+    };
+    const handleNewMessage = (e) => {
+      if (Number(e.detail?.projectId) === Number(effectiveChatProjectId)) {
+        fetchUnreadCount();
+      }
+    };
+    window.addEventListener('pmpulse_chat_read', handleChatRead);
+    window.addEventListener('pmpulse_chat_new_message', handleNewMessage);
+    return () => {
+      window.removeEventListener('pmpulse_chat_read', handleChatRead);
+      window.removeEventListener('pmpulse_chat_new_message', handleNewMessage);
+    };
+  }, [effectiveChatProjectId, fetchUnreadCount]);
+
   const [activeView, setActiveView] = useState(() => {
     try {
       return localStorage.getItem('pmpulse_employee_active_view') || 'list';
@@ -1368,16 +1444,36 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
           <div className="flex items-center gap-3">
             <button
               onClick={() => {
-                const firstProjectId = tasks[0]?.project_id || null;
-                setSelectedChatProjectId(firstProjectId);
+                const targetId = effectiveChatProjectId;
+                setSelectedChatProjectId(targetId);
                 setShowChatModal(true);
+                setUnreadChatCount(0);
+                if (user?.id && targetId) {
+                  const storageKey = `pmpulse_chat_last_read_${user.id}_${targetId}`;
+                  api.projects.getMessages(targetId).then(res => {
+                    const msgs = res?.messages || [];
+                    if (msgs.length > 0) {
+                      const maxId = Math.max(...msgs.map(m => m.id || 0));
+                      if (maxId > 0) localStorage.setItem(storageKey, String(maxId));
+                    }
+                  }).catch(() => {});
+                }
               }}
-              className="btn-secondary text-[var(--acube-gold)] hover:bg-[#2a2824] border-[#333] text-xs font-bold"
+              className="relative btn-secondary text-[var(--acube-gold)] hover:bg-[#2a2824] border-[#333] text-xs font-bold"
               style={{ background: 'var(--table-th-bg)' }}
               title="Open Project Team Chat & Meeting Sync"
             >
               <MessageSquare className="w-3.5 h-3.5" />
               <span>Project Chat &amp; Sync</span>
+              {unreadChatCount > 0 && (
+                <span
+                  className="absolute -top-1.5 -right-1.5 min-w-[19px] h-[19px] px-1 bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-md border-2 border-white dark:border-slate-800 animate-badge-pop"
+                  style={{ lineHeight: 1 }}
+                  title={`${unreadChatCount} unread message${unreadChatCount > 1 ? 's' : ''}`}
+                >
+                  {unreadChatCount > 99 ? '99+' : unreadChatCount}
+                </span>
+              )}
             </button>
 
             <div className="flex items-center gap-2 px-3.5 py-2 rounded-lg border border-[#333] text-xs" style={{ background: 'var(--table-th-bg)' }}>
@@ -2323,7 +2419,7 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
       {/* Project Team Chat & Meeting Scheduler Modal */}
       {showChatModal && (
         <ProjectChatModal
-          projectId={selectedChatProjectId || (tasks[0]?.project_id ?? null)}
+          projectId={effectiveChatProjectId}
           onClose={() => setShowChatModal(false)}
         />
       )}
@@ -2877,6 +2973,7 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
           "What is my task completion rate across my assigned projects?"
         ]}
       />
+
     </div>
   );
 }

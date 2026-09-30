@@ -211,7 +211,7 @@
   transition: background 0.3s ease;
 }
 
-/* ── Button Styles — Gold Accent ──────────────────────────────── */
+/* ── Button Styles — Gold Accent (Dark) / Sleek Slate (Light) ── */
 .btn-primary {
   display: inline-flex;
   align-items: center;
@@ -222,7 +222,7 @@
   font-size: 13px;
   font-weight: 700;
   border-radius: var(--radius-sm);
-  border: none;
+  border: 1px solid transparent;
   cursor: pointer;
   transition: all 0.2s ease;
   text-decoration: none;
@@ -231,6 +231,75 @@
 .btn-primary:hover {
   transform: translateY(-1px);
   box-shadow: 0 6px 24px rgba(238,178,13,0.42);
+}
+
+/* ── Light Mode Button Styling: Properly Blended with Light Theme ── */
+html:not(.dark) .btn-primary,
+[data-theme="light"] .btn-primary {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: #0f172a;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+}
+html:not(.dark) .btn-primary:hover,
+[data-theme="light"] .btn-primary:hover {
+  background: #1e293b;
+  border-color: #1e293b;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+  transform: translateY(-1px);
+}
+
+/* Update any buttons or links following the yellowish theme across the entire application in light mode only */
+html:not(.dark) button.bg-yellow-500,
+[data-theme="light"] button.bg-yellow-500,
+html:not(.dark) a.bg-yellow-500,
+[data-theme="light"] a.bg-yellow-500,
+html:not(.dark) [role="button"].bg-yellow-500,
+[data-theme="light"] [role="button"].bg-yellow-500,
+html:not(.dark) button.bg-amber-500,
+[data-theme="light"] button.bg-amber-500,
+html:not(.dark) a.bg-amber-500,
+[data-theme="light"] a.bg-amber-500,
+html:not(.dark) [role="button"].bg-amber-500,
+[data-theme="light"] [role="button"].bg-amber-500 {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  border: 1px solid #0f172a !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1) !important;
+}
+
+html:not(.dark) button.bg-yellow-500 *,
+[data-theme="light"] button.bg-yellow-500 *,
+html:not(.dark) a.bg-yellow-500 *,
+[data-theme="light"] a.bg-yellow-500 *,
+html:not(.dark) [role="button"].bg-yellow-500 *,
+[data-theme="light"] [role="button"].bg-yellow-500 *,
+html:not(.dark) button.bg-amber-500 *,
+[data-theme="light"] button.bg-amber-500 *,
+html:not(.dark) a.bg-amber-500 *,
+[data-theme="light"] a.bg-amber-500 *,
+html:not(.dark) [role="button"].bg-amber-500 *,
+[data-theme="light"] [role="button"].bg-amber-500 * {
+  color: #ffffff !important;
+}
+
+html:not(.dark) button.bg-yellow-500:hover,
+[data-theme="light"] button.bg-yellow-500:hover,
+html:not(.dark) a.bg-yellow-500:hover,
+[data-theme="light"] a.bg-yellow-500:hover,
+html:not(.dark) [role="button"].bg-yellow-500:hover,
+[data-theme="light"] [role="button"].bg-yellow-500:hover,
+html:not(.dark) button.bg-amber-500:hover,
+[data-theme="light"] button.bg-amber-500:hover,
+html:not(.dark) a.bg-amber-500:hover,
+[data-theme="light"] a.bg-amber-500:hover,
+html:not(.dark) [role="button"].bg-amber-500:hover,
+[data-theme="light"] [role="button"].bg-amber-500:hover {
+  background-color: #1e293b !important;
+  border-color: #1e293b !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15) !important;
 }
 
 .btn-secondary {
@@ -507,6 +576,15 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 .animate-fade-up { animation: fade-up 0.28s ease both; }
+
+@keyframes badge-pop {
+  0% { transform: scale(0.5); opacity: 0; }
+  70% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-badge-pop {
+  animation: badge-pop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
 
 @keyframes shimmer {
   0%   { background-position: -200% 0; }

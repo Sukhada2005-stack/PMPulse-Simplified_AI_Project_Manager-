@@ -1,4 +1,5 @@
 import db from '../db/database.js';
+import { callGeminiAPI } from './copilotController.js';
 
 // Submit daily text update or 'no work' blocker reason (Employee only)
 export const submitDailyLog = (req, res) => {
@@ -523,6 +524,170 @@ export const getActiveBlockers = (req, res) => {
         });
     } catch (err) {
         console.error('getActiveBlockers error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+/**
+ * Deterministic fallback standup parser
+ */
+export const parseVoiceFallback = (rawTranscript, availableTasks = []) => {
+    const text = (rawTranscript || '').trim();
+    if (!text) {
+        return {
+            has_worked: true,
+            completed_deliverables: '',
+            blockers: '',
+            next_tasks: '',
+            matched_task_id: null
+        };
+    }
+
+    let blockers = '';
+    let nextTasks = '';
+    let workTextClean = text;
+
+    // 1. Extract Blockers
+    const blockerRegex = /(?:blocked by|blocker(?:s)?(?:\s+is|\s+are)?|impediment(?:s)?(?:\s+is|\s+are)?|stuck on|waiting on|waiting for|issue with|cannot proceed due to|facing issue with)\s*[:\-]?\s*([^.!\n]+)/i;
+    const blockerMatch = text.match(blockerRegex);
+    if (blockerMatch) {
+        blockers = blockerMatch[1].trim();
+        workTextClean = workTextClean.replace(blockerMatch[0], '');
+    }
+
+    // 2. Extract Next Tasks
+    const nextRegex = /(?:next(?:\s+planned)?(?:\s+task|\s+steps)?|tomorrow|next up|planning to|plan is to|will work on|will do)\s*[:\-]?\s*([^.!\n]+)/i;
+    const nextMatch = text.match(nextRegex);
+    if (nextMatch) {
+        nextTasks = nextMatch[1].trim();
+        workTextClean = workTextClean.replace(nextMatch[0], '');
+    }
+
+    // 3. Clean up Completed Deliverables
+    workTextClean = workTextClean.replace(/^(today\s*(?:i\s*)?(?:have\s*)?)/i, '').trim();
+    workTextClean = workTextClean.replace(/^[,\.\s\-;]+|[,\.\s\-;]+$/g, '').trim();
+
+    // Split compound sentences into bullet points
+    const clauses = workTextClean.split(/(?:\. |\band\b|\balso\b)/i).map(c => c.trim()).filter(c => c.length > 3);
+    const completed = clauses.length > 1
+        ? clauses.map(c => '• ' + c.charAt(0).toUpperCase() + c.slice(1)).join('\n')
+        : (workTextClean ? '• ' + workTextClean.charAt(0).toUpperCase() + workTextClean.slice(1) : '');
+
+    const hasWorked = Boolean(workTextClean && workTextClean.length > 3);
+
+    // 4. Match against available tasks
+    let matchedTaskId = null;
+    let highestScore = 0;
+    if (Array.isArray(availableTasks) && availableTasks.length > 0) {
+        const textLower = text.toLowerCase();
+        availableTasks.forEach(task => {
+            if (!task || !task.title) return;
+            const titleLower = String(task.title).toLowerCase();
+            const words = titleLower.split(/\s+/).filter(w => w.length > 2);
+            let score = 0;
+            if (textLower.includes(titleLower)) {
+                score += 15;
+            } else {
+                words.forEach(w => {
+                    if (textLower.includes(w)) score += 3;
+                });
+            }
+            if (score > highestScore) {
+                highestScore = score;
+                matchedTaskId = task.id;
+            }
+        });
+        if (!matchedTaskId && availableTasks.length === 1) {
+            matchedTaskId = availableTasks[0].id;
+        }
+    }
+
+    return {
+        has_worked: hasWorked || !blockers,
+        completed_deliverables: completed,
+        blockers: blockers ? (blockers.charAt(0).toUpperCase() + blockers.slice(1)) : '',
+        next_tasks: nextTasks ? (nextTasks.charAt(0).toUpperCase() + nextTasks.slice(1)) : '',
+        matched_task_id: matchedTaskId
+    };
+};
+
+/**
+ * Voice-to-Log / 30-Second Async Audio Standup AI Parser Endpoint
+ * Splits spoken transcript into:
+ * - Completed Deliverables
+ * - Next Planned Tasks
+ * - Identified Impediments / Blockers
+ * - Matches closest assigned task
+ */
+export const parseVoiceStandup = async (req, res) => {
+    try {
+        const { transcript, tasks } = req.body;
+        const rawText = (transcript || '').trim();
+
+        if (!rawText) {
+            return res.status(400).json({ error: 'No transcript text provided for processing' });
+        }
+
+        const availableTasks = Array.isArray(tasks) ? tasks.map(t => ({
+            id: t.id,
+            title: t.title || t['Issue / Task / Enhancement'] || 'Task',
+            description: t.description || ''
+        })) : [];
+
+        // Check if Gemini is configured
+        let structuredResult = null;
+        if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim()) {
+            try {
+                const systemPrompt = `You are an AI standup assistant for PulsePM project management.
+A software developer has spoken a 30-second async daily standup audio log.
+Your goal is to accurately dissect the transcript into three distinct categories:
+1. "completed_deliverables": Bullet points of what was achieved, implemented, fixed, tested, or completed today.
+2. "next_tasks": Bullet points of planned next steps, what will be worked on next/tomorrow.
+3. "blockers": Any impediments, missing credentials, blockers, external dependencies, or issues preventing work. If none, return empty string "".
+4. "has_worked": Boolean. Set to true if the person made progress or worked on anything. Set to false ONLY if they were completely blocked or had zero productive work.
+5. "matched_task_id": Check the provided available tasks. If one matches the deliverables discussed, return its integer ID. If none clearly match, return null.
+
+Respond ONLY with valid, unformatted JSON adhering strictly to:
+{
+  "has_worked": boolean,
+  "completed_deliverables": string,
+  "next_tasks": string,
+  "blockers": string,
+  "matched_task_id": number or null
+}`;
+
+                const aiResponse = await callGeminiAPI(systemPrompt, { availableTasks }, rawText);
+
+                if (aiResponse && typeof aiResponse === 'string' && !aiResponse.startsWith('⚠️')) {
+                    let jsonStr = aiResponse.trim();
+                    if (jsonStr.includes('```')) {
+                        const match = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+                        if (match) jsonStr = match[1];
+                    }
+                    const parsed = JSON.parse(jsonStr);
+                    if (parsed && typeof parsed === 'object') {
+                        structuredResult = {
+                            has_worked: typeof parsed.has_worked === 'boolean' ? parsed.has_worked : true,
+                            completed_deliverables: String(parsed.completed_deliverables || '').trim(),
+                            next_tasks: String(parsed.next_tasks || '').trim(),
+                            blockers: String(parsed.blockers || '').trim(),
+                            matched_task_id: parsed.matched_task_id !== undefined ? parsed.matched_task_id : null
+                        };
+                    }
+                }
+            } catch (aiErr) {
+                console.warn('[parseVoiceStandup] Gemini API fallback triggered:', aiErr.message);
+            }
+        }
+
+        // Fallback if Gemini is unavailable, timed out, or returned non-JSON
+        if (!structuredResult) {
+            structuredResult = parseVoiceFallback(rawText, availableTasks);
+        }
+
+        return res.json(structuredResult);
+    } catch (err) {
+        console.error('parseVoiceStandup error:', err);
         res.status(500).json({ error: err.message });
     }
 };

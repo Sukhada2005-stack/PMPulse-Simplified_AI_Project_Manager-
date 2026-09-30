@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import Draggable from 'react-draggable';
@@ -44,6 +45,7 @@ export default function ProjectChatModal({ projectId, projects = [], onClose }) 
   const [meetingLocation, setMeetingLocation] = useState('Virtual / Engineering Room 1');
 
   const chatScrollRef = useRef(null);
+  const dragNodeRef = useRef(null);
   const isAtBottomRef = useRef(true);
   const initialLoadDoneRef = useRef(false);
   const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
@@ -95,13 +97,40 @@ export default function ProjectChatModal({ projectId, projects = [], onClose }) 
       const res = await api.projects.getMessages(activeProjectId);
       setProjectData(res.project);
       setMembers(res.members || []);
-      setMessages(res.messages || []);
+      const msgs = res.messages || [];
+      setMessages(msgs);
+
+      // WhatsApp mechanism: Mark messages as reviewed by the active user while viewing this chat
+      if (msgs.length > 0 && user?.id) {
+        const maxId = Math.max(...msgs.map(m => m.id || 0));
+        if (maxId > 0) {
+          localStorage.setItem(`pmpulse_chat_last_read_${user.id}_${activeProjectId}`, String(maxId));
+          window.dispatchEvent(new CustomEvent('pmpulse_chat_read', {
+            detail: { projectId: activeProjectId, lastMessageId: maxId }
+          }));
+        }
+      }
     } catch (err) {
       console.error('Failed to load project messages:', err);
     } finally {
       if (showSpinner) setLoading(false);
     }
   };
+
+  // Ensure last read is synced when closing or unmounting
+  useEffect(() => {
+    return () => {
+      if (messages.length > 0 && user?.id && activeProjectId) {
+        const maxId = Math.max(...messages.map(m => m.id || 0));
+        if (maxId > 0) {
+          localStorage.setItem(`pmpulse_chat_last_read_${user.id}_${activeProjectId}`, String(maxId));
+          window.dispatchEvent(new CustomEvent('pmpulse_chat_read', {
+            detail: { projectId: activeProjectId, lastMessageId: maxId }
+          }));
+        }
+      }
+    };
+  }, [messages, user?.id, activeProjectId]);
 
   useEffect(() => {
     loadMessages(true);
@@ -163,6 +192,15 @@ export default function ProjectChatModal({ projectId, projects = [], onClose }) 
       });
       if (res?.message) {
         setMessages(prev => [...prev, res.message]);
+        if (user?.id) {
+          localStorage.setItem(`pmpulse_chat_last_read_${user.id}_${activeProjectId}`, String(res.message.id));
+          window.dispatchEvent(new CustomEvent('pmpulse_chat_read', {
+            detail: { projectId: activeProjectId, lastMessageId: res.message.id }
+          }));
+        }
+        window.dispatchEvent(new CustomEvent('pmpulse_chat_new_message', {
+          detail: { projectId: activeProjectId, message: res.message }
+        }));
       } else {
         await loadMessages(false);
       }
@@ -199,6 +237,15 @@ export default function ProjectChatModal({ projectId, projects = [], onClose }) 
 
       if (res?.message) {
         setMessages(prev => [...prev, res.message]);
+        if (user?.id) {
+          localStorage.setItem(`pmpulse_chat_last_read_${user.id}_${activeProjectId}`, String(res.message.id));
+          window.dispatchEvent(new CustomEvent('pmpulse_chat_read', {
+            detail: { projectId: activeProjectId, lastMessageId: res.message.id }
+          }));
+        }
+        window.dispatchEvent(new CustomEvent('pmpulse_chat_new_message', {
+          detail: { projectId: activeProjectId, message: res.message }
+        }));
       } else {
         await loadMessages(false);
       }
@@ -235,13 +282,35 @@ export default function ProjectChatModal({ projectId, projects = [], onClose }) 
     }
   };
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div
-      className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[300] pointer-events-none"
+      className="fixed inset-0 flex items-center justify-center p-4 overflow-y-auto animate-fade-in"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        zIndex: 999999,
+        backgroundColor: 'rgba(15, 23, 42, 0.75)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
     >
-      <Draggable handle=".chat-drag-handle">
+      <Draggable nodeRef={dragNodeRef} handle=".chat-drag-handle">
         <div
-          className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-gray-300 dark:border-slate-700 flex flex-col overflow-hidden relative pointer-events-auto w-[95vw] sm:w-[450px] md:w-[600px] text-gray-900 dark:text-slate-100"
+          ref={dragNodeRef}
+          onClick={(e) => e.stopPropagation()}
+          className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-gray-300 dark:border-slate-700 flex flex-col overflow-hidden relative pointer-events-auto w-[95vw] sm:w-[450px] md:w-[600px] text-gray-900 dark:text-slate-100 my-auto"
           style={{ height: 'min(75vh, 600px)', minHeight: '400px' }}
         >
           {/* ── TOP HEADER (Always Sticky & High Visibility) ────────── */}
@@ -290,16 +359,6 @@ export default function ProjectChatModal({ projectId, projects = [], onClose }) 
               >
                 <CalendarPlus className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                 <span className="hidden sm:inline">Schedule Meeting</span>
-              </button>
-
-              {/* Prominent Red/Gray Close Button */}
-              <button
-                onClick={onClose}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-900/40 hover:text-red-700 dark:hover:text-red-400 text-gray-700 dark:text-slate-300 font-bold text-xs transition-colors border border-gray-200 dark:border-slate-700"
-                title="Close Chat (Esc or click outside)"
-              >
-                <X className="w-4 h-4" />
-                <span>Close</span>
               </button>
             </div>
           </div>
@@ -637,6 +696,7 @@ export default function ProjectChatModal({ projectId, projects = [], onClose }) 
           </form>
         </div>
       </Draggable>
-    </div>
+    </div>,
+    document.body
   );
 }

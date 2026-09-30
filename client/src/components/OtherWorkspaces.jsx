@@ -26,6 +26,8 @@ import {
   Table as TableIcon,
   ChevronLeft,
   ChevronRight,
+  MoreVertical,
+  FileText,
 } from 'lucide-react';
 import { NewProjectModal, NewTaskModal } from './ProjectTaskModal';
 import ProjectChatModal from './ProjectChatModal';
@@ -228,6 +230,19 @@ export default function OtherWorkspaces({ onNavigateTab }) {
   });
   const [tablePage, setTablePage]                             = useState(1);
   const ITEMS_PER_PAGE = 8;
+  const [openKebabProjectId, setOpenKebabProjectId]           = useState(null);
+  const kebabContainerRef                                     = useRef(null);
+
+  useEffect(() => {
+    if (!openKebabProjectId) return;
+    const handleClickOutside = (e) => {
+      if (kebabContainerRef.current && !kebabContainerRef.current.contains(e.target)) {
+        setOpenKebabProjectId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openKebabProjectId]);
 
   /* ── Data fetch ───────────────────────────────────────────────────── */
   const fetchProjectsAndTasks = async () => {
@@ -1066,54 +1081,33 @@ export default function OtherWorkspaces({ onNavigateTab }) {
               />
             </div>
 
-            {/* View Mode Toggle: Grid vs Table */}
-            <div className="flex items-center bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md p-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setViewMode('grid');
-                  try {
-                    localStorage.setItem('pmpulse_projects_view_mode', 'grid');
-                  } catch (e) {
-                    console.error(e);
-                  }
-                }}
-                className={`px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  viewMode === 'grid'
-                    ? 'bg-white dark:bg-slate-800 text-yellow-600 dark:text-yellow-400 shadow-sm border border-slate-200 dark:border-slate-700/80'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                }`}
-                title="Grid View (Cards)"
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                <span>Grid</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setViewMode('table');
-                  try {
-                    localStorage.setItem('pmpulse_projects_view_mode', 'table');
-                  } catch (e) {
-                    console.error(e);
-                  }
-                }}
-                className={`px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  viewMode === 'table'
-                    ? 'bg-white dark:bg-slate-800 text-yellow-600 dark:text-yellow-400 shadow-sm border border-slate-200 dark:border-slate-700/80'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                }`}
-                title="Table View (Tabular Display)"
-              >
-                <TableIcon className="w-3.5 h-3.5" />
-                <span>Table</span>
-              </button>
-            </div>
+            {/* View Mode Toggle Button */}
+            <button
+              type="button"
+              onClick={() => {
+                const nextMode = viewMode === 'grid' ? 'table' : 'grid';
+                setViewMode(nextMode);
+                try {
+                  localStorage.setItem('pmpulse_projects_view_mode', nextMode);
+                } catch (e) {
+                  console.error(e);
+                }
+              }}
+              className="border rounded-md px-3.5 py-2 text-sm font-medium flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer select-none bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 shadow-sm"
+              title={`Switch to ${viewMode === 'grid' ? 'Table' : 'Grid'} View`}
+            >
+              {viewMode === 'grid' ? (
+                <TableIcon className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+              ) : (
+                <LayoutGrid className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+              )}
+              <span>Toggle View</span>
+            </button>
 
             {/* + New Project */}
             <button
               onClick={() => setShowNewProjectModal(true)}
-              className="bg-yellow-500 hover:bg-yellow-600 text-slate-900 font-semibold px-4 py-2 rounded-md flex items-center gap-2 transition-colors whitespace-nowrap"
+              className="btn-primary font-semibold px-4 py-2 rounded-md flex items-center gap-2 whitespace-nowrap"
             >
               <Plus className="w-4 h-4" />
               <span>New Project</span>
@@ -1152,7 +1146,7 @@ export default function OtherWorkspaces({ onNavigateTab }) {
           </div>
         ) : viewMode === 'table' ? (
           <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto min-h-[220px]">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
@@ -1162,11 +1156,11 @@ export default function OtherWorkspaces({ onNavigateTab }) {
                     <th className="py-3 px-4">Priority</th>
                     <th className="py-3 px-4 text-center">Tasks</th>
                     <th className="py-3 px-4 text-center">Team</th>
-                    <th className="py-3 px-4 text-right min-w-[190px]">Actions</th>
+                    <th className="py-3 px-4 text-right min-w-[70px]">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800/80">
-                  {paginatedTableProjects.map(proj => (
+                  {paginatedTableProjects.map((proj, idx) => (
                     <tr
                       key={proj.id}
                       className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group"
@@ -1218,49 +1212,100 @@ export default function OtherWorkspaces({ onNavigateTab }) {
                         </span>
                       </td>
 
-                      {/* Actions */}
+                      {/* Actions — Kebab Menu */}
                       <td className="py-3 px-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {/* Chat */}
+                        <div
+                          className="relative inline-block text-left"
+                          ref={openKebabProjectId === proj.id ? kebabContainerRef : null}
+                        >
                           <button
-                            onClick={() => {
-                              setSelectedChatProjectId(proj.id);
-                              setShowChatModal(true);
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenKebabProjectId(prev => prev === proj.id ? null : proj.id);
                             }}
-                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700/70 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                            title="Open Team Chat"
+                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700/70 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                            title="Actions"
+                            aria-label={`Actions for ${proj.title}`}
                           >
-                            <MessageSquare className="w-3.5 h-3.5" />
+                            <MoreVertical className="w-4 h-4" />
                           </button>
 
-                          {/* Workspace */}
-                          <button
-                            onClick={() => onNavigateTab && onNavigateTab('dashboard', proj.id, 'workspace')}
-                            className="btn-primary text-xs py-1 px-2.5 flex items-center gap-1 font-semibold"
-                            title={`Open ${proj.title} Workspace`}
-                          >
-                            <Layout className="w-3 h-3" />
-                            <span>Workspace</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </button>
+                          {openKebabProjectId === proj.id && (
+                            <div
+                              className={`absolute right-0 w-36 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl py-1 text-xs z-50 animate-fade-in ${
+                                idx >= paginatedTableProjects.length - 1 && paginatedTableProjects.length >= 2
+                                  ? 'bottom-full mb-1.5'
+                                  : 'top-full mt-1.5'
+                              }`}
+                            >
+                              {/* 1. Chat */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenKebabProjectId(null);
+                                  setSelectedChatProjectId(proj.id);
+                                  setShowChatModal(true);
+                                }}
+                                className="w-full text-left px-3 py-2 flex items-center gap-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer font-medium"
+                              >
+                                <MessageSquare className="w-3.5 h-3.5 text-slate-400" />
+                                <span>Chat</span>
+                              </button>
 
-                          {/* Delete */}
-                          <button
-                            onClick={async () => {
-                              if (window.confirm(`Delete "${proj.title}"? This cannot be undone.`)) {
-                                try {
-                                  await api.projects.delete(proj.id);
-                                  fetchProjectsAndTasks();
-                                } catch (err) {
-                                  alert(err.message || 'Failed to delete project');
-                                }
-                              }
-                            }}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
-                            title="Delete project"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                              {/* Daily Logs */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenKebabProjectId(null);
+                                  if (onNavigateTab) {
+                                    onNavigateTab('pm_daily_logs', proj.id);
+                                  }
+                                }}
+                                className="w-full text-left px-3 py-2 flex items-center gap-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer font-medium"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-slate-400" />
+                                <span>Daily Logs</span>
+                              </button>
+
+                              {/* 2. Workspace */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenKebabProjectId(null);
+                                  if (onNavigateTab) {
+                                    onNavigateTab('dashboard', proj.id, 'workspace');
+                                  }
+                                }}
+                                className="w-full text-left px-3 py-2 flex items-center gap-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer font-medium"
+                              >
+                                <Layout className="w-3.5 h-3.5 text-slate-400" />
+                                <span>Workspace</span>
+                              </button>
+
+                              <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+
+                              {/* 3. Delete */}
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  setOpenKebabProjectId(null);
+                                  if (window.confirm(`Delete "${proj.title}"? This cannot be undone.`)) {
+                                    try {
+                                      await api.projects.delete(proj.id);
+                                      fetchProjectsAndTasks();
+                                    } catch (err) {
+                                      alert(err.message || 'Failed to delete project');
+                                    }
+                                  }
+                                }}
+                                className="w-full text-left px-3 py-2 flex items-center gap-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors cursor-pointer font-medium"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400" />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1359,6 +1404,16 @@ export default function OtherWorkspaces({ onNavigateTab }) {
                   >
                     <MessageSquare className="w-3.5 h-3.5" />
                     <span>Chat</span>
+                  </button>
+
+                  {/* 📋 Daily Logs */}
+                  <button
+                    onClick={() => onNavigateTab && onNavigateTab('pm_daily_logs', proj.id)}
+                    className="btn-secondary flex-1 justify-center text-xs px-2.5 py-1.5 border border-slate-200 dark:border-slate-700/70 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors duration-200 whitespace-nowrap"
+                    title="Open Daily Logs for this Project"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-yellow-500" />
+                    <span>Daily Logs</span>
                   </button>
 
                   {/* Workspace → */}
@@ -1524,7 +1579,7 @@ export default function OtherWorkspaces({ onNavigateTab }) {
                           className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
                         >
                           <Layout className="w-3.5 h-3.5" />
-                          <span>Open Workspace</span>
+                          <span>Workspace</span>
                           <ArrowRight className="w-3 h-3" />
                         </button>
                       )}
@@ -1639,7 +1694,7 @@ export default function OtherWorkspaces({ onNavigateTab }) {
                           title={`Navigate to ${p.title} Workspace`}
                         >
                           <Layout className="w-3.5 h-3.5" />
-                          <span>To the workspace</span>
+                          <span>Workspace</span>
                           <ArrowRight className="w-3 h-3" />
                         </button>
                       </div>
@@ -1780,7 +1835,7 @@ export default function OtherWorkspaces({ onNavigateTab }) {
                           title={`Navigate to ${p.title} Workspace`}
                         >
                           <Layout className="w-3.5 h-3.5" />
-                          <span>To the workspace</span>
+                          <span>Workspace</span>
                           <ArrowRight className="w-3 h-3" />
                         </button>
                       </div>
@@ -2048,19 +2103,8 @@ export default function OtherWorkspaces({ onNavigateTab }) {
                         </div>
                       </div>
 
-                      {/* Right side: Progress badge & To the workspace button */}
+                      {/* Right side: To the workspace button */}
                       <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold ${
-                          p.progressPct === 100
-                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25'
-                            : p.progressPct > 0
-                              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25'
-                              : 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20'
-                        }`}>
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>{p.progressPct}% Completed</span>
-                        </span>
-
                         <button
                           onClick={() => {
                             setShowPortfolioModal(false);
@@ -2072,7 +2116,7 @@ export default function OtherWorkspaces({ onNavigateTab }) {
                           title={`Navigate to ${p.title} Workspace`}
                         >
                           <Layout className="w-3.5 h-3.5" />
-                          <span>To the workspace</span>
+                          <span>Workspace</span>
                           <ArrowRight className="w-3 h-3" />
                         </button>
                       </div>

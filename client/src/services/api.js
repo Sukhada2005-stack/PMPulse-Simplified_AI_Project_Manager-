@@ -165,7 +165,11 @@ export const api = {
       const query = params.toString() ? `?${params.toString()}` : '';
       return request(`/matrix/fleet${query}`);
     },
-    getActiveBlockers: () => request('/daily-logs/active-blockers')
+    getActiveBlockers: () => request('/daily-logs/active-blockers'),
+    parseVoiceStandup: (transcript, tasks = []) => request('/daily-logs/parse-voice', {
+      method: 'POST',
+      body: JSON.stringify({ transcript, tasks })
+    })
   },
   ai: {
     summarize: (payload) => request('/ai/summarize', {

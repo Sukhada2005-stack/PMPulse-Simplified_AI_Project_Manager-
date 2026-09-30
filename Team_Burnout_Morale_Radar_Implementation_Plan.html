@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PulsePM Engineering Specification — Team Burnout & Morale Early Warning Radar</title>
+<style>
+  @page {
+    size: A4;
+    margin: 16mm 14mm 16mm 14mm;
+    @bottom-right {
+      content: counter(page);
+    }
+  }
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #1e293b;
+    background: #ffffff;
+    font-size: 11pt;
+    line-height: 1.55;
+    padding: 10px;
+  }
+  .page-break {
+    page-break-after: always;
+    break-after: page;
+  }
+  
+  /* Header / Cover Banner */
+  .cover-card {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #334155 100%);
+    color: #ffffff;
+    border-radius: 12px;
+    padding: 32px 30px;
+    margin-bottom: 24px;
+    border-left: 6px solid #eab308;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.15);
+  }
+  .cover-card .badge {
+    display: inline-block;
+    background: rgba(234, 179, 8, 0.18);
+    color: #fef08a;
+    border: 1px solid rgba(234, 179, 8, 0.4);
+    padding: 3px 10px;
+    border-radius: 9999px;
+    font-size: 8.5pt;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .cover-card h1 {
+    font-size: 22pt;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.25;
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
+  }
+  .cover-card .subtitle {
+    font-size: 11.5pt;
+    color: #cbd5e1;
+    max-width: 680px;
+    margin-bottom: 18px;
+  }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    padding-top: 14px;
+    font-size: 8.5pt;
+  }
+  .meta-item strong {
+    display: block;
+    color: #94a3b8;
+    text-transform: uppercase;
+    font-size: 7.5pt;
+    letter-spacing: 0.04em;
+    margin-bottom: 2px;
+  }
+  .meta-item span {
+    color: #f8fafc;
+    font-weight: 600;
+  }
+
+  /* Section Layouts */
+  h2 {
+    font-size: 14.5pt;
+    color: #0f172a;
+    font-weight: 700;
+    margin-top: 22px;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 2px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  h2 .num {
+    background: #0f172a;
+    color: #facc15;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9pt;
+    font-weight: 800;
+    margin-right: 6px;
+  }
+  h3 {
+    font-size: 11.5pt;
+    color: #334155;
+    font-weight: 700;
+    margin-top: 14px;
+    margin-bottom: 6px;
+  }
+  p {
+    margin-bottom: 9px;
+    color: #334155;
+    font-size: 10pt;
+  }
+
+  /* Callout Boxes */
+  .callout {
+    background: #f8fafc;
+    border-left: 4px solid #3b82f6;
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin: 12px 0;
+    font-size: 9.5pt;
+  }
+  .callout-warn {
+    background: #fffbeb;
+    border-left-color: #f59e0b;
+    color: #92400e;
+  }
+  .callout-success {
+    background: #ecfdf5;
+    border-left-color: #10b981;
+    color: #065f46;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 16px 0;
+    font-size: 9pt;
+  }
+  th {
+    background: #0f172a;
+    color: #f8fafc;
+    text-align: left;
+    padding: 8px 10px;
+    font-weight: 700;
+    font-size: 8.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  td {
+    padding: 7px 10px;
+    border-bottom: 1px solid #e2e8f0;
+    color: #334155;
+    vertical-align: top;
+  }
+  tr:nth-child(even) td {
+    background: #f8fafc;
+  }
+
+  /* Metric Pill */
+  .pill {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 7.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .pill-green { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+  .pill-yellow { background: #fef9c3; color: #854d0e; border: 1px solid #fef08a; }
+  .pill-orange { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
+  .pill-red { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+  /* Formula Card */
+  .formula-card {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin: 8px 0;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 9pt;
+    color: #0f172a;
+  }
+
+  /* Grid Layout for Wireframes */
+  .diagram-box {
+    border: 1px dashed #94a3b8;
+    background: #f8fafc;
+    border-radius: 8px;
+    padding: 14px;
+    margin: 12px 0;
+    font-family: monospace;
+    font-size: 8.5pt;
+    line-height: 1.4;
+    white-space: pre;
+    color: #1e293b;
+    overflow-x: auto;
+  }
+
+  .footer-note {
+    margin-top: 24px;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 8px;
+    font-size: 8pt;
+    color: #94a3b8;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+  <!-- COVER CARD -->
+  <div class="cover-card">
+    <div class="badge">Architecture & Implementation Blueprint</div>
+    <h1>Team Burnout & Morale Early Warning Radar</h1>
+    <div class="subtitle">
+      A Non-Invasive Engineering Resilience & Early Fatigue Detection System for PulsePM
+    </div>
+    <div class="meta-grid">
+      <div class="meta-item">
+        <strong>Document Version</strong>
+        <span>v1.0.0 (Production Blueprint)</span>
+      </div>
+      <div class="meta-item">
+        <strong>Target Platform</strong>
+        <span>PulsePM Client & Services</span>
+      </div>
+      <div class="meta-item">
+        <strong>Engineers & Reviewers</strong>
+        <span>Senior Full-Stack Engineering</span>
+      </div>
+      <div class="meta-item">
+        <strong>Date & Lifecycle</strong>
+        <span>September 2026 — Active</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 1 -->
+  <h2><span class="num">1</span> Executive Overview & Problem Statement</h2>
+  <p>
+    In high-velocity engineering teams, burnout and morale degradation are chronic compounding issues rather than overnight events. Traditional agile project management tools (such as Jira, Linear, or Asana) only capture failure retrospectively: when deliverables are missed, sprint commitments fail, or contributors resign.
+  </p>
+  <p>
+    The <strong>Team Burnout & Morale Early Warning Radar</strong> is a proactive early warning radar designed to give Project Managers (PMs) actionable, empathetic foresight into team strain <strong>10 to 14 days before</strong> missed deadlines or employee turnover occur.
+  </p>
+  <div class="callout callout-success">
+    <strong>Non-Invasive Architecture Guarantee:</strong> The radar introduces zero surveillance software, zero screen tracking, and zero background microphone listening. It operates entirely as an algorithmic aggregator over existing platform metadata: task transition logs, weekend submission timestamps, and daily standup progress notes.
+  </div>
+
+  <!-- SECTION 2 -->
+  <h2><span class="num">2</span> The 4 Core Algorithmic Signals</h2>
+  <p>The radar synthesizes four normalized dimensions (0 to 100) extracted from existing platform data:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 25%;">Signal Dimension</th>
+        <th style="width: 35%;">Data Origin & Formula</th>
+        <th style="width: 40%;">Burnout Correlation Rationale</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1. Task Churn Index (TCI)</strong></td>
+        <td>
+          Ratio of status oscillation between <code>In Progress</code>, <code>Blocked</code>, and <code>To Do</code>:
+          <div class="formula-card">TCI = min(100, (State_Flips / Active_Days) * 40)</div>
+        </td>
+        <td>Frequent context switching and re-work deplete cognitive stamina without delivering finished value.</td>
+      </tr>
+      <tr>
+        <td><strong>2. Overdue & Rollover Load (ORA)</strong></td>
+        <td>
+          Days past <code>end_date</code> + sprint boundary rollover count:
+          <div class="formula-card">ORA = min(100, (Overdue_Days * 8) + (Rollover_Count * 15))</div>
+        </td>
+        <td>Carrying stale tickets from sprint to sprint produces psychological fatigue and feelings of falling behind.</td>
+      </tr>
+      <tr>
+        <td><strong>3. Off-Hours & Weekend Activity (OWR)</strong></td>
+        <td>
+          Logs submitted on Sat/Sun or outside 08:30–19:30 local time:
+          <div class="formula-card">OWR = min(100, (Weekend_Logs / Total_Logs) * 200)</div>
+        </td>
+        <td>Direct indicator of workload spillover into personal recovery time, destroying work-life balance.</td>
+      </tr>
+      <tr>
+        <td><strong>4. Blocker & Sentiment Friction (BSF)</strong></td>
+        <td>
+          Proportion of <code>has_worked === 0</code> + negative friction keywords:
+          <div class="formula-card">BSF = (Blocker_Days_Pct * 0.7) + (Keyword_Friction * 0.3)</div>
+        </td>
+        <td>External dependencies (e.g. staging certs, vendor sandboxes, missing credentials) create feelings of helplessness.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="page-break"></div>
+
+  <!-- SECTION 3 -->
+  <h2><span class="num">3</span> Composite Scoring Model & Risk Tiers</h2>
+  <p>
+    The composite <strong>Burnout Risk Score (BRS)</strong> is computed using an empirically weighted linear combination:
+  </p>
+  <div class="formula-card">
+    BRS = (TCI * 0.25) + (ORA * 0.25) + (OWR * 0.25) + (BSF * 0.25)
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 15%;">Score</th>
+        <th style="width: 25%;">Risk Tier</th>
+        <th style="width: 35%;">Observed Team State</th>
+        <th style="width: 25%;">Recommended PM Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>0 – 30</strong></td>
+        <td><span class="pill pill-green">Optimal Flow</span></td>
+        <td>Steady progress, low churn, consistent working hours.</td>
+        <td>Maintain current cadence; protect focus blocks.</td>
+      </tr>
+      <tr>
+        <td><strong>31 – 60</strong></td>
+        <td><span class="pill pill-yellow">Moderate Strain</span></td>
+        <td>Occasional late logs, 1–2 blockers, moderate context switching.</td>
+        <td>Check in during 1-on-1s; verify ticket requirements.</td>
+      </tr>
+      <tr>
+        <td><strong>61 – 80</strong></td>
+        <td><span class="pill pill-orange">Elevated Fatigue</span></td>
+        <td>Repeated overdue deliverables, weekend activity spikes.</td>
+        <td>Deprioritize 1–2 tickets; rebalance pod workloads.</td>
+      </tr>
+      <tr>
+        <td><strong>81 – 100</strong></td>
+        <td><span class="pill pill-red">Critical Burnout</span></td>
+        <td>Severe multi-day blocker stall, chronic off-hours logging.</td>
+        <td>Immediate leadership escalation; clear external blocker.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- SECTION 4 -->
+  <h2><span class="num">4</span> Component Architecture & UI/UX Placement</h2>
+  <p>
+    To ensure zero backend disruption, the feature is structured as a client-side calculation and presentation layer consuming already-fetched task and daily log data:
+  </p>
+
+  <div class="diagram-box">
++---------------------------------------------------------------------------------------------------+
+| PM DASHBOARD / EMPLOYEE 360° ANALYTICS                                                            |
+|                                                                                                   |
+|  [ Team Burnout & Morale Early Warning Radar ]                     [ 🟢 Pod Overall: 34 (Mild) ]   |
+|                                                                                                   |
+|    +-----------------------------+   +-------------------------------------------------------+    |
+|    |      SPIDER RADAR CHART     |   | POD / CONTRIBUTOR STRAIN BREAKDOWN                    |    |
+|    |                             |   |                                                       |    |
+|    |          Workload           |   | • Abhishek T (Frontend Lead):                         |    |
+|    |             /\              |   |   Risk: 32/100 (Optimal) — Balanced task distribution |    |
+|    |   Morale  /    \  Friction  |   |                                                       |    |
+|    |      <---+------+--->       |   | • Ananya R (Backend Infra):                           |    |
+|    |           \    /            |   |   Risk: 74/100 (High Strain)                          |    |
+|    |             \/              |   |   Flag: 5 consecutive blocker days on Staging TLS     |    |
+|    |          Recovery           |   |   Action: Escalate vendor credentials immediately     |    |
+|    +-----------------------------+   +-------------------------------------------------------+    |
++---------------------------------------------------------------------------------------------------+
+  </div>
+
+  <!-- SECTION 5 -->
+  <h2><span class="num">5</span> Implementation Plan & Rollout Phases</h2>
+
+  <div class="callout callout-warn">
+    <strong>Strict Safety Constraint:</strong> Zero modifications to backend databases, SQLite tables, or existing controller APIs. The radar computes its telemetry purely on existing datasets delivered via <code>/projects/all/tasks</code> and <code>/employees/:id/analytics</code>.
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 15%;">Phase</th>
+        <th style="width: 30%;">Target File / Scope</th>
+        <th style="width: 55%;">Implementation Deliverables</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Phase 1</strong></td>
+        <td><code>client/src/utils/burnoutRadarCalculator.js</code></td>
+        <td>Pure computation engine. Takes raw tasks & logs, outputs normalized dimensions (TCI, ORA, OWR, BSF, BRS) and tailored PM action bullet points.</td>
+      </tr>
+      <tr>
+        <td><strong>Phase 2</strong></td>
+        <td><code>client/src/components/BurnoutRadarModal.jsx</code></td>
+        <td>Self-contained modal / card with pure SVG polygon radar chart (no heavy D3/Chart.js dependency), dark/light mode parity, and contributor breakdown.</td>
+      </tr>
+      <tr>
+        <td><strong>Phase 3</strong></td>
+        <td><code>Employee360View.jsx</code> & <code>OtherWorkspaces.jsx</code></td>
+        <td>Adds a designated "Burnout & Morale Radar" entry button in PM views to open the radar drawer/modal, preserving all existing KPI cards and tables.</td>
+      </tr>
+      <tr>
+        <td><strong>Phase 4</strong></td>
+        <td>Vite Build & Smoke Test</td>
+        <td>Execute <code>npm run build</code>, verify zero bundle regressions, test backdrop-blur styling and dark mode contrast.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- SECTION 6 -->
+  <h2><span class="num">6</span> Ethical & Psychological Safety Safeguards</h2>
+  <ul>
+    <li><strong>No Punitive Metrics:</strong> The score is never labeled as developer competence or velocity. It is explicitly labeled as <em>"Process & External Friction Risk"</em>.</li>
+    <li><strong>Blameless Problem Solving:</strong> Alerts emphasize external blockers (e.g. <em>"Blocked by missing staging DB credentials"</em>) to direct management focus onto removing impediments.</li>
+    <li><strong>Restricted Visibility:</strong> Radar details are restricted to PM and Superuser management views, avoiding cross-contributor comparisons.</li>
+  </ul>
+
+  <div class="footer-note">
+    <span>PulsePM Engineering • Confidential Architecture Document</span>
+    <span>Automated System Artifact • Build Hash 8f68d33</span>
+  </div>
+
+</body>
+</html>

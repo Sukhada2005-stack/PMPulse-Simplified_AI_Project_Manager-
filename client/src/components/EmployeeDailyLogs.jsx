@@ -19,8 +19,10 @@ import {
   FolderGit2,
   Eye,
   X,
-  ChevronRight
+  ChevronRight,
+  Mic
 } from 'lucide-react';
+import VoiceStandupModal from './VoiceStandupModal';
 
 export default function EmployeeDailyLogs({ selectedWorkspace: propWorkspace }) {
   const { user } = useAuth();
@@ -42,6 +44,19 @@ export default function EmployeeDailyLogs({ selectedWorkspace: propWorkspace }) 
   const [hasWorked, setHasWorked] = useState(true);
   const [workText, setWorkText] = useState('');
   const [noWorkReason, setNoWorkReason] = useState('');
+  const [isVoiceStandupOpen, setIsVoiceStandupOpen] = useState(false);
+
+  const handleApplyVoiceStandup = ({ selectedTaskId: newTaskId, hasWorked: newHasWorked, workText: newWorkText, noWorkReason: newNoWorkReason, logDate: newLogDate }) => {
+    if (newTaskId) setSelectedTaskId(newTaskId);
+    setHasWorked(newHasWorked);
+    if (newWorkText) setWorkText(newWorkText);
+    if (newNoWorkReason) setNoWorkReason(newNoWorkReason);
+    if (newLogDate) setLogDate(newLogDate);
+    setFeedback({
+      type: 'success',
+      message: '✨ Form populated by AI Voice Standup! Review and submit when ready.'
+    });
+  };
 
   // History filtering & search
   const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'productive', 'blocker'
@@ -372,9 +387,21 @@ export default function EmployeeDailyLogs({ selectedWorkspace: propWorkspace }) 
             </div>
           </div>
 
-          <div className="hidden sm:flex items-center gap-2">
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Auto-syncs with Calendar Matrix</span>
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsVoiceStandupOpen(true)}
+              className="btn-secondary flex items-center gap-2 px-3 py-1.5 rounded-lg border border-yellow-500/40 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/10 text-xs font-semibold shadow-sm transition-all cursor-pointer"
+              title="Speak a 30-second standup summary to auto-populate or submit"
+            >
+              <Mic className="w-3.5 h-3.5 text-yellow-500 animate-pulse" />
+              <span>Voice Standup (30s)</span>
+            </button>
+
+            <div className="hidden sm:flex items-center gap-2">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Auto-syncs with Calendar Matrix</span>
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            </div>
           </div>
         </div>
 
@@ -724,6 +751,21 @@ export default function EmployeeDailyLogs({ selectedWorkspace: propWorkspace }) 
           </div>
         </div>
       )}
+
+      {/* ── 30-SECOND ASYNC VOICE STANDUP MODAL ────────────────────── */}
+      <VoiceStandupModal
+        isOpen={isVoiceStandupOpen}
+        onClose={() => setIsVoiceStandupOpen(false)}
+        tasks={tasks}
+        onApplyToForm={handleApplyVoiceStandup}
+        onLogSubmitted={async () => {
+          setFeedback({
+            type: 'success',
+            message: '🚀 Voice standup submitted successfully! Metrics & Calendar Matrix updated.'
+          });
+          await fetchEmployeeData();
+        }}
+      />
     </div>
   );
 }

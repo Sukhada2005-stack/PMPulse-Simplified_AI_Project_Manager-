@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { api } from '../services/api';
 import {
   Users,
@@ -18,7 +18,12 @@ import {
   UserMinus,
   Edit,
   Layers,
-  AlertCircle
+  AlertCircle,
+  LayoutGrid,
+  Table as TableIcon,
+  ChevronLeft,
+  ChevronRight,
+  MoreVertical
 } from 'lucide-react';
 
 const EditContributorModal = ({ data, onClose }) => {
@@ -103,6 +108,29 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
   // Edit State
   const [editingContributor, setEditingContributor] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // View Mode: Grid (Cards) vs Table (Tabular Display)
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      return localStorage.getItem('pmpulse_workforce_view_mode') || 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
+  const [tablePage, setTablePage] = useState(1);
+  const [openKebabEmployeeId, setOpenKebabEmployeeId] = useState(null);
+  const kebabContainerRef = useRef(null);
+
+  useEffect(() => {
+    if (!openKebabEmployeeId) return;
+    const handleClickOutside = (e) => {
+      if (kebabContainerRef.current && !kebabContainerRef.current.contains(e.target)) {
+        setOpenKebabEmployeeId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openKebabEmployeeId]);
 
   // New employee form
   const [fullName, setFullName] = useState('');
@@ -373,6 +401,19 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
       return true;
     });
   }, [employees, activeKpiFilter, search]);
+
+  // Table Pagination
+  const TABLE_ITEMS_PER_PAGE = 8;
+  const totalTablePages = Math.max(1, Math.ceil(filteredEmployees.length / TABLE_ITEMS_PER_PAGE));
+
+  useEffect(() => {
+    setTablePage(1);
+  }, [search, activeKpiFilter]);
+
+  const paginatedTableEmployees = useMemo(() => {
+    const start = (tablePage - 1) * TABLE_ITEMS_PER_PAGE;
+    return filteredEmployees.slice(start, start + TABLE_ITEMS_PER_PAGE);
+  }, [filteredEmployees, tablePage]);
 
   return (
     <div className="space-y-6 animate-fade-up">
@@ -661,7 +702,39 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
         </div>
       </div>
 
-      {/* Directory Grid */}
+      {/* ── View Controls Bar (located just below the KPI and above the contributors) ── */}
+      {!loading && employees.length > 0 && (
+        <div className="flex items-center justify-between flex-wrap gap-3 pt-1">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <Users className="w-4 h-4 text-slate-400" />
+            <span>Contributors Directory ({filteredEmployees.length})</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              const nextMode = viewMode === 'grid' ? 'table' : 'grid';
+              setViewMode(nextMode);
+              try {
+                localStorage.setItem('pmpulse_workforce_view_mode', nextMode);
+              } catch (e) {
+                console.error(e);
+              }
+            }}
+            className="border rounded-md px-3.5 py-2 text-sm font-medium flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer select-none bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 shadow-sm"
+            title={`Switch to ${viewMode === 'grid' ? 'Table' : 'Grid'} View`}
+          >
+            {viewMode === 'grid' ? (
+              <TableIcon className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+            ) : (
+              <LayoutGrid className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+            )}
+            <span>Toggle View</span>
+          </button>
+        </div>
+      )}
+
+      {/* Directory Content: Loading / Empty / Table / Grid */}
       {loading ? (
         <div className="py-20 text-center jira-card" style={{ background: 'var(--color-surface-solid)' }}>
           <RefreshCw className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-2" />
@@ -714,6 +787,202 @@ export default function WorkforceDirectory({ onSelectEmployee360 }) {
             >
               Reset filter to view all employees
             </button>
+          )}
+        </div>
+      ) : viewMode === 'table' ? (
+        <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+          <div className="overflow-x-auto min-h-[220px]">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="py-3 px-4 min-w-[220px]">Contributor</th>
+                  <th className="py-3 px-4 min-w-[170px]">Role & Type</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-center">Projects</th>
+                  <th className="py-3 px-4 text-center">Active Tasks</th>
+                  <th className="py-3 px-4 text-center min-w-[140px]">Compliance</th>
+                  <th className="py-3 px-4 text-right min-w-[70px]">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800/80">
+                {paginatedTableEmployees.map((emp, idx) => (
+                  <tr
+                    key={emp.id}
+                    className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group"
+                  >
+                    {/* Contributor Name & Email */}
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex items-center justify-center font-bold text-xs shrink-0">
+                          {emp.full_name ? emp.full_name.charAt(0).toUpperCase() : 'U'}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-slate-900 dark:text-white text-xs truncate max-w-[200px] sm:max-w-xs">
+                            {emp.full_name}
+                          </h4>
+                          <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[200px] sm:max-w-xs font-mono">
+                            <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span className="truncate">{emp.email}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Role & Employment Type */}
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <div className="flex flex-col gap-1 items-start">
+                        <span className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                          {emp.role_title}
+                        </span>
+                        {emp.employment_type && (
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                            emp.employment_type.toLowerCase().includes('intern')
+                              ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+                              : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                          }`}>
+                            {emp.employment_type}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Status */}
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <span className="lozenge lozenge-success">
+                        Active
+                      </span>
+                    </td>
+
+                    {/* Projects Count */}
+                    <td className="py-3 px-4 text-center whitespace-nowrap">
+                      <span className="lozenge lozenge-default font-mono text-[11px]">
+                        {getEmployeeProjectCount(emp)} Projects
+                      </span>
+                    </td>
+
+                    {/* Active Tasks Count */}
+                    <td className="py-3 px-4 text-center whitespace-nowrap">
+                      <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                        {getEmployeeActiveTaskCount(emp)} Tasks
+                      </span>
+                    </td>
+
+                    {/* Daily Log Compliance */}
+                    <td className="py-3 px-4 text-center whitespace-nowrap">
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                        <span>{emp.consistency_score}%</span>
+                      </div>
+                    </td>
+
+                    {/* Actions — Kebab Menu */}
+                    <td className="py-3 px-4 text-right whitespace-nowrap">
+                      <div
+                        className="relative inline-block text-left"
+                        ref={openKebabEmployeeId === emp.id ? kebabContainerRef : null}
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenKebabEmployeeId(prev => prev === emp.id ? null : emp.id);
+                          }}
+                          className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700/70 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                          title="Actions"
+                          aria-label={`Actions for ${emp.full_name}`}
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+
+                        {openKebabEmployeeId === emp.id && (
+                          <div
+                            className={`absolute right-0 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl py-1 text-xs z-50 animate-fade-in ${
+                              idx >= paginatedTableEmployees.length - 1 && paginatedTableEmployees.length >= 2
+                                ? 'bottom-full mb-1.5'
+                                : 'top-full mt-1.5'
+                            }`}
+                          >
+                            {/* 1. 360° Analysis */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenKebabEmployeeId(null);
+                                onSelectEmployee360(emp.id);
+                              }}
+                              className="w-full text-left px-3 py-2 flex items-center gap-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer font-medium"
+                            >
+                              <ArrowUpRight className="w-3.5 h-3.5 text-slate-400" />
+                              <span>360° Analysis</span>
+                            </button>
+
+                            {/* 2. Edit */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenKebabEmployeeId(null);
+                                setEditingContributor(emp);
+                                setIsEditModalOpen(true);
+                              }}
+                              className="w-full text-left px-3 py-2 flex items-center gap-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer font-medium"
+                            >
+                              <Edit className="w-3.5 h-3.5 text-slate-400" />
+                              <span>Edit</span>
+                            </button>
+
+                            <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+
+                            {/* 3. Delete */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenKebabEmployeeId(null);
+                                setRemoveTarget({ id: emp.id, full_name: emp.full_name });
+                              }}
+                              className="w-full text-left px-3 py-2 flex items-center gap-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors cursor-pointer font-medium"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400" />
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination Controls */}
+          {totalTablePages > 1 && (
+            <div className="py-3 px-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+              <div>
+                Showing <span className="font-semibold text-slate-700 dark:text-slate-300">{(tablePage - 1) * TABLE_ITEMS_PER_PAGE + 1}</span> to <span className="font-semibold text-slate-700 dark:text-slate-300">{Math.min(tablePage * TABLE_ITEMS_PER_PAGE, filteredEmployees.length)}</span> of <span className="font-semibold text-slate-700 dark:text-slate-300">{filteredEmployees.length}</span> contributors
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTablePage(p => Math.max(1, p - 1))}
+                  disabled={tablePage === 1}
+                  className="p-1.5 rounded border border-slate-200 dark:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  title="Previous Page"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <span className="font-medium text-slate-700 dark:text-slate-300 px-1">
+                  Page {tablePage} of {totalTablePages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setTablePage(p => Math.min(totalTablePages, p + 1))}
+                  disabled={tablePage === totalTablePages}
+                  className="p-1.5 rounded border border-slate-200 dark:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  title="Next Page"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
           )}
         </div>
       ) : (
