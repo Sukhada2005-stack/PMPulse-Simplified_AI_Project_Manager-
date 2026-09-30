@@ -7,6 +7,7 @@ import { generateSummary } from '../controllers/aiController.js';
 import { getProjectMessages, sendProjectMessage } from '../controllers/chatController.js';
 import { createPM, getPMs, deletePM, updatePM, getPMProjects, getPMWorkforce } from '../controllers/superuserController.js';
 import { handleEmployeeCopilot, handlePMCopilot, handleSuperuserCopilot } from '../controllers/copilotController.js';
+import { generateExecutiveReport } from '../controllers/reportController.js';
 import { authenticateToken, requirePM, requireSuperuser } from '../middleware/auth.js';
 import multer from 'multer';
 
@@ -77,8 +78,9 @@ router.get('/daily-logs/active-blockers', authenticateToken, requirePM, getActiv
 router.get('/projects/:id/matrix', authenticateToken, requirePM, getProjectMatrix);
 router.get('/matrix/fleet', authenticateToken, requirePM, getFleetMatrix);
 
-// --- Multi-Dimensional AI Summary Engine ---
+// --- Multi-Dimensional AI Summary Engine & Executive Sprint Report ---
 router.post('/ai/summarize', authenticateToken, requirePM, generateSummary);
+router.post('/projects/:id/executive-sprint-report', authenticateToken, requirePM, generateExecutiveReport);
 
 // --- Role-Scoped Conversational AI Copilots ---
 router.post('/copilot/employee', authenticateToken, handleEmployeeCopilot);

@@ -135,6 +135,10 @@ export const api = {
     syncWorkspaceTasks: (projectId, tasks) => request(`/workspaces/${projectId}/tasks/sync`, {
       method: 'POST',
       body: JSON.stringify({ tasks })
+    }),
+    getExecutiveReport: (projectId, payload) => request(`/projects/${projectId}/executive-sprint-report`, {
+      method: 'POST',
+      body: JSON.stringify(payload || {})
     })
   },
   tasks: {

@@ -18,8 +18,10 @@ import {
   RefreshCw,
   Clock,
   ShieldAlert,
-  ChevronRight
+  ChevronRight,
+  FileText
 } from 'lucide-react';
+import ExecutiveSprintReportModal from './ExecutiveSprintReportModal';
 
 const DIMENSIONS = [
   {
@@ -118,6 +120,7 @@ export default function AISummaryHub({ selectedWorkspace }) {
   const [dateTo, setDateTo] = useState(initialSprint.end);
   const [sprintLabel, setSprintLabel] = useState(initialSprint.label);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [showExecutiveDeck, setShowExecutiveDeck] = useState(false);
 
   // Multi-select entities
   const [projects, setProjects] = useState([]);
@@ -295,6 +298,14 @@ export default function AISummaryHub({ selectedWorkspace }) {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowExecutiveDeck(true)}
+              className="px-3.5 py-2 rounded-lg text-xs font-bold transition-all border border-yellow-500/40 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 flex items-center gap-1.5 shadow-sm"
+              title="Open One-Click Boardroom Executive Sprint Report & PDF Presentation"
+            >
+              <FileText className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-400" />
+              <span>Generate Executive Deck</span>
+            </button>
             <button
               onClick={handleGenerateSummary}
               disabled={loading}
@@ -555,6 +566,16 @@ export default function AISummaryHub({ selectedWorkspace }) {
           </div>
 
         </div>
+      )}
+
+      {/* Executive Sprint Report Modal (Deck & PDF Export) */}
+      {showExecutiveDeck && (
+        <ExecutiveSprintReportModal
+          projectId={selectedProjectIds?.[0] || selectedWorkspace?.id || 'fleet'}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onClose={() => setShowExecutiveDeck(false)}
+        />
       )}
     </div>
   );

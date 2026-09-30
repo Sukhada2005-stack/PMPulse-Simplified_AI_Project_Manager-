@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import confetti from 'canvas-confetti';
@@ -62,6 +63,23 @@ export default function EmployeeDailyLogs({ selectedWorkspace: propWorkspace }) 
   const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'productive', 'blocker'
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLogDetail, setSelectedLogDetail] = useState(null);
+
+  // Escape key and body scroll lock for detail modal
+  useEffect(() => {
+    if (!selectedLogDetail) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setSelectedLogDetail(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow || '';
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedLogDetail]);
 
   // Active project context
   const activeWorkspace = propWorkspace || (tasks[0]?.project_id ? { id: tasks[0].project_id, title: tasks[0].project_title } : null);
@@ -678,9 +696,32 @@ export default function EmployeeDailyLogs({ selectedWorkspace: propWorkspace }) 
       </div>
 
       {/* ── DETAIL MODAL ───────────────────────────────────────────── */}
-      {selectedLogDetail && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 animate-scale-up">
+      {selectedLogDetail && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 flex items-center justify-center p-4 overflow-y-auto animate-fade-in"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            zIndex: 999999,
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setSelectedLogDetail(null);
+            }
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 animate-scale-up my-auto"
+          >
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-yellow-500" />
@@ -688,7 +729,8 @@ export default function EmployeeDailyLogs({ selectedWorkspace: propWorkspace }) 
               </div>
               <button
                 onClick={() => setSelectedLogDetail(null)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                title="Close (Esc or click outside)"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -743,13 +785,14 @@ export default function EmployeeDailyLogs({ selectedWorkspace: propWorkspace }) 
             <div className="flex justify-end pt-2">
               <button
                 onClick={() => setSelectedLogDetail(null)}
-                className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-sm font-semibold border border-slate-300 dark:border-slate-700"
+                className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-sm font-semibold border border-slate-300 dark:border-slate-700 transition-colors"
               >
                 Close
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── 30-SECOND ASYNC VOICE STANDUP MODAL ────────────────────── */}

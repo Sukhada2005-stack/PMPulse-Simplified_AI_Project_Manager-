@@ -17,11 +17,13 @@ import {
   Search,
   MessageSquare,
   Layout,
-  ArrowLeft
+  ArrowLeft,
+  FileText
 } from 'lucide-react';
 import LogDetailModal from './LogDetailModal';
 import TaskDetailModal from './TaskDetailModal';
 import ProjectChatModal from './ProjectChatModal';
+import ExecutiveSprintReportModal from './ExecutiveSprintReportModal';
 import { useAuth } from '../context/AuthContext';
 
 /* ── Main CalendarMatrix Component ──────────────────────────────────── */
@@ -35,6 +37,7 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onN
   const [showChatModal, setShowChatModal] = useState(false);
   const [selectedTaskModal, setSelectedTaskModal] = useState(null);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const [showExecutiveReportModal, setShowExecutiveReportModal] = useState(false);
 
   // Compute active project ID for chat
   const effectiveChatProjectId = currentProjectId !== 'fleet' && currentProjectId
@@ -465,6 +468,16 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onN
                 )}
               </button>
 
+              {/* One-Click Executive Sprint Report (Generate Executive Deck) */}
+              <button
+                onClick={() => setShowExecutiveReportModal(true)}
+                className="flex items-center gap-2 bg-gradient-to-r from-yellow-500/10 to-amber-500/15 hover:from-yellow-500/20 hover:to-amber-500/25 dark:from-yellow-500/15 dark:to-amber-500/20 text-yellow-700 dark:text-yellow-400 border border-yellow-500/40 dark:border-yellow-500/50 px-3 py-1.5 rounded-md text-sm font-bold transition-all shadow-sm hover:shadow"
+                title="Generate Boardroom-Ready One-Click Executive Sprint Report (PDF / Slide Deck)"
+              >
+                <FileText className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
+                <span>Generate Executive Deck</span>
+              </button>
+
               <button
                 onClick={fetchMatrix}
                 className="flex items-center gap-2 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 px-3 py-1.5 rounded-md text-sm font-medium transition-colors shadow-sm"
@@ -876,6 +889,41 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onN
           onClose={() => setShowChatModal(false)}
         />
       )}
+
+      {/* ── Executive Sprint Report Modal (Presentation Deck & PDF) ─── */}
+      {showExecutiveReportModal && (() => {
+        const targetPid = currentProjectId !== 'fleet' && currentProjectId ? currentProjectId : (projects[0]?.id || 'fleet');
+        let cfg = null;
+        let sprintTasks = [];
+        try {
+          const rawCfg = localStorage.getItem(`pmpulse_sprintConfig_${targetPid}`);
+          if (rawCfg) cfg = JSON.parse(rawCfg);
+          const rawTasks = localStorage.getItem(`pmpulse_listTasks_${targetPid}`);
+          if (rawTasks) sprintTasks = JSON.parse(rawTasks);
+        } catch (e) {}
+
+        const isMultiYear = (d1, d2) => {
+          if (!d1 || !d2) return true;
+          const diffDays = (new Date(d2) - new Date(d1)) / (1000 * 60 * 60 * 24);
+          return isNaN(diffDays) || diffDays > 45;
+        };
+
+        const effectiveFrom = (dateFrom && !isMultiYear(dateFrom, dateTo)) ? dateFrom : '2026-09-23';
+        const effectiveTo = (dateTo && !isMultiYear(dateFrom, dateTo)) ? dateTo : '2026-10-07';
+        const sprintLabelStr = cfg?.start && cfg?.end ? `${cfg.start} — ${cfg.end}` : '23 Sept 2026 — 07 Oct 2026';
+
+        return (
+          <ExecutiveSprintReportModal
+            projectId={targetPid}
+            dateFrom={effectiveFrom}
+            dateTo={effectiveTo}
+            sprintConfig={cfg}
+            sprintLabel={sprintLabelStr}
+            activeSprintTasks={sprintTasks}
+            onClose={() => setShowExecutiveReportModal(false)}
+          />
+        );
+      })()}
 
       {/* ── Project Deadline Reached Modal ─── */}
       {showDeadlineModal && deadlineProject && (

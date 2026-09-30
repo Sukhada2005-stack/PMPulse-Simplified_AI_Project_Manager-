@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Layout, Upload, Loader2, Inbox, Trash2, Plus, Users, X, FileText, UploadCloud, File, UserCheck, DownloadCloud, Folder, Target, AlertTriangle, SearchCheck, Bug, Clock, LayoutList, Calendar, User, CornerDownLeft, MoreHorizontal, Edit2, Grid2x2, ArrowRight, CheckCircle2, List, LayoutGrid, CheckSquare, Layers, TrendingUp, ListFilter, Filter } from 'lucide-react';
 import TaskFilterPanel from './TaskFilterPanel';
 import AICopilotPanel from './AICopilotPanel';
+import ExecutiveSprintReportModal from './ExecutiveSprintReportModal';
 const getSafeStorage = (key, fallback) => {
     if (typeof window === 'undefined') return fallback;
     try {
@@ -31,6 +32,31 @@ const parseSprintEndDate = (dateStr) => {
     if (!isNaN(day) && month !== undefined && !isNaN(year)) {
       return new Date(year, month, day);
     }
+  }
+  return null;
+};
+
+const parseSprintDateISO = (dateStr) => {
+  if (!dateStr) return null;
+  const str = String(dateStr).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  const months = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12 };
+  const parts = str.split(/[\s-]+/);
+  if (parts.length >= 3) {
+    const day = parseInt(parts[0], 10);
+    const monthStr = parts[1].toLowerCase().slice(0, 4);
+    const monthNum = months[monthStr] || months[parts[1].toLowerCase().slice(0, 3)];
+    const year = parseInt(parts[2], 10);
+    if (!isNaN(day) && monthNum && !isNaN(year)) {
+      return `${year}-${String(monthNum).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+  }
+  const direct = new Date(str.replace(/Sept/i, 'Sep'));
+  if (!isNaN(direct.getTime())) {
+    const y = direct.getFullYear();
+    const m = String(direct.getMonth() + 1).padStart(2, '0');
+    const d = String(direct.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
   return null;
 };
@@ -95,6 +121,7 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
   const [workspaces, setWorkspaces] = useState([]);
   const [allWorkspacesTasks, setAllWorkspacesTasks] = useState([]);
   const [allWorkspacesDocs, setAllWorkspacesDocs] = useState([]);
+  const [showExecutiveReportModal, setShowExecutiveReportModal] = useState(false);
 
   const fetchAllWorkspacesData = async () => {
     try {
@@ -2588,6 +2615,14 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
                           <span>Summary</span>
                           <ArrowRight size={14} className="text-slate-400" />
                         </button>
+                        <button
+                          onClick={() => setShowExecutiveReportModal(true)}
+                          className="flex items-center gap-2 bg-gradient-to-r from-yellow-500/10 to-amber-500/15 hover:from-yellow-500/20 hover:to-amber-500/25 dark:from-yellow-500/15 dark:to-amber-500/20 text-yellow-700 dark:text-yellow-400 px-3 py-1.5 rounded-md text-sm font-bold transition-all border border-yellow-500/40 dark:border-yellow-500/50 shadow-sm hover:shadow"
+                          title="Generate Boardroom-Ready One-Click Executive Sprint Report (PDF / Slide Deck)"
+                        >
+                          <FileText size={16} className="text-yellow-600 dark:text-yellow-400" />
+                          <span>Executive Deck</span>
+                        </button>
                       </>
                     )}
                   </div>
@@ -4485,6 +4520,41 @@ export default function PMDashboard({ onNavigateTab, onSelectEmployee360, select
           </div>
         </div>
       )}
+
+      {/* Executive Sprint Report Modal (Deck & PDF Export) */}
+      {showExecutiveReportModal && (() => {
+        const wsId = selectedWorkspace?.id;
+        let cfg = sprintConfig;
+        if (!cfg && wsId) {
+          cfg = getSafeStorage(`pmpulse_sprintConfig_${wsId}`, null);
+        }
+        const startISO = parseSprintDateISO(cfg?.start) || parseSprintDateISO(cfg?.startDateISO) || '2026-09-23';
+        const endISO = parseSprintDateISO(cfg?.end) || parseSprintDateISO(cfg?.endDateISO) || '2026-10-07';
+        const sprintLabelStr = cfg?.start && cfg?.end ? `${cfg.start} — ${cfg.end}` : '23 Sept 2026 — 07 Oct 2026';
+        
+        let sprintTasks = (listTasks && listTasks.length > 0) ? listTasks : ((boardTasks && boardTasks.length > 0) ? boardTasks : []);
+        if ((!sprintTasks || sprintTasks.length === 0) && wsId) {
+          const storedList = getSafeStorage(`pmpulse_listTasks_${wsId}`, []);
+          if (storedList && storedList.length > 0) {
+            sprintTasks = storedList;
+          } else {
+            const storedBoard = getSafeStorage(`pmpulse_boardTasks_${wsId}`, []);
+            if (storedBoard && storedBoard.length > 0) sprintTasks = storedBoard;
+          }
+        }
+
+        return (
+          <ExecutiveSprintReportModal
+            projectId={selectedWorkspace?.id || 'fleet'}
+            dateFrom={startISO}
+            dateTo={endISO}
+            sprintConfig={cfg}
+            sprintLabel={sprintLabelStr}
+            activeSprintTasks={sprintTasks}
+            onClose={() => setShowExecutiveReportModal(false)}
+          />
+        );
+      })()}
 
       {/* Role-Scoped Conversational AI Copilot */}
       <AICopilotPanel
