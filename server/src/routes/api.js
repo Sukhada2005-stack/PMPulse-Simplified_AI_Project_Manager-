@@ -8,6 +8,7 @@ import { getProjectMessages, sendProjectMessage } from '../controllers/chatContr
 import { createPM, getPMs, deletePM, updatePM, getPMProjects, getPMWorkforce } from '../controllers/superuserController.js';
 import { handleEmployeeCopilot, handlePMCopilot, handleSuperuserCopilot } from '../controllers/copilotController.js';
 import { generateExecutiveReport } from '../controllers/reportController.js';
+import { getMyProfile, updateMyProfile, downloadMyResume } from '../controllers/profileController.js';
 import { authenticateToken, requirePM, requireSuperuser } from '../middleware/auth.js';
 import multer from 'multer';
 
@@ -22,6 +23,11 @@ router.post('/auth/set-permanent-password', setPermanentPassword);
 router.post('/auth/change-password', authenticateToken, changePassword);
 router.get('/auth/me', authenticateToken, getMe);
 router.get('/auth/users', listAllUsers);
+
+// --- Personal Profile ---
+router.get('/profile/me', authenticateToken, getMyProfile);
+router.put('/profile/me', authenticateToken, updateMyProfile);
+router.get('/profile/resume/download', authenticateToken, downloadMyResume);
 
 // --- Employee Management & 360° Analytics ---
 router.post('/employees', authenticateToken, requirePM, createEmployee);

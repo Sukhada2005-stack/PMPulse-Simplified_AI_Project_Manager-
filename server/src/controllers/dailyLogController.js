@@ -171,16 +171,24 @@ export const getProjectMatrix = (req, res) => {
         let startDate = date_from;
         let endDate = date_to;
 
-        if (!startDate || !endDate) {
-            // Find min start_date and max end_date from tasks or default to current 10-day window
+        if (!startDate && !endDate) {
+            // Find min start_date and max end_date from tasks, project, or default to current date
             if (tasks.length > 0) {
-                const dates = tasks.flatMap(t => [t.start_date, t.end_date]).sort();
-                startDate = startDate || dates[0] || '2026-08-27';
-                endDate = endDate || dates[dates.length - 1] || '2026-09-06';
+                const dates = tasks.flatMap(t => [t.start_date, t.end_date]).filter(Boolean).sort();
+                startDate = dates[0] || new Date().toISOString().split('T')[0];
+                endDate = dates[dates.length - 1] || startDate;
+            } else if (project.start_date && project.end_date) {
+                startDate = project.start_date;
+                endDate = project.end_date;
             } else {
-                startDate = startDate || '2026-08-27';
-                endDate = endDate || '2026-09-06';
+                const today = new Date().toISOString().split('T')[0];
+                startDate = today;
+                endDate = today;
             }
+        } else if (!startDate) {
+            startDate = endDate;
+        } else if (!endDate) {
+            endDate = startDate;
         }
 
         if (startDate > endDate) {
@@ -189,12 +197,17 @@ export const getProjectMatrix = (req, res) => {
             endDate = temp;
         }
 
-        // Generate full array of calendar days between startDate and endDate
+        // Generate full array of calendar days between startDate and endDate (timezone-safe)
         const dayList = [];
-        const curr = new Date(startDate);
-        const end = new Date(endDate);
+        const [sY, sM, sD] = startDate.split('-').map(Number);
+        const [eY, eM, eD] = endDate.split('-').map(Number);
+        const curr = new Date(sY, sM - 1, sD);
+        const end = new Date(eY, eM - 1, eD);
         while (curr <= end) {
-            dayList.push(curr.toISOString().split('T')[0]);
+            const y = curr.getFullYear();
+            const m = String(curr.getMonth() + 1).padStart(2, '0');
+            const d = String(curr.getDate()).padStart(2, '0');
+            dayList.push(`${y}-${m}-${d}`);
             curr.setDate(curr.getDate() + 1);
         }
 
@@ -303,7 +316,7 @@ export const getProjectMatrix = (req, res) => {
                     }
                 } else {
                     // Check if contributor has any assigned active deliverable for this date
-                    const activeTask = empTasks.find(t => dateStr >= t.start_date && dateStr <= t.end_date) || (empTasks.length > 0 ? empTasks[0] : null);
+                    const activeTask = empTasks.find(t => dateStr >= t.start_date && dateStr <= t.end_date) || null;
 
                     if (activeTask) {
                         const taskInfo = {
@@ -368,8 +381,17 @@ export const getProjectMatrix = (req, res) => {
 // Global Fleet Matrix for all projects combined
 export const getFleetMatrix = (req, res) => {
     try {
-        let startDate = req.query.date_from || '2026-08-27';
-        let endDate = req.query.date_to || '2026-09-06';
+        let startDate = req.query.date_from;
+        let endDate = req.query.date_to;
+
+        if (!startDate && !endDate) {
+            startDate = '2026-08-27';
+            endDate = '2026-09-06';
+        } else if (!startDate) {
+            startDate = endDate;
+        } else if (!endDate) {
+            endDate = startDate;
+        }
 
         if (startDate > endDate) {
             const temp = startDate;
@@ -377,12 +399,17 @@ export const getFleetMatrix = (req, res) => {
             endDate = temp;
         }
 
-        // Generate full array of calendar days
+        // Generate full array of calendar days (timezone-safe)
         const dayList = [];
-        const curr = new Date(startDate);
-        const end = new Date(endDate);
+        const [sY, sM, sD] = startDate.split('-').map(Number);
+        const [eY, eM, eD] = endDate.split('-').map(Number);
+        const curr = new Date(sY, sM - 1, sD);
+        const end = new Date(eY, eM - 1, eD);
         while (curr <= end) {
-            dayList.push(curr.toISOString().split('T')[0]);
+            const y = curr.getFullYear();
+            const m = String(curr.getMonth() + 1).padStart(2, '0');
+            const d = String(curr.getDate()).padStart(2, '0');
+            dayList.push(`${y}-${m}-${d}`);
             curr.setDate(curr.getDate() + 1);
         }
 

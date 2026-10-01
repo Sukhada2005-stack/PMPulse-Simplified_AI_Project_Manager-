@@ -61,6 +61,13 @@ export const api = {
       body: JSON.stringify({ email, initial_password: initialPassword, new_password: newPassword })
     })
   },
+  profile: {
+    getMe: () => request('/profile/me'),
+    updateMe: (data) => request('/profile/me', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    })
+  },
   employees: {
     getAll: () => request('/employees'),
     create: (data) => request('/employees', {
@@ -186,6 +193,21 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ message, history })
     })
+  },
+  profile: {
+    getMe: () => request('/profile/me'),
+    updateMe: (data) => request('/profile/me', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+    downloadResume: async () => {
+      const token = localStorage.getItem('pulsepm_token') || localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/profile/resume/download`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (!response.ok) throw new Error('Failed to download resume');
+      return await response.blob();
+    }
   }
 };
 

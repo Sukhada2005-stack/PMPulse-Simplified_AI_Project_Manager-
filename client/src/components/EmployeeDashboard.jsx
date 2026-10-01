@@ -34,7 +34,9 @@ import {
   LayoutGrid,
   CheckSquare,
   Layers,
-  ListFilter
+  ListFilter,
+  Target,
+  Filter
 } from 'lucide-react';
 import ProjectChatModal from './ProjectChatModal';
 import AICopilotPanel from './AICopilotPanel';
@@ -239,6 +241,8 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
     try { return (wsId ? JSON.parse(window.localStorage.getItem(`pmpulse_sprintBacklogTasks_${wsId}`)) : null) || []; } 
     catch { return []; }
   });
+  const [overallFilter, setOverallFilter] = useState(null); // null, 'unassigned', 'undated'
+  const [overallPriorityFilter, setOverallPriorityFilter] = useState('all'); // 'all', 'Highest', 'High', 'Medium', 'Low', 'Lowest'
   const [workspaceMembers, setWorkspaceMembers] = useState(() => {
     try { return JSON.parse(window.localStorage.getItem('pmpulse_workspaceMembers')) || []; } 
     catch { return []; }
@@ -380,6 +384,8 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
       setWorkspaceDocs([]);
       setSprintBacklogTasks([]);
       setSprintConfig(null);
+      setOverallFilter(null);
+      setOverallPriorityFilter('all');
       return;
     }
     try {
@@ -391,6 +397,8 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
       setSprintBacklogTasks(JSON.parse(localStorage.getItem(`pmpulse_sprintBacklogTasks_${id}`)) || []);
       setSprintConfig(JSON.parse(localStorage.getItem(`pmpulse_sprintConfig_${id}`)) || null);
     } catch (e) {}
+    setOverallFilter(null);
+    setOverallPriorityFilter('all');
     activeWsIdRef.current = id;
   }, [selectedWorkspace?.id]);
 
@@ -1275,6 +1283,186 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
   const filteredBoardTasks = useMemo(() => applyTaskFilter(boardTasks, activeBoardFilters), [boardTasks, activeBoardFilters]);
   const filteredBoardBacklogTasks = useMemo(() => applyTaskFilter(boardBacklogTasks, backlogBoardFilters), [boardBacklogTasks, backlogBoardFilters]);
 
+  // ── Overall Tasks Priority & KPI Filter State & Calculations ───────────────
+  const OVERALL_PRIORITY_OPTIONS = [
+    { id: 'all', label: 'All Priorities' },
+    { id: 'Highest', label: 'Highest' },
+    { id: 'High', label: 'High' },
+    { id: 'Medium', label: 'Medium' },
+    { id: 'Low', label: 'Low' },
+    { id: 'Lowest', label: 'Lowest' },
+  ];
+
+  const getResolvedTaskDetails = useMemo(() => {
+    const normalizeTitle = (str) => !str ? '' : String(str).trim().replace(/[\u2010-\u2015]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/\s+/g, ' ').toLowerCase();
+    const activeSprintAndBacklog = [
+      ...(listTasks || []),
+      ...(boardTasks || []),
+      ...(sprintBacklogTasks || []),
+      ...(boardBacklogTasks || [])
+    ];
+
+    return (task) => {
+      if (!task) return {};
+      const tTitle = normalizeTitle(task['Issue / Task / Enhancement'] || task.title || task.description || '');
+      
+      const activeMatch = activeSprintAndBacklog.find(at => 
+        (at.id && String(at.id) === String(task.id)) ||
+        (at.key && task.key && at.key === task.key) ||
+        (tTitle && normalizeTitle(at.task || at.title || at.description || at.taskName || '') === tTitle)
+      );
+
+      const displayAssignee = (activeMatch?.assignee && activeMatch.assignee !== 'Unassigned')
+        ? activeMatch.assignee
+        : (activeMatch?.['Responsible'] && activeMatch['Responsible'] !== 'Unassigned')
+          ? activeMatch['Responsible']
+          : (task['Responsible'] || task.assignee || task['Added by'] || 'Unassigned');
+
+      const displayStatus = activeMatch?.status || activeMatch?.['Status'] || task['Status'] || (task.status === 'in_progress' ? 'In Progress' : (task.status || 'To Do'));
+      const displayDueDate = (activeMatch?.dueDate && activeMatch.dueDate !== '—') 
+        ? activeMatch.dueDate 
+        : (activeMatch?.['Completed'] && activeMatch['Completed'] !== '—')
+          ? activeMatch['Completed']
+          : ((task.due_date && task.due_date !== '—') 
+              ? task.due_date 
+              : ((task.dueDate && task.dueDate !== '—') 
+                  ? task.dueDate 
+                  : ((task['Completed'] && task['Completed'] !== '—') ? task['Completed'] : '—')));
+      const displayPriority = activeMatch?.priority || activeMatch?.['Priority'] || task['Priority'] || task.priority || 'Medium';
+
+      const isUnassigned = !displayAssignee || displayAssignee === 'Unassigned' || String(displayAssignee).trim() === '';
+      const isUndated = !displayDueDate || displayDueDate === '—' || displayDueDate === '-' || String(displayDueDate).trim() === '';
+
+      return {
+        displayAssignee,
+        displayStatus,
+        displayDueDate,
+        displayPriority,
+        isUnassigned,
+        isUndated
+      };
+    };
+  }, [listTasks, boardTasks, sprintBacklogTasks, boardBacklogTasks]);
+
+  const overallKpis = useMemo(() => {
+    let unassignedCount = 0;
+    let undatedCount = 0;
+
+    (workspaceTasks || []).forEach(task => {
+      const details = getResolvedTaskDetails(task);
+      if (details.isUnassigned) unassignedCount++;
+      if (details.isUndated) undatedCount++;
+    });
+
+    return {
+      unassignedCount,
+      undatedCount,
+      totalCount: (workspaceTasks || []).length
+    };
+  }, [workspaceTasks, getResolvedTaskDetails]);
+
+  // Dynamic Metadata for the 3rd KPI block based on selected priority filter
+  const priorityKpiMeta = useMemo(() => {
+    const key = String(overallPriorityFilter || 'all').toLowerCase();
+    switch (key) {
+      case 'highest':
+        return {
+          title: 'Escalated tasks',
+          subtext: 'Showing highest priority tasks',
+          filterLabel: 'Highest'
+        };
+      case 'high':
+        return {
+          title: 'Escalated tasks',
+          subtext: 'Showing high priority tasks',
+          filterLabel: 'High'
+        };
+      case 'medium':
+        return {
+          title: 'Neutral Priority tasks',
+          subtext: 'Showing medium priority tasks',
+          filterLabel: 'Medium'
+        };
+      case 'low':
+        return {
+          title: 'Low Priority tasks',
+          subtext: 'Showing low priority tasks',
+          filterLabel: 'Low'
+        };
+      case 'lowest':
+        return {
+          title: 'Lowest Priority tasks',
+          subtext: 'Showing lowest priority tasks',
+          filterLabel: 'Lowest'
+        };
+      default:
+        return {
+          title: 'Priority tasks',
+          subtext: 'Select a priority below to filter',
+          filterLabel: 'All'
+        };
+    }
+  }, [overallPriorityFilter]);
+
+  // Calculated count of tasks matching the selected priority filter
+  const priorityKpiCount = useMemo(() => {
+    if (!overallPriorityFilter || overallPriorityFilter === 'all') {
+      return (workspaceTasks || []).length;
+    }
+    const target = String(overallPriorityFilter).trim().toLowerCase();
+    return (workspaceTasks || []).filter(task => {
+      const details = getResolvedTaskDetails(task);
+      const p = String(details.displayPriority || task['Priority'] || task.priority || 'Medium').trim().toLowerCase();
+      if (target === 'highest') {
+        return p === 'highest' || p === 'critical' || p === 'urgent';
+      }
+      if (target === 'high') {
+        return p === 'high' || p === 'high priority';
+      }
+      if (target === 'medium') {
+        return p === 'medium';
+      }
+      if (target === 'low') {
+        return p === 'low';
+      }
+      if (target === 'lowest') {
+        return p === 'lowest';
+      }
+      return p === target;
+    }).length;
+  }, [workspaceTasks, overallPriorityFilter, getResolvedTaskDetails]);
+
+  const displayedWorkspaceTasks = useMemo(() => {
+    return (workspaceTasks || []).filter(task => {
+      const details = getResolvedTaskDetails(task);
+      
+      // 1. KPI Filter (unassigned / undated)
+      if (overallFilter === 'unassigned' && !details.isUnassigned) return false;
+      if (overallFilter === 'undated' && !details.isUndated) return false;
+
+      // 2. Priority Filter (all / Highest / High / Medium / Low / Lowest)
+      if (overallPriorityFilter && overallPriorityFilter !== 'all') {
+        const p = String(details.displayPriority || task['Priority'] || task.priority || 'Medium').trim().toLowerCase();
+        const target = String(overallPriorityFilter).trim().toLowerCase();
+        if (target === 'highest') {
+          if (p !== 'highest' && p !== 'critical' && p !== 'urgent') return false;
+        } else if (target === 'high') {
+          if (p !== 'high' && p !== 'high priority') return false;
+        } else if (target === 'medium') {
+          if (p !== 'medium') return false;
+        } else if (target === 'low') {
+          if (p !== 'low') return false;
+        } else if (target === 'lowest') {
+          if (p !== 'lowest') return false;
+        } else {
+          if (p !== target) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [workspaceTasks, overallFilter, overallPriorityFilter, getResolvedTaskDetails]);
+
   const handleDocsUpload = (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -1847,152 +2035,321 @@ export default function EmployeeDashboard({ selectedWorkspace: propWorkspace }) 
 
       {/* Overall Tasks View */}
       {activeView === 'overall' && (
-        <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Overall Project Tasks</h2>
-            <button 
-              onClick={() => setIsAddTaskModalOpen(true)}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-slate-900 rounded-md transition-colors shadow-sm"
-            >
-              <Plus size={14} /> Add Task
-            </button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 uppercase border-b border-slate-200 dark:border-slate-700/50">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Task Name</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Assignee</th>
-                  <th className="px-4 py-3 font-medium">Due Date</th>
-                  <th className="px-4 py-3 font-medium">Priority</th>
-                  <th className="px-4 py-3 font-medium">Added On</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 dark:divide-slate-700/50">
-                {workspaceTasks.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No overall tasks available for this workspace.</td></tr>
-                ) : (
-                  workspaceTasks.map((task, i) => {
-                    const normalizeTitle = (str) => !str ? '' : str.trim().replace(/[\u2010-\u2015]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/\s+/g, ' ').toLowerCase();
-                    const tTitle = normalizeTitle(task['Issue / Task / Enhancement'] || task.title || task.description || '');
-                    
-                    const activeMatch = [...(listTasks || []), ...(boardTasks || []), ...(boardBacklogTasks || [])].find(at => 
-                      (at.id && String(at.id) === String(task.id)) ||
-                      (at.key && task.key && at.key === task.key) ||
-                      (tTitle && normalizeTitle(at.task || at.title || at.description || at.taskName || '') === tTitle)
-                    );
+        <div className="space-y-6">
 
-                    const displayAssignee = (activeMatch?.assignee && activeMatch.assignee !== 'Unassigned')
-                      ? activeMatch.assignee
-                      : (activeMatch?.['Responsible'] && activeMatch['Responsible'] !== 'Unassigned')
-                        ? activeMatch['Responsible']
-                        : (task['Responsible'] || task.assignee || task['Added by'] || 'Unassigned');
+          {/* Overall Tasks KPI Filter Cards (below the secondary header and above the overall tasks table) */}
+          {workspaceTasks.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* 1. Unassigned tasks KPI */}
+              <div 
+                onClick={() => setOverallFilter(prev => prev === 'unassigned' ? null : 'unassigned')}
+                className={`relative p-5 rounded-xl border transition-all cursor-pointer shadow-sm select-none ${
+                  overallFilter === 'unassigned'
+                    ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-500 dark:border-amber-500 ring-2 ring-amber-500/20'
+                    : 'bg-white dark:bg-slate-800/40 border-slate-200 dark:border-slate-700/60 hover:border-slate-300 dark:hover:border-slate-600'
+                }`}
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Unassigned tasks</p>
+                    <h3 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
+                      {overallKpis.unassignedCount}
+                      <span className="text-xs font-normal text-slate-400 dark:text-slate-500 ml-2">
+                        of {overallKpis.totalCount} total
+                      </span>
+                    </h3>
+                  </div>
+                  <div className="p-2.5 bg-amber-500/10 rounded-lg text-amber-500">
+                    <Users size={20} />
+                  </div>
+                </div>
 
-                    const displayStatus = activeMatch?.status || activeMatch?.['Status'] || task['Status'] || (task.status === 'in_progress' ? 'In Progress' : (task.status || 'To Do'));
-                    const displayDueDate = (activeMatch?.dueDate && activeMatch.dueDate !== '—')
-                      ? activeMatch.dueDate
-                      : (activeMatch?.['Completed'] && activeMatch['Completed'] !== '—')
-                        ? activeMatch['Completed']
-                        : ((task.due_date && task.due_date !== '—') 
-                            ? task.due_date 
-                            : ((task.dueDate && task.dueDate !== '—') 
-                                ? task.dueDate 
-                                : ((task['Completed'] && task['Completed'] !== '—') ? task['Completed'] : '—')));
-                    const displayPriority = activeMatch?.priority || activeMatch?.['Priority'] || task['Priority'] || task.priority || 'Medium';
+                <div className="flex justify-between items-center mt-3 pt-2 border-t border-slate-100 dark:border-slate-700/30 min-h-[32px]">
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    {overallFilter === 'unassigned' ? 'Showing only unassigned tasks' : 'Click to filter unassigned tasks'}
+                  </span>
+                  {overallFilter === 'unassigned' && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOverallFilter(null);
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-800/40 transition-colors shadow-sm cursor-pointer"
+                      title="Remove filter to view all overall tasks"
+                    >
+                      <X size={12} />
+                      <span>Remove filter</span>
+                    </button>
+                  )}
+                </div>
+              </div>
 
-                    return (
-                      <tr 
-                        key={task.id || i} 
-                        onClick={() => { if (isMultiSelectMode) { setSelectedTasks(prev => prev.some(t => t === task) ? prev.filter(t => t !== task) : [...prev, task]); } else { setActionModalTasks([task]); } }}
-                        className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer ${selectedTasks.some(t => t === task) ? 'bg-yellow-500/10' : ''}`}
-                      >
-                        <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-200">
-                          {task['Issue / Task / Enhancement'] || task.title || task.task || 'Untitled Task'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded text-xs">
-                            {displayStatus}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
-                          {displayAssignee}
-                        </td>
-                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
-                          {displayDueDate}
-                        </td>
-                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
-                          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-md text-xs">
-                            {displayPriority}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
-                          {task['Added '] || (task.description && task.description !== (task['Issue / Task / Enhancement'] || task.title) ? task.description : '—')}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
+              {/* 2. Undated tasks KPI */}
+              <div 
+                onClick={() => setOverallFilter(prev => prev === 'undated' ? null : 'undated')}
+                className={`relative p-5 rounded-xl border transition-all cursor-pointer shadow-sm select-none ${
+                  overallFilter === 'undated'
+                    ? 'bg-blue-50/50 dark:bg-blue-950/20 border-blue-500 dark:border-blue-500 ring-2 ring-blue-500/20'
+                    : 'bg-white dark:bg-slate-800/40 border-slate-200 dark:border-slate-700/60 hover:border-slate-300 dark:hover:border-slate-600'
+                }`}
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">Undated tasks</p>
+                    <h3 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
+                      {overallKpis.undatedCount}
+                      <span className="text-xs font-normal text-slate-400 dark:text-slate-500 ml-2">
+                        of {overallKpis.totalCount} total
+                      </span>
+                    </h3>
+                  </div>
+                  <div className="p-2.5 bg-blue-500/10 rounded-lg text-blue-500">
+                    <Calendar size={20} />
+                  </div>
+                </div>
 
-                {/* Inline task creation row */}
-                {isAddTaskModalOpen && (
-                  <tr className="bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-700/50">
-                    <td colSpan={6} className="px-4 py-3">
-                      <form onSubmit={handleAddTask} className="flex items-center gap-3">
-                        <input 
-                          type="text" 
-                          autoFocus
-                          placeholder="Enter task name..."
-                          value={newTaskName}
-                          onChange={(e) => setNewTaskName(e.target.value)}
-                          required
-                          className="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-yellow-500"
-                        />
-                        <div className="flex items-center gap-2">
-                          <button 
-                            type="button"
-                            onClick={() => setIsAddTaskModalOpen(false)}
-                            className="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white px-3 py-1.5 transition-colors"
-                          >
-                            Cancel
-                          </button>
-                          <button 
-                            type="submit"
-                            className="text-sm bg-yellow-500 hover:bg-yellow-600 text-slate-900 font-medium px-4 py-1.5 rounded-md shadow-sm transition-colors"
-                          >
-                            Save Task
-                          </button>
-                        </div>
-                      </form>
-                    </td>
-                  </tr>
-                )}
+                <div className="flex justify-between items-center mt-3 pt-2 border-t border-slate-100 dark:border-slate-700/30 min-h-[32px]">
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    {overallFilter === 'undated' ? 'Showing only undated tasks' : 'Click to filter undated tasks'}
+                  </span>
+                  {overallFilter === 'undated' && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOverallFilter(null);
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-800/40 transition-colors shadow-sm cursor-pointer"
+                      title="Remove filter to view all overall tasks"
+                    >
+                      <X size={12} />
+                      <span>Remove filter</span>
+                    </button>
+                  )}
+                </div>
+              </div>
 
-                {/* '+ Create' button row */}
-                {!isAddTaskModalOpen && (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-3">
-                      <button 
-                        onClick={() => setIsAddTaskModalOpen(true)}
-                        className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-1.5 rounded-md transition-colors"
-                      >
-                        <Plus size={16} /> Create
-                      </button>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          {isMultiSelectMode && selectedTasks.length > 0 && (
-            <div className="m-3 flex items-center justify-between bg-slate-100 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{selectedTasks.length} tasks selected</span>
-              <div className="flex gap-2">
-                <button onClick={() => { setIsMultiSelectMode(false); setSelectedTasks([]); setPullOrigin(null); }} className="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md">Cancel</button>
-                <button onClick={() => pullOrigin ? setIsPullConfirmModalOpen(true) : setActionModalTasks(selectedTasks)} className="px-3 py-1.5 text-sm font-medium text-slate-900 bg-yellow-500 hover:bg-yellow-600 rounded-md shadow-sm">Proceed</button>
+              {/* 3. Priority tasks KPI (in succession of Undated tasks) */}
+              <div 
+                onClick={() => {
+                  if (overallPriorityFilter !== 'all') {
+                    setOverallPriorityFilter('all');
+                  }
+                }}
+                className={`relative p-5 rounded-xl border transition-all cursor-pointer shadow-sm select-none ${
+                  overallPriorityFilter !== 'all'
+                    ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-500 dark:border-indigo-500 ring-2 ring-indigo-500/20'
+                    : 'bg-white dark:bg-slate-800/40 border-slate-200 dark:border-slate-700/60 hover:border-slate-300 dark:hover:border-slate-600'
+                }`}
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">
+                      {priorityKpiMeta.title}
+                    </p>
+                    <h3 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
+                      {priorityKpiCount}
+                      <span className="text-xs font-normal text-slate-400 dark:text-slate-500 ml-2">
+                        of {overallKpis.totalCount} total
+                      </span>
+                    </h3>
+                  </div>
+                  <div className="p-2.5 bg-indigo-500/10 rounded-lg text-indigo-500">
+                    <Target size={20} />
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center mt-3 pt-2 border-t border-slate-100 dark:border-slate-700/30 min-h-[32px]">
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    {overallPriorityFilter !== 'all' 
+                      ? `Showing only ${priorityKpiMeta.filterLabel.toLowerCase()} priority tasks` 
+                      : 'Select a priority below to filter'}
+                  </span>
+                  {overallPriorityFilter !== 'all' && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOverallPriorityFilter('all');
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-800/40 transition-colors shadow-sm cursor-pointer"
+                      title="Remove priority filter to view all priorities"
+                    >
+                      <X size={12} />
+                      <span>Remove filter</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           )}
+
+          {/* Priority Filter Bar (below the KPIs and above the overall tasks table container) */}
+          {workspaceTasks.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-400 select-none mr-1">
+                <Filter size={14} className="text-slate-400 dark:text-slate-400" />
+                <span className="text-xs font-bold tracking-wider uppercase">PRIORITY:</span>
+              </div>
+              {OVERALL_PRIORITY_OPTIONS.map((opt) => {
+                const isActive = overallPriorityFilter === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setOverallPriorityFilter(prev => prev === opt.id ? 'all' : opt.id)}
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm transition-all duration-150 rounded-xl cursor-pointer select-none ${
+                      isActive
+                        ? 'bg-[#6366f1] text-white font-bold shadow-sm border border-[#6366f1]'
+                        : 'bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-600 font-medium'
+                    }`}
+                  >
+                    {opt.icon && <span>{opt.icon}</span>}
+                    <span>{opt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Overall Project Tasks</h2>
+              <button 
+                onClick={() => setIsAddTaskModalOpen(true)}
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-slate-900 rounded-md transition-colors shadow-sm"
+              >
+                <Plus size={14} /> Add Task
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 uppercase border-b border-slate-200 dark:border-slate-700/50">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Task Name</th>
+                    <th className="px-4 py-3 font-medium">Status</th>
+                    <th className="px-4 py-3 font-medium">Assignee</th>
+                    <th className="px-4 py-3 font-medium">Due Date</th>
+                    <th className="px-4 py-3 font-medium">Priority</th>
+                    <th className="px-4 py-3 font-medium">Added On</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-700/50">
+                  {workspaceTasks.length === 0 ? (
+                    <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No overall tasks available for this workspace.</td></tr>
+                  ) : displayedWorkspaceTasks.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
+                        No {overallFilter === 'unassigned' ? 'unassigned ' : overallFilter === 'undated' ? 'undated ' : ''}{overallPriorityFilter !== 'all' ? `${OVERALL_PRIORITY_OPTIONS.find(o => o.id === overallPriorityFilter)?.label || overallPriorityFilter} ` : ''}tasks found in overall tasks.
+                        {(overallFilter || overallPriorityFilter !== 'all') && (
+                          <button
+                            type="button"
+                            onClick={() => { setOverallFilter(null); setOverallPriorityFilter('all'); }}
+                            className="ml-2 text-yellow-500 hover:text-yellow-600 dark:text-yellow-400 font-medium underline cursor-pointer"
+                          >
+                            View all tasks
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ) : (
+                    displayedWorkspaceTasks.map((task, i) => {
+                      const { displayAssignee, displayStatus, displayDueDate, displayPriority } = getResolvedTaskDetails(task);
+
+                      return (
+                        <tr 
+                          key={task.id || i} 
+                          onClick={() => { if (isMultiSelectMode) { setSelectedTasks(prev => prev.some(t => t === task) ? prev.filter(t => t !== task) : [...prev, task]); } else { setActionModalTasks([task]); } }}
+                          className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer ${selectedTasks.some(t => t === task) ? 'bg-yellow-500/10' : ''}`}
+                        >
+                          <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-200">
+                            {task['Issue / Task / Enhancement'] || task.title || task.task || 'Untitled Task'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded text-xs">
+                              {displayStatus}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+                            {displayAssignee}
+                          </td>
+                          <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+                            {displayDueDate}
+                          </td>
+                          <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+                            <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-md text-xs">
+                              {displayPriority}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
+                            {task['Added '] || (task.description && task.description !== (task['Issue / Task / Enhancement'] || task.title) ? task.description : '—')}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+
+                  {/* Inline task creation row */}
+                  {isAddTaskModalOpen && (
+                    <tr className="bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-700/50">
+                      <td colSpan={6} className="px-4 py-3">
+                        <form onSubmit={handleAddTask} className="flex items-center gap-3">
+                          <input 
+                            type="text" 
+                            autoFocus
+                            placeholder="Enter task name..."
+                            value={newTaskName}
+                            onChange={(e) => setNewTaskName(e.target.value)}
+                            required
+                            className="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-yellow-500"
+                          />
+                          <div className="flex items-center gap-2">
+                            <button 
+                              type="button"
+                              onClick={() => setIsAddTaskModalOpen(false)}
+                              className="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white px-3 py-1.5 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button 
+                              type="submit"
+                              className="text-sm bg-yellow-500 hover:bg-yellow-600 text-slate-900 font-medium px-4 py-1.5 rounded-md shadow-sm transition-colors"
+                            >
+                              Save Task
+                            </button>
+                          </div>
+                        </form>
+                      </td>
+                    </tr>
+                  )}
+
+                  {/* '+ Create' button row */}
+                  {!isAddTaskModalOpen && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-3">
+                        <button 
+                          onClick={() => setIsAddTaskModalOpen(true)}
+                          className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-1.5 rounded-md transition-colors"
+                        >
+                          <Plus size={16} /> Create
+                        </button>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {isMultiSelectMode && selectedTasks.length > 0 && (
+              <div className="m-3 flex items-center justify-between bg-slate-100 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{selectedTasks.length} tasks selected</span>
+                <div className="flex gap-2">
+                  <button onClick={() => { setIsMultiSelectMode(false); setSelectedTasks([]); setPullOrigin(null); }} className="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md">Cancel</button>
+                  <button onClick={() => pullOrigin ? setIsPullConfirmModalOpen(true) : setActionModalTasks(selectedTasks)} className="px-3 py-1.5 text-sm font-medium text-slate-900 bg-yellow-500 hover:bg-yellow-600 rounded-md shadow-sm">Proceed</button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

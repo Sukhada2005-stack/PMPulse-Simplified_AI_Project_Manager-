@@ -114,10 +114,12 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onN
   const [sprintDateTo, setSprintDateTo] = useState('');
 
   const initializedProjectRef = useRef(null);
+  const syncedProjectRef = useRef(null);
 
   // When project changes, reset initialized project ref so the new project's bounds will be adopted
   useEffect(() => {
     initializedProjectRef.current = null;
+    syncedProjectRef.current = null;
     setDateFrom('');
     setDateTo('');
   }, [currentProjectId]);
@@ -133,14 +135,14 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onN
     if (initializedProjectRef.current !== currentProjectId) {
       const rows = matrixData.rows || [];
 
-      // Collect task dates — prefer in_progress tasks to represent the active sprint
-      const activeTasks = rows
-        .map(r => r.task)
-        .filter(t => t && t.status === 'in_progress' && t.start_date && t.end_date && !String(t.id).startsWith('unallocated-'));
+      // Collect task dates from all tasks across rows
+      const allRowTasks = rows.flatMap(r => r.tasks && r.tasks.length > 0 ? r.tasks : (r.task ? [r.task] : []));
+
+      const activeTasks = allRowTasks.filter(t => t && t.status === 'in_progress' && t.start_date && t.end_date && !String(t.id).startsWith('unallocated-'));
 
       const candidateTasks = activeTasks.length > 0
         ? activeTasks
-        : rows.map(r => r.task).filter(t => t && t.start_date && t.end_date && !String(t.id).startsWith('unallocated-'));
+        : allRowTasks.filter(t => t && t.start_date && t.end_date && !String(t.id).startsWith('unallocated-'));
 
       let initialStart = '';
       let initialEnd = '';
@@ -148,9 +150,11 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onN
       if (candidateTasks.length > 0) {
         initialStart = candidateTasks
           .map(t => t.start_date)
+          .filter(Boolean)
           .sort()[0]; // earliest task start
         initialEnd = candidateTasks
           .map(t => t.end_date)
+          .filter(Boolean)
           .sort()
           .reverse()[0]; // latest task end
       } else if (matrixData?.dates?.length > 0) {
@@ -196,12 +200,15 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onN
   const handleFiveDayWindow = () => {
     const base = sprintDateFrom || dateFrom;
     if (!base) return;
-    const start = new Date(base);
+    const [y, m, d] = base.split('-').map(Number);
+    const start = new Date(y, m - 1, d);
     const end = new Date(start);
     end.setDate(end.getDate() + 4);
-    const endStr = end.toISOString().split('T')[0];
+    const yE = end.getFullYear();
+    const mE = String(end.getMonth() + 1).padStart(2, '0');
+    const dE = String(end.getDate()).padStart(2, '0');
     setDateFrom(base);
-    setDateTo(endStr);
+    setDateTo(`${yE}-${mE}-${dE}`);
   };
 
   const isFullSprintActive = Boolean(
@@ -210,9 +217,13 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onN
   );
 
   const fiveDayEndStr = sprintDateFrom ? (() => {
-    const d = new Date(sprintDateFrom);
-    d.setDate(d.getDate() + 4);
-    return d.toISOString().split('T')[0];
+    const [y, m, d] = sprintDateFrom.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() + 4);
+    const yE = dt.getFullYear();
+    const mE = String(dt.getMonth() + 1).padStart(2, '0');
+    const dE = String(dt.getDate()).padStart(2, '0');
+    return `${yE}-${mE}-${dE}`;
   })() : null;
 
   const isFiveDayActive = Boolean(
@@ -279,7 +290,8 @@ export default function CalendarMatrix({ selectedProjectId, onSelectProject, onN
   const fetchMatrix = useCallback(async () => {
     setLoading(true);
     try {
-      if (currentProjectId && currentProjectId !== 'fleet') {
+      if (currentProjectId && currentProjectId !== 'fleet' && syncedProjectRef.current !== currentProjectId) {
+        syncedProjectRef.current = currentProjectId;
         try {
           const listTasks = JSON.parse(localStorage.getItem(`pmpulse_listTasks_${currentProjectId}`) || '[]');
           const boardTasks = JSON.parse(localStorage.getItem(`pmpulse_boardTasks_${currentProjectId}`) || '[]');

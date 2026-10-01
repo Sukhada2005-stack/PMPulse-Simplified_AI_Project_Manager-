@@ -24,12 +24,19 @@ export const createEmployee = (req, res) => {
             INSERT INTO users (email, password_hash, full_name, role_title, employment_type, user_type, status, avatar_url, manager_id)
             VALUES (?, ?, ?, ?, ?, 'employee', 'active', ?, ?)
         `);
-        const result = stmt.run(email, password_hash, full_name, role_title, empType, avatar, req.user.id);
+        const result = stmt.run(email, password_hash, full_name.trim(), role_title.trim(), empType, avatar, req.user.id);
+        const newEmployeeId = result.lastInsertRowid;
+
+        // Initialize personal profile with Contributor's full_name and role_title pre-filled, and all other fields empty
+        db.prepare(`
+            INSERT INTO user_profiles (user_id, full_name, role_title, experience, about, resume_name, resume_data, skills, avatar_url)
+            VALUES (?, ?, ?, '', '', NULL, NULL, '[]', ?)
+        `).run(newEmployeeId, full_name.trim(), role_title.trim(), avatar);
 
         const newUser = db.prepare(`
             SELECT id, email, full_name, role_title, employment_type, user_type, status, avatar_url, created_at 
             FROM users WHERE id = ?
-        `).get(result.lastInsertRowid);
+        `).get(newEmployeeId);
 
         res.status(201).json({ message: 'Employee profile created successfully', employee: newUser });
     } catch (err) {

@@ -68,4 +68,39 @@ try {
   console.error('Migration notice (users.employment_type):', e.message);
 }
 
+// Migration: Ensure user_profiles table exists
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_profiles (
+      user_id INTEGER PRIMARY KEY,
+      full_name TEXT,
+      role_title TEXT,
+      experience TEXT,
+      about TEXT,
+      resume_name TEXT,
+      resume_data TEXT,
+      resume_type TEXT,
+      resume_size TEXT,
+      skills TEXT,
+      avatar_url TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Migrate missing columns if table already existed
+  const tableCols = db.prepare("PRAGMA table_info(user_profiles)").all();
+  if (!tableCols.some(c => c.name === 'resume_data')) {
+    db.exec("ALTER TABLE user_profiles ADD COLUMN resume_data TEXT");
+  }
+  if (!tableCols.some(c => c.name === 'resume_type')) {
+    db.exec("ALTER TABLE user_profiles ADD COLUMN resume_type TEXT");
+  }
+  if (!tableCols.some(c => c.name === 'resume_size')) {
+    db.exec("ALTER TABLE user_profiles ADD COLUMN resume_size TEXT");
+  }
+} catch (e) {
+  console.error('Migration notice (user_profiles table):', e.message);
+}
+
 export default db;

@@ -19,12 +19,19 @@ export const createPM = (req, res) => {
             INSERT INTO users (email, password_hash, full_name, role_title, user_type, status, is_first_login)
             VALUES (?, ?, ?, 'Project Manager', 'pm', 'active', 1)
         `);
-        const result = stmt.run(email, password_hash, full_name);
+        const result = stmt.run(email, password_hash, full_name.trim());
+        const newPMId = result.lastInsertRowid;
+
+        // Initialize personal profile with PM's full_name pre-filled and all other fields empty
+        db.prepare(`
+            INSERT INTO user_profiles (user_id, full_name, role_title, experience, about, resume_name, resume_data, skills)
+            VALUES (?, ?, '', '', '', NULL, NULL, '[]')
+        `).run(newPMId, full_name.trim());
 
         const newPM = db.prepare(`
             SELECT id, email, full_name, role_title, user_type, status, created_at 
             FROM users WHERE id = ?
-        `).get(result.lastInsertRowid);
+        `).get(newPMId);
 
         res.status(201).json({ message: 'Project Manager created successfully', pm: newPM });
     } catch (err) {
@@ -104,6 +111,9 @@ export const updatePM = (req, res) => {
         if (updates.length > 0) {
             params.push(id);
             db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+            if (full_name !== undefined) {
+                db.prepare('UPDATE user_profiles SET full_name = ? WHERE user_id = ?').run(String(full_name).trim(), id);
+            }
         }
 
         const updatedPM = db.prepare(`

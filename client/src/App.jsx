@@ -14,6 +14,7 @@ import LandingPage from './components/LandingPage';
 import SetPassword from './components/SetPassword';
 import SessionReauthModal from './components/SessionReauthModal';
 import OtherWorkspaces from './components/OtherWorkspaces';
+import PersonalProfile from './components/PersonalProfile';
 import { Loader2, Sun, Moon, LogOut, Search } from 'lucide-react';
 import { api } from './services/api';
 
@@ -35,6 +36,8 @@ function MainApp() {
       return 'other_workspaces';
     }
   });
+
+  const [previousTab, setPreviousTab] = useState(null);
 
   useEffect(() => {
     if (activeTab) {
@@ -89,6 +92,7 @@ function MainApp() {
   }, [selectedWorkspace]);
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [selectedAiDimension, setSelectedAiDimension] = useState('project_based');
 
   useEffect(() => {
     const fetchWorkspaces = async () => {
@@ -207,6 +211,7 @@ function MainApp() {
     ai_summary:      'AI Executive Summary Hub',
     employee_dash:   'My Tasks & Daily Log',
     employee_daily_logs: 'Daily Logs',
+    personal_profile: 'Personal Profile',
   };
   const pageTitle = user.user_type === 'superuser' ? 'Superuser Hub' : (pageTitles[activeTab] || 'PulsePM');
 
@@ -218,11 +223,18 @@ function MainApp() {
       {/* Left Sidebar */}
       <Sidebar
         activeTab={activeTab}
-        onSelectTab={(tab) => {
+        activeAiDimension={selectedAiDimension}
+        onSelectTab={(tab, dimension) => {
           if (tab === 'dashboard') {
             setInitialDashboardView('workspace');
           }
+          if (tab === 'personal_profile' && activeTab !== 'personal_profile') {
+            setPreviousTab(activeTab);
+          }
           setActiveTab(tab);
+          if (dimension) {
+            setSelectedAiDimension(dimension);
+          }
         }}
       />
 
@@ -352,8 +364,26 @@ function MainApp() {
         <main
           className="flex-1 p-6"
         >
+          {/* Personal Profile View (accessible to PM, Superuser, and Contributor) */}
+          {activeTab === 'personal_profile' && (
+            <PersonalProfile
+              user={user}
+              onBack={() => {
+                if (previousTab && previousTab !== 'personal_profile') {
+                  setActiveTab(previousTab);
+                } else if (user?.user_type === 'superuser') {
+                  setActiveTab('superuser_hub');
+                } else if (isPM) {
+                  setActiveTab('other_workspaces');
+                } else {
+                  setActiveTab('employee_dash');
+                }
+              }}
+            />
+          )}
+
           {/* PM Views */}
-          {isPM && (
+          {isPM && activeTab !== 'personal_profile' && (
             <>
               {activeTab === 'dashboard' && (
                 <PMDashboard
@@ -409,17 +439,21 @@ function MainApp() {
                       AI Executive Summary Hub
                     </h1>
                   </div>
-                  <AISummaryHub selectedWorkspace={selectedWorkspace} />
+                  <AISummaryHub
+                    selectedWorkspace={selectedWorkspace}
+                    activeDimension={selectedAiDimension}
+                    onDimensionChange={setSelectedAiDimension}
+                  />
                 </div>
               )}
             </>
           )}
 
           {/* Superuser View */}
-          {user?.user_type === 'superuser' && <SuperuserDashboard />}
+          {user?.user_type === 'superuser' && activeTab !== 'personal_profile' && <SuperuserDashboard />}
 
           {/* Employee View */}
-          {!isPM && user?.user_type !== 'superuser' && (
+          {!isPM && user?.user_type !== 'superuser' && activeTab !== 'personal_profile' && (
             <>
               {activeTab === 'employee_dash' && <EmployeeDashboard selectedWorkspace={selectedWorkspace} />}
               {activeTab === 'employee_daily_logs' && <EmployeeDailyLogs selectedWorkspace={selectedWorkspace} />}

@@ -131,3 +131,19 @@ CREATE TABLE IF NOT EXISTS project_documents (
 );
 
 CREATE INDEX IF NOT EXISTS idx_project_documents_project ON project_documents(project_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS user_profiles (
+    user_id INTEGER PRIMARY KEY,
+    full_name TEXT,
+    role_title TEXT,
+    experience TEXT,
+    about TEXT,
+    resume_name TEXT,
+    resume_data TEXT,
+    resume_type TEXT,
+    resume_size TEXT,
+    skills TEXT,
+    avatar_url TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);

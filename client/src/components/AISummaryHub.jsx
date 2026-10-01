@@ -3,11 +3,9 @@ import { api } from '../services/api';
 import {
   Sparkles,
   Filter,
-  User,
   Users,
   CheckSquare,
   FolderGit2,
-  Globe,
   Calendar,
   Layers,
   Copy,
@@ -22,44 +20,6 @@ import {
   FileText
 } from 'lucide-react';
 import ExecutiveSprintReportModal from './ExecutiveSprintReportModal';
-
-const DIMENSIONS = [
-  {
-    id: 'single_employee',
-    name: '1. Single Employee Drilldown',
-    short: 'Single Contributor',
-    icon: User,
-    desc: 'Individual achievements, blockers, consistency score, and technical trajectory.'
-  },
-  {
-    id: 'multi_employee',
-    name: '2. Team Cohort Analysis',
-    short: 'Team Cohort',
-    icon: Users,
-    desc: 'Relative output contribution, cross-functional dependencies, and shared impediments.'
-  },
-  {
-    id: 'task_based',
-    name: '3. Task & Milestone Tracking',
-    short: 'Task / Milestone',
-    icon: CheckSquare,
-    desc: 'Timeline progression, percentage towards completion, solved sub-tasks, and risk.'
-  },
-  {
-    id: 'project_based',
-    name: '4. Project Health & Status',
-    short: 'Project Health',
-    icon: FolderGit2,
-    desc: 'Executive milestone review, completed vs lagging tasks, and delivery forecast.'
-  },
-  {
-    id: 'fleet_level',
-    name: '5. Fleet-Level Macro Overview',
-    short: 'Company Fleet',
-    icon: Globe,
-    desc: 'Macro productivity trends, high-performing vs stalled initiatives, and organizational bottlenecks.'
-  }
-];
 
 const formatDateISO = (d) => {
   if (!d) return '';
@@ -107,8 +67,8 @@ const getSprintDates = (workspaceId) => {
   return defaultRange;
 };
 
-export default function AISummaryHub({ selectedWorkspace }) {
-  const [selectedDimension, setSelectedDimension] = useState('project_based');
+export default function AISummaryHub({ selectedWorkspace, activeDimension, onDimensionChange }) {
+  const [selectedDimension, setSelectedDimension] = useState(activeDimension || 'project_based');
   const [loading, setLoading] = useState(false);
   const [summaryData, setSummaryData] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -145,6 +105,14 @@ export default function AISummaryHub({ selectedWorkspace }) {
       }
     }
   }, [selectedWorkspace?.id]);
+
+  // Sync selectedDimension with activeDimension prop (e.g. from Sidebar selection)
+  useEffect(() => {
+    if (activeDimension && activeDimension !== selectedDimension) {
+      setSelectedDimension(activeDimension);
+      handleGenerateSummary({ dimension: activeDimension });
+    }
+  }, [activeDimension]);
 
   // Load projects and employees for filter dropdowns
   useEffect(() => {
@@ -261,34 +229,6 @@ export default function AISummaryHub({ selectedWorkspace }) {
 
   return (
     <div className="space-y-6 animate-fade-up">
-      {/* Dimension Selector Tabs Strip */}
-      <div className="jira-card p-2 overflow-x-auto" style={{ background: 'var(--color-surface-solid)' }}>
-        <div className="flex items-center gap-1.5 min-w-max">
-          {DIMENSIONS.map(dim => {
-            const Icon = dim.icon;
-            const isSelected = selectedDimension === dim.id;
-            return (
-              <button
-                key={dim.id}
-                onClick={() => {
-                  setSelectedDimension(dim.id);
-                  handleGenerateSummary({ dimension: dim.id });
-                }}
-                className={`flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                  isSelected
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-                style={isSelected ? { background: '#eeb20d' } : {}}
-              >
-                <Icon className={`w-4 h-4 ${isSelected ? 'text-yellow-300' : 'text-blue-600'}`} />
-                <span>{dim.name}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Multi-Dimensional Filter Control Panel & Synthesis Action */}
       <div className="jira-card p-5 space-y-4" style={{ background: 'var(--color-surface-solid)' }}>
         <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-gray-100">
