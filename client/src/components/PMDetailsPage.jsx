@@ -35,10 +35,10 @@ function StatusBadge({ status }) {
     cls += 'lozenge-success';
     label = 'Active';
   } else if (s === 'completed' || s === 'complete') {
-    cls += 'bg-sky-500/15 text-sky-400 border border-sky-500/30';
+    cls += 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30';
     label = 'Complete';
   } else if (s === 'inactive') {
-    cls += 'bg-slate-700/60 text-slate-300 border border-slate-600';
+    cls += 'bg-slate-100 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600';
     label = 'Inactive';
   } else if (s === 'in-review' || s === 'in_review') {
     cls += 'lozenge-warn';
@@ -356,18 +356,18 @@ export default function PMDetailsPage({ pm, onBack }) {
             <ArrowLeft className="w-4 h-4" />
             <span>Back to Hub</span>
           </button>
-          <div className="h-6 w-px bg-slate-700/60 hidden sm:block" />
+          <div className="h-6 w-px bg-slate-200 dark:bg-slate-700/60 hidden sm:block" />
           <div>
             <div className="flex items-center gap-2.5">
               <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--color-text-1)' }}>
                 {pm.full_name}
               </h1>
-              <span className={`lozenge ${pm.status === 'inactive' ? 'bg-slate-700/60 text-slate-300 border border-slate-600' : 'lozenge-success'}`}>
+              <span className={`lozenge ${pm.status === 'inactive' ? 'bg-slate-100 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600' : 'lozenge-success'}`}>
                 {pm.status === 'inactive' ? 'Inactive' : 'Active'}
               </span>
             </div>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-3)' }}>
-              Project Manager Details &bull; <span className="font-mono">{pm.email}</span>
+            <p className="text-xs mt-0.5 text-slate-600 dark:text-slate-400">
+              Project Manager Details &bull; <span className="font-mono text-slate-700 dark:text-slate-300 font-medium">{pm.email}</span>
             </p>
           </div>
         </div>
@@ -396,13 +396,13 @@ export default function PMDetailsPage({ pm, onBack }) {
         >
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">
+              <p className="text-slate-600 dark:text-slate-400 text-sm font-medium mb-1">
                 Total Projects
               </p>
               <div className="flex items-baseline gap-2">
-                <h3 className="text-3xl font-bold text-blue-500">
+                <h3 className="text-3xl font-bold text-blue-600 dark:text-blue-500">
                   {loading ? (
-                    <Loader2 className="w-7 h-7 animate-spin inline text-blue-500" />
+                    <Loader2 className="w-7 h-7 animate-spin inline text-blue-600 dark:text-blue-500" />
                   ) : (
                     projects.length
                   )}
@@ -422,7 +422,7 @@ export default function PMDetailsPage({ pm, onBack }) {
                 )}
               </p>
             </div>
-            <div className="p-2.5 bg-blue-500/10 rounded-lg text-blue-500 group-hover:bg-blue-500/20 transition-colors">
+            <div className="p-2.5 bg-blue-500/10 rounded-lg text-blue-600 dark:text-blue-500 group-hover:bg-blue-500/20 transition-colors">
               <FolderGit2 className="w-5 h-5" />
             </div>
           </div>
@@ -449,13 +449,13 @@ export default function PMDetailsPage({ pm, onBack }) {
         >
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">
+              <p className="text-slate-600 dark:text-slate-400 text-sm font-medium mb-1">
                 OverDued Task
               </p>
               <div className="flex items-baseline gap-2">
-                <h3 className="text-3xl font-bold text-red-500">
+                <h3 className="text-3xl font-bold text-red-600 dark:text-red-500">
                   {loading ? (
-                    <Loader2 className="w-7 h-7 animate-spin inline text-red-500" />
+                    <Loader2 className="w-7 h-7 animate-spin inline text-red-600 dark:text-red-500" />
                   ) : (
                     totalOverdueCount
                   )}
@@ -475,7 +475,7 @@ export default function PMDetailsPage({ pm, onBack }) {
                 )}
               </p>
             </div>
-            <div className="p-2.5 bg-red-500/10 rounded-lg text-red-500 group-hover:bg-red-500/20 transition-colors">
+            <div className="p-2.5 bg-red-500/10 rounded-lg text-red-600 dark:text-red-500 group-hover:bg-red-500/20 transition-colors">
               <Clock className="w-5 h-5" />
             </div>
           </div>
@@ -502,13 +502,13 @@ export default function PMDetailsPage({ pm, onBack }) {
         >
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">
+              <p className="text-slate-600 dark:text-slate-400 text-sm font-medium mb-1">
                 Total Workforce
               </p>
               <div className="flex items-baseline gap-2">
-                <h3 className="text-3xl font-bold text-purple-400">
+                <h3 className="text-3xl font-bold text-purple-600 dark:text-purple-400">
                   {loadingWorkforce ? (
-                    <Loader2 className="w-7 h-7 animate-spin inline text-purple-400" />
+                    <Loader2 className="w-7 h-7 animate-spin inline text-purple-600 dark:text-purple-400" />
                   ) : (
                     employees.length
                   )}
@@ -528,7 +528,7 @@ export default function PMDetailsPage({ pm, onBack }) {
                 )}
               </p>
             </div>
-            <div className="p-2.5 bg-purple-500/10 rounded-lg text-purple-400 group-hover:bg-purple-500/20 transition-colors">
+            <div className="p-2.5 bg-purple-500/10 rounded-lg text-purple-600 dark:text-purple-400 group-hover:bg-purple-500/20 transition-colors">
               <Users className="w-5 h-5" />
             </div>
           </div>
@@ -538,23 +538,23 @@ export default function PMDetailsPage({ pm, onBack }) {
       {/* ── Table 1: Projects Table (Appears when clicking Total Projects KPI) ── */}
       {activeTable === 'projects' && (
         <div className="jira-card p-5 space-y-4 animate-fade-up" style={{ background: 'var(--color-surface-solid)' }}>
-          <div className="flex items-center justify-between flex-wrap gap-3 border-b border-slate-700/50 pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-3 border-b border-slate-200 dark:border-slate-700/50 pb-3">
             <div className="flex items-center gap-2">
               <FolderGit2 className="w-4 h-4 text-blue-500" />
               <h2 className="text-sm font-bold tracking-tight" style={{ color: 'var(--color-text-1)' }}>
                 Projects under {pm.full_name} ({projects.length})
               </h2>
             </div>
-            <span className="text-xs text-slate-400 font-mono">
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
               {projects.filter(p => (p.status || '').toLowerCase() === 'active').length} Active &bull;{' '}
               {projects.filter(p => (p.status || '').toLowerCase() !== 'active').length} Inactive / Complete
             </span>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-slate-700/60">
+          <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
             <table className="w-full text-sm text-left border-collapse">
               <thead>
-                <tr className="bg-slate-800/80 text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-700">
+                <tr className="bg-slate-50 dark:bg-slate-800/80 text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Category</th>
                   <th className="px-4 py-3">Status</th>
@@ -565,17 +565,17 @@ export default function PMDetailsPage({ pm, onBack }) {
                   <th className="px-4 py-3">End Date</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700/50">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-700/50">
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
+                    <td colSpan={8} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
                       <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-[var(--accent-gold)]" />
                       <span>Loading projects...</span>
                     </td>
                   </tr>
                 ) : projects.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
+                    <td colSpan={8} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
                       No projects found under this Project Manager.
                     </td>
                   </tr>
@@ -583,14 +583,14 @@ export default function PMDetailsPage({ pm, onBack }) {
                   projects.map((proj) => (
                     <tr
                       key={proj.id}
-                      className="hover:bg-slate-800/40 transition-colors"
+                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
                     >
                       {/* Name */}
-                      <td className="px-4 py-3 font-semibold text-slate-100">
+                      <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">
                         <div>
                           <span>{proj.title || proj.name || 'Untitled Project'}</span>
                           {proj.description && (
-                            <p className="text-xs font-normal text-slate-400 line-clamp-1 mt-0.5 max-w-xs">
+                            <p className="text-xs font-normal text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5 max-w-xs">
                               {proj.description}
                             </p>
                           )}
@@ -609,7 +609,7 @@ export default function PMDetailsPage({ pm, onBack }) {
 
                       {/* Members */}
                       <td className="px-4 py-3">
-                        <span className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#eeb20d' }}>
+                        <span className="text-xs font-semibold flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
                           <Users className="w-3.5 h-3.5" />
                           <span>{proj.member_count ?? 0}</span>
                         </span>
@@ -628,12 +628,12 @@ export default function PMDetailsPage({ pm, onBack }) {
                       </td>
 
                       {/* Start Date */}
-                      <td className="px-4 py-3 font-mono text-xs text-slate-300">
+                      <td className="px-4 py-3 font-mono text-xs text-slate-600 dark:text-slate-300">
                         {proj.start_date || '—'}
                       </td>
 
                       {/* End Date */}
-                      <td className="px-4 py-3 font-mono text-xs text-slate-300">
+                      <td className="px-4 py-3 font-mono text-xs text-slate-600 dark:text-slate-300">
                         {proj.end_date || '—'}
                       </td>
                     </tr>
@@ -648,7 +648,7 @@ export default function PMDetailsPage({ pm, onBack }) {
       {/* ── Table 2: Overdue Tasks Breakdown Table (Appears when clicking OverDued Task KPI) ── */}
       {activeTable === 'overdue' && (
         <div className="jira-card p-5 space-y-4 animate-fade-up" style={{ background: 'var(--color-surface-solid)' }}>
-          <div className="flex items-center justify-between flex-wrap gap-3 border-b border-slate-700/50 pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-3 border-b border-slate-200 dark:border-slate-700/50 pb-3">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-red-500" />
               <h2 className="text-sm font-bold tracking-tight" style={{ color: 'var(--color-text-1)' }}>
@@ -656,33 +656,33 @@ export default function PMDetailsPage({ pm, onBack }) {
               </h2>
             </div>
             <div className="flex items-center gap-2 text-xs font-mono">
-              <span className="lozenge bg-red-500/15 text-red-400 border border-red-500/30">
+              <span className="lozenge bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30">
                 {totalOverdueCount} Total Overdue
               </span>
-              <span className="text-slate-400">across {projects.length} {projects.length === 1 ? 'project' : 'projects'}</span>
+              <span className="text-slate-500 dark:text-slate-400">across {projects.length} {projects.length === 1 ? 'project' : 'projects'}</span>
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-slate-700/60">
+          <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
             <table className="w-full text-sm text-left border-collapse">
               <thead>
-                <tr className="bg-slate-800/80 text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-700">
+                <tr className="bg-slate-50 dark:bg-slate-800/80 text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
                   <th className="px-4 py-3">Project Name</th>
                   <th className="px-4 py-3">Total Overdue Tasks</th>
                   <th className="px-4 py-3">High Priority Tasks from Overdues</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700/50">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-700/50">
                 {loading ? (
                   <tr>
-                    <td colSpan={3} className="px-4 py-10 text-center text-slate-400">
+                    <td colSpan={3} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
                       <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-red-500" />
                       <span>Calculating overdue tasks...</span>
                     </td>
                   </tr>
                 ) : projectOverdueData.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="px-4 py-10 text-center text-slate-400">
+                    <td colSpan={3} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
                       No projects found under this Project Manager.
                     </td>
                   </tr>
@@ -690,17 +690,17 @@ export default function PMDetailsPage({ pm, onBack }) {
                   projectOverdueData.map((item) => (
                     <tr
                       key={item.id}
-                      className="hover:bg-slate-800/40 transition-colors"
+                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
                     >
                       {/* Project Name */}
-                      <td className="px-4 py-3 font-semibold text-slate-100">
+                      <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">
                         <span>{item.name}</span>
                       </td>
 
                       {/* Total Overdue Tasks */}
                       <td className="px-4 py-3">
                         {item.totalOverdueTasks > 0 ? (
-                          <span className="lozenge bg-red-500/15 text-red-400 border border-red-500/30 font-mono font-bold">
+                          <span className="lozenge bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30 font-mono font-bold">
                             {item.totalOverdueTasks} {item.totalOverdueTasks === 1 ? 'Task' : 'Tasks'}
                           </span>
                         ) : (
@@ -713,12 +713,12 @@ export default function PMDetailsPage({ pm, onBack }) {
                       {/* High Priority Tasks from Overdues */}
                       <td className="px-4 py-3">
                         {item.highPriorityOverdueTasks > 0 ? (
-                          <span className="lozenge font-semibold flex items-center gap-1.5 bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                          <span className="lozenge font-semibold flex items-center gap-1.5 bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
                             <span>⚡</span>
                             <span>{item.highPriorityOverdueTasks} {item.highPriorityOverdueTasks === 1 ? 'Task' : 'Tasks'}</span>
                           </span>
                         ) : (
-                          <span className="text-xs text-slate-400 font-mono">
+                          <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                             0
                           </span>
                         )}
@@ -735,24 +735,24 @@ export default function PMDetailsPage({ pm, onBack }) {
       {/* ── Table 3: Workforce Directory Table (Appears when clicking Total Workforce KPI) ── */}
       {activeTable === 'workforce' && (
         <div className="jira-card p-5 space-y-4 animate-fade-up" style={{ background: 'var(--color-surface-solid)' }}>
-          <div className="flex items-center justify-between flex-wrap gap-3 border-b border-slate-700/50 pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-3 border-b border-slate-200 dark:border-slate-700/50 pb-3">
             <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-purple-400" />
+              <Users className="w-4 h-4 text-purple-600 dark:text-purple-400" />
               <h2 className="text-sm font-bold tracking-tight" style={{ color: 'var(--color-text-1)' }}>
                 Workforce Directory &bull; {pm.full_name} ({employees.length})
               </h2>
             </div>
             <div className="flex items-center gap-2 text-xs font-mono">
-              <span className="lozenge bg-purple-500/15 text-purple-400 border border-purple-500/30">
+              <span className="lozenge bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30">
                 {employees.length} Total Headcount
               </span>
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-slate-700/60">
+          <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
             <table className="w-full text-sm text-left border-collapse">
               <thead>
-                <tr className="bg-slate-800/80 text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-700">
+                <tr className="bg-slate-50 dark:bg-slate-800/80 text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
                   <th className="px-4 py-3">Names (of members)</th>
                   <th className="px-4 py-3">Deparmental Job Role</th>
                   <th className="px-4 py-3">Category</th>
@@ -760,17 +760,17 @@ export default function PMDetailsPage({ pm, onBack }) {
                   <th className="px-4 py-3">Active Tasks</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700/50">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-700/50">
                 {loadingWorkforce ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-slate-400">
-                      <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-purple-400" />
+                    <td colSpan={5} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
+                      <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-purple-600 dark:text-purple-400" />
                       <span>Loading workforce directory...</span>
                     </td>
                   </tr>
                 ) : employees.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-slate-400">
+                    <td colSpan={5} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
                       No contributors found in the workforce directory under this Project Manager.
                     </td>
                   </tr>
@@ -784,10 +784,10 @@ export default function PMDetailsPage({ pm, onBack }) {
                     return (
                       <tr
                         key={emp.id}
-                        className="hover:bg-slate-800/40 transition-colors"
+                        className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
                       >
                         {/* Names (of members) */}
-                        <td className="px-4 py-3 font-semibold text-slate-100">
+                        <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">
                           <div className="flex items-center gap-2.5">
                             <div
                               className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs uppercase shrink-0"
@@ -805,7 +805,7 @@ export default function PMDetailsPage({ pm, onBack }) {
 
                         {/* Deparmental Job Role */}
                         <td className="px-4 py-3 text-sm">
-                          <span className="font-medium text-blue-400">
+                          <span className="font-medium text-blue-600 dark:text-blue-400">
                             {emp.role_title || 'Contributor'}
                           </span>
                         </td>
@@ -813,11 +813,11 @@ export default function PMDetailsPage({ pm, onBack }) {
                         {/* Category */}
                         <td className="px-4 py-3 text-sm">
                           {category === 'Intern' ? (
-                            <span className="lozenge bg-purple-500/15 text-purple-400 border border-purple-500/30 font-semibold text-xs">
+                            <span className="lozenge bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 font-semibold text-xs">
                               Intern
                             </span>
                           ) : (
-                            <span className="lozenge bg-blue-500/15 text-blue-400 border border-blue-500/30 font-semibold text-xs">
+                            <span className="lozenge bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 font-semibold text-xs">
                               Full Time Contributor
                             </span>
                           )}
@@ -825,8 +825,8 @@ export default function PMDetailsPage({ pm, onBack }) {
 
                         {/* Work Email */}
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-2 text-slate-300 font-mono text-xs">
-                            <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300 font-mono text-xs">
+                            <Mail className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
                             <span>{emp.email}</span>
                           </div>
                         </td>
@@ -834,7 +834,7 @@ export default function PMDetailsPage({ pm, onBack }) {
                         {/* Active Tasks */}
                         <td className="px-4 py-3">
                           {activeTasks > 0 ? (
-                            <span className="lozenge bg-blue-500/15 text-blue-400 border border-blue-500/30 font-mono font-bold">
+                            <span className="lozenge bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 font-mono font-bold">
                               {activeTasks} {activeTasks === 1 ? 'Task' : 'Tasks'}
                             </span>
                           ) : (

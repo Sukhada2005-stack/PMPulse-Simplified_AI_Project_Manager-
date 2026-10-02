@@ -128,21 +128,21 @@ export default function LandingPage() {
       </div>
 
       {/* Advantages Section */}
-      <section className="py-24 border-t border-[var(--color-border)] px-6" style={{ background: '#0d0c0a' }}>
+      <section className="py-24 border-t border-slate-200 dark:border-[var(--color-border)] px-6 bg-slate-100/80 dark:bg-[#0d0c0a] transition-colors">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-black text-[var(--color-text-1)] mb-4">Leave Legacy Platforms Behind</h2>
-            <p className="text-[var(--color-text-3)] max-w-xl mx-auto text-lg">We stripped away the noise so you can focus on building.</p>
+            <h2 className="text-3xl md:text-4xl font-black text-slate-900 dark:text-white mb-4">Leave Legacy Platforms Behind</h2>
+            <p className="text-slate-600 dark:text-[var(--color-text-3)] max-w-xl mx-auto text-lg">We stripped away the noise so you can focus on building.</p>
           </div>
           
           <div className="grid md:grid-cols-2 gap-10 items-center">
             <div className="space-y-6">
-              <div className="p-6 rounded-2xl border border-red-500/20 bg-red-500/5">
-                <h3 className="text-xl font-bold text-red-400 flex items-center gap-3 mb-4">
+              <div className="p-6 rounded-2xl border border-red-500/20 bg-white dark:bg-red-500/5 shadow-sm">
+                <h3 className="text-xl font-bold text-red-600 dark:text-red-400 flex items-center gap-3 mb-4">
                   <XCircle className="w-6 h-6" />
                   Legacy Platforms
                 </h3>
-                <ul className="space-y-3 text-[#c5c4c1]">
+                <ul className="space-y-3 text-slate-700 dark:text-[#c5c4c1]">
                   <li className="flex items-start gap-2"><span className="text-red-500 font-bold mt-0.5">×</span> Complex configuration overhead</li>
                   <li className="flex items-start gap-2"><span className="text-red-500 font-bold mt-0.5">×</span> Forced sprint ceremonies</li>
                   <li className="flex items-start gap-2"><span className="text-red-500 font-bold mt-0.5">×</span> Rigid ticketing & micromanagement</li>
@@ -151,13 +151,13 @@ export default function LandingPage() {
             </div>
             
             <div className="space-y-6">
-              <div className="p-6 rounded-2xl border border-[#eeb20d]/20 bg-[#eeb20d]/5 relative overflow-hidden">
+              <div className="p-6 rounded-2xl border border-amber-500/30 bg-white dark:bg-[#eeb20d]/5 relative overflow-hidden shadow-sm">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-[#eeb20d]/10 rounded-full blur-3xl"></div>
-                <h3 className="text-xl font-bold text-[#eeb20d] flex items-center gap-3 mb-4">
+                <h3 className="text-xl font-bold text-amber-600 dark:text-[#eeb20d] flex items-center gap-3 mb-4">
                   <CheckCircle2 className="w-6 h-6" />
                   PMPluse
                 </h3>
-                <ul className="space-y-3 text-[var(--color-text-1)]">
+                <ul className="space-y-3 text-slate-800 dark:text-slate-100">
                   <li className="flex items-start gap-2"><span className="text-[#eeb20d] font-bold mt-0.5">✓</span> Frictionless daily logging</li>
                   <li className="flex items-start gap-2"><span className="text-[#eeb20d] font-bold mt-0.5">✓</span> AI-synthesized executive insights</li>
                   <li className="flex items-start gap-2"><span className="text-[#eeb20d] font-bold mt-0.5">✓</span> Continuous delivery workflow</li>
@@ -171,8 +171,8 @@ export default function LandingPage() {
       {/* Features Grid */}
       <section className="py-24 px-6 max-w-7xl mx-auto">
         <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-black text-[var(--color-text-1)] mb-4">The Four Pillars of Execution</h2>
-          <p className="text-[var(--color-text-3)] max-w-xl mx-auto text-lg">Engineered for absolute clarity and momentum.</p>
+          <h2 className="text-3xl md:text-4xl font-black text-slate-900 dark:text-white mb-4">The Four Pillars of Execution</h2>
+          <p className="text-slate-600 dark:text-[var(--color-text-3)] max-w-xl mx-auto text-lg">Engineered for absolute clarity and momentum.</p>
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">
@@ -198,22 +198,22 @@ export default function LandingPage() {
               desc: 'Clean separation of concerns. PMs get high-level visibility, Contributors get undisturbed focus.'
             }
           ].map((feat, i) => (
-            <div key={i} className="p-8 rounded-2xl border border-[var(--color-border)] bg-[#1a1814] hover:border-[#eeb20d]/50 transition-colors group">
-              <div className="w-14 h-14 rounded-xl bg-[#eeb20d]/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                <feat.icon className="w-7 h-7 text-[#eeb20d]" />
+            <div key={i} className="p-8 rounded-2xl border border-slate-200 dark:border-[var(--color-border)] bg-white dark:bg-[#1a1814] hover:border-[#eeb20d]/50 shadow-sm hover:shadow-md transition-all group">
+              <div className="w-14 h-14 rounded-xl bg-amber-500/10 dark:bg-[#eeb20d]/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                <feat.icon className="w-7 h-7 text-amber-600 dark:text-[#eeb20d]" />
               </div>
-              <h3 className="text-2xl font-bold text-[var(--color-text-1)] mb-3">{feat.title}</h3>
-              <p className="text-[var(--color-text-3)] text-base leading-relaxed">{feat.desc}</p>
+              <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">{feat.title}</h3>
+              <p className="text-slate-600 dark:text-[var(--color-text-3)] text-base leading-relaxed">{feat.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-[var(--color-border)] py-8 text-center text-[var(--color-text-3)] text-sm">
+      <footer className="border-t border-slate-200 dark:border-[var(--color-border)] py-8 text-center text-slate-600 dark:text-[var(--color-text-3)] text-sm">
         <div className="flex items-center justify-center gap-2 mb-2">
           <ShieldCheck className="w-4 h-4 text-[#eeb20d]" />
-          <span className="font-bold text-[var(--color-text-1)]">Acube AI</span> Enterprise Grade Security
+          <span className="font-bold text-slate-900 dark:text-white">Acube AI</span> Enterprise Grade Security
         </div>
         &copy; {new Date().getFullYear()} PMPluse powered by Acube AI. All rights reserved.
       </footer>
