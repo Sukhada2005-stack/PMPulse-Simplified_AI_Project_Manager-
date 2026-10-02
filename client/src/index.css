@@ -47,6 +47,7 @@
   --radius-lg:  16px;
   --radius-xl:  20px;
   --topbar-bg:         rgba(11, 15, 25, 0.95);
+  --sidebar-width:     56px;
   --sidebar-bg:        #0b0f19;
   --sidebar-border:    rgba(51, 65, 85, 0.5);
   --sidebar-item-hover: rgba(30, 41, 59, 0.7);
@@ -115,6 +116,7 @@
   --radius-lg:  18px;
   --radius-xl:  24px;
   --topbar-bg:         rgba(255,255,255,0.97);
+  --sidebar-width:     56px;
   --sidebar-bg:        #ffffff;
   --sidebar-border:    #e2e8f0;
   --sidebar-item-hover: rgba(200,137,10,0.09);
@@ -196,11 +198,11 @@
   gap: 16px;
   position: fixed;
   top: 0;
-  left: 56px;
+  left: var(--sidebar-width, 56px);
   right: 0;
   z-index: 40;
   box-shadow: 0 1px 0 var(--color-border-soft);
-  transition: background 0.3s ease;
+  transition: left 0.22s cubic-bezier(0.4,0,0.2,1), background 0.3s ease;
 }
 
 /* ── Page Shell ────────────────────────────────────────────────── */

@@ -62,7 +62,7 @@ export default function ActiveProjectContainers({ projects = [], allProjects = [
           {projects.map((proj) => (
             <div
               key={proj.id}
-              className="jira-card p-5 flex flex-col justify-between group transition-all"
+              className="jira-card px-4 py-5 2xl:p-5 flex flex-col justify-between group transition-all overflow-hidden"
               style={{ background: 'var(--table-th-bg)' }}
             >
               {/* Card body */}
@@ -105,7 +105,7 @@ export default function ActiveProjectContainers({ projects = [], allProjects = [
               </div>
 
               {/* Quick-action footer */}
-              <div className="mt-4 pt-3 border-t border-slate-200 dark:border-white/10 flex items-center gap-2">
+              <div className="mt-4 pt-3 border-t border-slate-200 dark:border-white/10 flex flex-wrap items-center gap-1.5 sm:gap-2">
 
                 {/* 💬 Chat */}
                 <button
@@ -113,11 +113,11 @@ export default function ActiveProjectContainers({ projects = [], allProjects = [
                     setSelectedChatProjectId(proj.id);
                     setShowChatModal(true);
                   }}
-                  className="btn-secondary flex-1 justify-center text-xs px-2.5 py-1.5 border border-slate-200 dark:border-slate-700/70 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors duration-200"
+                  className="btn-secondary flex-1 min-w-[58px] justify-center text-xs px-2 py-1.5 border border-slate-200 dark:border-slate-700/70 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors duration-200"
                   title="Open Team Chat & Meeting Scheduler"
                 >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  <span>Chat</span>
+                  <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span className="truncate">Chat</span>
                 </button>
 
                 {/* Workspace → */}
@@ -127,12 +127,13 @@ export default function ActiveProjectContainers({ projects = [], allProjects = [
                       onOpenWorkspace(proj);
                     }
                   }}
-                  className="btn-primary flex-1 justify-center text-xs px-2"
+                  className="btn-primary flex-1 min-w-[95px] justify-center text-xs !px-2 !py-1.5"
+                  style={{ paddingLeft: '8px', paddingRight: '8px' }}
                   title="Open Workspace for this Project"
                 >
-                  <Layout className="w-3.5 h-3.5" />
-                  <span>Workspace</span>
-                  <ArrowRight className="w-3 h-3" />
+                  <Layout className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span className="truncate">Workspace</span>
+                  <ArrowRight className="w-3 h-3 flex-shrink-0" />
                 </button>
 
                 {/* 🗑 Delete */}
@@ -149,7 +150,7 @@ export default function ActiveProjectContainers({ projects = [], allProjects = [
                       }
                     }
                   }}
-                  className="btn-secondary text-slate-400 hover:text-rose-500 hover:border-rose-500/30 hover:bg-rose-500/10 justify-center text-xs p-1.5"
+                  className="btn-secondary text-slate-400 hover:text-rose-500 hover:border-rose-500/30 hover:bg-rose-500/10 justify-center text-xs p-1.5 flex-shrink-0"
                   title="Delete Project"
                 >
                   <Trash2 className="w-3.5 h-3.5" />

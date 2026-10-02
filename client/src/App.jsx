@@ -93,6 +93,7 @@ function MainApp() {
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedAiDimension, setSelectedAiDimension] = useState('project_based');
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
   useEffect(() => {
     const fetchWorkspaces = async () => {
@@ -224,6 +225,7 @@ function MainApp() {
       <Sidebar
         activeTab={activeTab}
         activeAiDimension={selectedAiDimension}
+        onExpandChange={setSidebarExpanded}
         onSelectTab={(tab, dimension) => {
           if (tab === 'dashboard') {
             setInitialDashboardView('workspace');
@@ -244,7 +246,15 @@ function MainApp() {
         style={{ flex: 1, minWidth: 0, paddingTop: '72px' }}
       >
         {/* Top Bar */}
-        <header className="jira-topbar no-print flex items-center justify-between relative" style={{ height: '72px', padding: '0 24px' }}>
+        <header
+          className="jira-topbar no-print flex items-center justify-between"
+          style={{
+            height: '72px',
+            padding: '0 24px',
+            left: sidebarExpanded ? '220px' : '56px',
+            transition: 'left 0.22s cubic-bezier(0.4,0,0.2,1), background 0.3s ease',
+          }}
+        >
           
           {/* Left: Logo */}
           <div className="flex flex-col justify-center h-full pt-1 z-10 select-none">
@@ -363,6 +373,7 @@ function MainApp() {
         {/* Page Content */}
         <main
           className="flex-1 p-6"
+          style={{ minWidth: 0 }}
         >
           {/* Personal Profile View (accessible to PM, Superuser, and Contributor) */}
           {activeTab === 'personal_profile' && (

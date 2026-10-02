@@ -99,9 +99,15 @@ export default function PersonalProfile({ user, onBack }) {
 
   // Resume kebab menu and action modal states
   const [showResumeMenu, setShowResumeMenu] = useState(false);
-  const [noDocAlert, setNoDocAlert] = useState(false);
+  const [resumeActionWarning, setResumeActionWarning] = useState(null);
   const resumeMenuRef = useRef(null);
   const directResumeInputRef = useRef(null);
+
+  const triggerResumeWarning = (msg) => {
+    setResumeActionWarning(msg);
+    alert(msg);
+    setTimeout(() => setResumeActionWarning(null), 5000);
+  };
 
   // Input refs for automatic focus when edit pen is clicked
   const nameInputRef = useRef(null);
@@ -225,35 +231,28 @@ export default function PersonalProfile({ user, onBack }) {
     }
   }, [isEditingAbout]);
 
-  // Handle resume file selection (.pdf, .docx, .doc)
-  const handleResumeFileSelect = (file) => {
-    if (!file) return;
-    setResumeUploadError(null);
-
-    const ext = file.name.split('.').pop().toLowerCase();
-    if (!['pdf', 'docx', 'doc'].includes(ext)) {
-      setResumeUploadError('Please select a valid document in .pdf, .docx, or .doc format.');
-      return;
-    }
-
-    // Limit to 15MB
-    if (file.size > 15 * 1024 * 1024) {
-      setResumeUploadError('File size exceeds 15MB limit. Please upload a smaller file.');
-      return;
-    }
-
-    setStagedResumeFile(file);
-    setStagedResumeName(file.name);
+  // Resume Action / Kebab Menu Handlers
+  const handleMenuImport = () => {
+    setShowResumeMenu(false);
+    setResumeActionWarning(null);
+    directResumeInputRef.current?.click();
   };
 
-  // Upload staged resume file and save to database
-  const handleUploadResume = async () => {
-    if (!stagedResumeFile) {
-      // If user only modified name without picking new file
-      if (stagedResumeName && stagedResumeName !== profileData.resumeName) {
-        await saveToDatabase({ resumeName: stagedResumeName });
-      }
-      setIsEditingResume(false);
+  const handleDirectResumeFileImport = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setResumeActionWarning(null);
+
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!ext || !['pdf', 'docx', 'doc'].includes(ext)) {
+      triggerResumeWarning('Files imported must be in the format .doc or .docx or .pdf');
+      return;
+    }
+
+    if (file.size > 15 * 1024 * 1024) {
+      triggerResumeWarning('File size exceeds 15MB limit. Please upload a smaller file.');
       return;
     }
 
@@ -261,35 +260,54 @@ export default function PersonalProfile({ user, onBack }) {
       setSaving(true);
       const reader = new FileReader();
       reader.onloadend = async () => {
-        const base64Data = reader.result;
-        const formattedSize = formatFileSize(stagedResumeFile.size);
-        const fileExt = stagedResumeFile.name.split('.').pop().toLowerCase();
-        const mimeType = stagedResumeFile.type || (
-          fileExt === 'pdf' ? 'application/pdf' :
-          fileExt === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' :
-          'application/msword'
-        );
+        try {
+          const base64Data = reader.result;
+          const formattedSize = formatFileSize(file.size);
+          const mimeType = file.type || (
+            ext === 'pdf' ? 'application/pdf' :
+            ext === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' :
+            'application/msword'
+          );
 
-        await saveToDatabase({
-          resumeName: stagedResumeName || stagedResumeFile.name,
-          resumeData: base64Data,
-          resumeType: mimeType,
-          resumeSize: formattedSize
-        });
+          await saveToDatabase({
+            resumeName: file.name,
+            resumeData: base64Data,
+            resumeType: mimeType,
+            resumeSize: formattedSize
+          });
 
-        setStagedResumeFile(null);
-        setIsEditingResume(false);
-        setResumeUploadError(null);
+          setProfileData(prev => ({
+            ...prev,
+            resumeName: file.name,
+            resumeData: base64Data,
+            resumeType: mimeType,
+            resumeSize: formattedSize
+          }));
+        } catch (err) {
+          console.error('Failed to save imported resume:', err);
+          triggerResumeWarning('Failed to import document. Please try again.');
+        } finally {
+          setSaving(false);
+        }
       };
-      reader.readAsDataURL(stagedResumeFile);
+      reader.readAsDataURL(file);
     } catch (err) {
-      console.error('Failed to read and upload resume:', err);
-      setResumeUploadError('Failed to process file. Please try again.');
+      console.error('Failed to read resume file:', err);
+      triggerResumeWarning('Failed to import document. Please try again.');
+      setSaving(false);
     }
   };
 
-  // Download resume file
-  const handleDownloadResume = async () => {
+  const handleMenuDownload = async () => {
+    setShowResumeMenu(false);
+    setResumeActionWarning(null);
+
+    // If no file is imported and the field is empty
+    if (!profileData.resumeData && !profileData.resumeName) {
+      triggerResumeWarning('Unable to download : no file currently imported!');
+      return;
+    }
+
     try {
       if (profileData.resumeData) {
         const link = document.createElement('a');
@@ -301,7 +319,7 @@ export default function PersonalProfile({ user, onBack }) {
         return;
       }
 
-      // Fallback: Fetch directly from server endpoint
+      // Fallback: Fetch from server
       const blob = await api.profile.downloadResume();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -313,9 +331,93 @@ export default function PersonalProfile({ user, onBack }) {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Download error:', err);
-      alert('No resume file has been uploaded yet. Click the edit/upload button to upload your resume.');
+      triggerResumeWarning('Unable to download : no file currently imported!');
     }
   };
+
+  const handleMenuDelete = async () => {
+    setShowResumeMenu(false);
+    setResumeActionWarning(null);
+
+    // If no file is imported
+    if (!profileData.resumeData && !profileData.resumeName) {
+      triggerResumeWarning('Unable to Delete : No file present currently ! ');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await saveToDatabase({
+        resumeName: null,
+        resumeData: null,
+        resumeType: null,
+        resumeSize: null
+      });
+      setProfileData(prev => ({
+        ...prev,
+        resumeName: null,
+        resumeData: null,
+        resumeType: null,
+        resumeSize: null
+      }));
+    } catch (err) {
+      console.error('Failed to delete resume:', err);
+      triggerResumeWarning('Failed to delete resume file. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const renderResumeKebabMenu = () => (
+    <div className="relative" ref={resumeMenuRef}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setShowResumeMenu(prev => !prev);
+        }}
+        className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+        title="Resume actions"
+        aria-label="Resume actions menu"
+      >
+        <MoreVertical size={16} />
+      </button>
+
+      {showResumeMenu && (
+        <div
+          className="absolute right-0 top-full mt-1.5 w-36 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl py-1 z-50 text-xs font-medium animate-fade-up"
+          style={{ boxShadow: '0 10px 25px -5px rgba(0,0,0,0.35)' }}
+        >
+          <button
+            type="button"
+            onClick={handleMenuImport}
+            className="w-full px-3 py-2 text-left flex items-center gap-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            <Upload size={13} className="text-[var(--acube-gold)]" />
+            <span>Import</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleMenuDownload}
+            className="w-full px-3 py-2 text-left flex items-center gap-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            <Download size={13} className="text-blue-500" />
+            <span>Download</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleMenuDelete}
+            className="w-full px-3 py-2 text-left flex items-center gap-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer border-t border-slate-100 dark:border-slate-800/80 mt-1 pt-1.5"
+          >
+            <Trash2 size={13} />
+            <span>Delete</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
 
   // Skill management
   const handleAddSkill = async (e) => {
@@ -772,159 +874,26 @@ export default function PersonalProfile({ user, onBack }) {
                 <ShieldCheck size={14} className="text-[var(--acube-gold)]" />
                 Resume & Career Documentation
               </span>
-              <button
-                type="button"
-                onClick={() => {
-                  if (isEditingResume) {
-                    handleUploadResume();
-                  } else {
-                    setIsEditingResume(true);
-                    setStagedResumeFile(null);
-                    setStagedResumeName(profileData.resumeName);
-                    setResumeUploadError(null);
-                  }
-                }}
-                className="p-1 rounded text-slate-500 dark:text-slate-400 hover:text-[var(--acube-gold)] hover:bg-slate-100 dark:hover:bg-slate-800/70 transition-colors"
-                title={isEditingResume ? "Done Editing Resume" : "Upload / Edit Resume"}
-              >
-                {isEditingResume ? <Check size={15} className="text-emerald-600 dark:text-emerald-400" /> : <Pencil size={13} />}
-              </button>
             </div>
 
-            {/* EDIT MODE: Upload/Import mechanism supporting .pdf, .docx, .doc */}
-            {isEditingResume ? (
-              <div className="space-y-3 animate-fade-up">
-                <input
-                  ref={resumeFileInputRef}
-                  type="file"
-                  accept=".pdf,.docx,.doc,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleResumeFileSelect(file);
-                  }}
-                />
+            {/* Hidden direct file input for Kebab Menu Import */}
+            <input
+              ref={directResumeInputRef}
+              type="file"
+              accept=".pdf,.docx,.doc,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              className="hidden"
+              onChange={handleDirectResumeFileImport}
+            />
 
-                {!stagedResumeFile ? (
-                  <div
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setIsDraggingResume(true);
-                    }}
-                    onDragLeave={() => setIsDraggingResume(false)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      setIsDraggingResume(false);
-                      const file = e.dataTransfer.files?.[0];
-                      if (file) handleResumeFileSelect(file);
-                    }}
-                    onClick={() => resumeFileInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
-                      isDraggingResume
-                        ? 'border-[var(--acube-gold)] bg-amber-500/10 scale-[1.01]'
-                        : 'border-slate-300 dark:border-slate-700 hover:border-[var(--acube-gold)] dark:hover:border-[var(--acube-gold)] bg-slate-50/70 dark:bg-slate-900/60 hover:bg-slate-100/80 dark:hover:bg-slate-900/90'
-                    }`}
-                  >
-                    <div className="flex flex-col items-center justify-center gap-2.5">
-                      <div className="w-12 h-12 rounded-full bg-amber-500/10 text-[var(--acube-gold)] flex items-center justify-center shadow-xs">
-                        <UploadCloud size={24} />
-                      </div>
-                      <div>
-                        <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200">
-                          Click to browse or drag & drop resume file
-                        </p>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                          Supported formats: <span className="font-semibold text-[var(--acube-gold)]">.pdf, .docx, .doc</span> (up to 15MB)
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-slate-50 dark:bg-slate-900/90 border-2 border-[var(--acube-gold)] rounded-xl p-4 space-y-3 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0 font-bold ${getResumeFileMeta(stagedResumeFile.name).badgeClass}`}>
-                        <FileCheck size={22} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
-                          {stagedResumeFile.name}
-                        </p>
-                        <p className="text-[11px] font-mono text-slate-500 dark:text-slate-400 mt-0.5">
-                          {formatFileSize(stagedResumeFile.size)} • {getResumeFileMeta(stagedResumeFile.name).typeLabel}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setStagedResumeFile(null);
-                          setStagedResumeName(profileData.resumeName);
-                        }}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                        title="Remove selected file"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-
-                    {/* Custom document display name */}
-                    <div className="pt-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 block mb-1">
-                        Document Display Label:
-                      </label>
-                      <input
-                        type="text"
-                        value={stagedResumeName}
-                        onChange={(e) => setStagedResumeName(e.target.value)}
-                        className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:border-[var(--acube-gold)]"
-                        placeholder="Document name"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {resumeUploadError && (
-                  <div className="flex items-center gap-1.5 text-xs text-rose-500 dark:text-rose-400 font-medium bg-rose-500/10 border border-rose-500/20 rounded-lg p-2.5">
-                    <AlertCircle size={14} className="flex-shrink-0" />
-                    <span>{resumeUploadError}</span>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between pt-1">
-                  {!stagedResumeFile ? (
-                    <button
-                      type="button"
-                      onClick={() => resumeFileInputRef.current?.click()}
-                      className="text-xs text-[var(--acube-gold)] hover:underline flex items-center gap-1 font-semibold"
-                    >
-                      <Upload size={12} /> Choose from device
-                    </button>
-                  ) : <div />}
-
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsEditingResume(false);
-                        setStagedResumeFile(null);
-                        setResumeUploadError(null);
-                      }}
-                      className="text-xs px-3.5 py-1.5 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleUploadResume}
-                      disabled={saving}
-                      className="text-xs px-4 py-1.5 bg-[var(--acube-gold)] hover:bg-yellow-400 text-slate-950 font-bold rounded-lg shadow-xs flex items-center gap-1.5 transition-colors disabled:opacity-60"
-                    >
-                      {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                      <span>{stagedResumeFile ? 'Upload & Save to Profile' : 'Save'}</span>
-                    </button>
-                  </div>
-                </div>
+            {/* Warning banner if triggered */}
+            {resumeActionWarning && (
+              <div className="flex items-center gap-2 p-2.5 rounded-lg text-xs font-medium bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 animate-fade-up">
+                <AlertCircle size={15} className="flex-shrink-0 text-amber-500" />
+                <span>{resumeActionWarning}</span>
               </div>
-            ) : profileData.resumeData ? (
+            )}
+
+            {profileData.resumeData ? (
               /* VIEW MODE: Actual Uploaded Document Display Card */
               <div className="bg-slate-50 hover:bg-slate-100/90 dark:bg-slate-900/70 dark:hover:bg-slate-900 border border-slate-200 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700/80 rounded-xl p-3.5 flex items-center gap-3.5 transition-all shadow-xs">
                 {/* Format-specific badge */}
@@ -940,39 +909,17 @@ export default function PersonalProfile({ user, onBack }) {
                     {getResumeFileMeta(profileData.resumeName).typeLabel} • Ready for Review
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsEditingResume(true);
-                      setStagedResumeFile(null);
-                      setStagedResumeName(profileData.resumeName || '');
-                      setResumeUploadError(null);
-                      setTimeout(() => resumeFileInputRef.current?.click(), 100);
-                    }}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-                    title="Import / Upload new resume (.pdf, .docx, .doc)"
-                  >
-                    <Upload size={13} className="text-[var(--acube-gold)]" />
-                    <span>Import</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDownloadResume}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--acube-gold)] hover:bg-yellow-400 text-slate-950 flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-                    title="Download Resume"
-                  >
-                    <Download size={13} />
-                    <span>Download</span>
-                  </button>
-                </div>
+                {/* Action / Kebab Menu at exact place */}
+                {renderResumeKebabMenu()}
               </div>
             ) : (
               /* VIEW MODE: When no document is uploaded */
-              <div className="py-2.5 px-0.5">
+              <div className="flex items-center justify-between py-2.5 px-0.5">
                 <p className="text-sm font-semibold text-rose-500 dark:text-rose-400">
                   no document uploaded yet.
                 </p>
+                {/* Action / Kebab Menu at exact place */}
+                {renderResumeKebabMenu()}
               </div>
             )}
           </div>

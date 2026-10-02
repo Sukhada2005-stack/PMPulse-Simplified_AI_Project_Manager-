@@ -15,7 +15,7 @@ import {
   FileText,
 } from 'lucide-react';
 
-export default function Sidebar({ activeTab, onSelectTab, activeAiDimension }) {
+export default function Sidebar({ activeTab, onSelectTab, activeAiDimension, onExpandChange }) {
   const { user, isPM } = useAuth();
   const [expanded, setExpanded] = useState(false);
   const [isAiSummaryOpen, setIsAiSummaryOpen] = useState(false);
@@ -53,12 +53,24 @@ export default function Sidebar({ activeTab, onSelectTab, activeAiDimension }) {
   /* Shared transition */
   const transition = 'all 0.22s cubic-bezier(0.4,0,0.2,1)';
 
+  const handleMouseEnter = () => {
+    setExpanded(true);
+    document.documentElement.style.setProperty('--sidebar-width', `${W_OPEN}px`);
+    onExpandChange?.(true);
+  };
+
+  const handleMouseLeave = () => {
+    setExpanded(false);
+    document.documentElement.style.setProperty('--sidebar-width', `${W_CLOSED}px`);
+    onExpandChange?.(false);
+  };
+
   return (
     <>
       {/* ── SIDEBAR ──────────────────────────────────────────────── */}
       <aside
-        onMouseEnter={() => setExpanded(true)}
-        onMouseLeave={() => setExpanded(false)}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
         className="no-print"
         style={{
           position: 'fixed',
@@ -374,8 +386,14 @@ export default function Sidebar({ activeTab, onSelectTab, activeAiDimension }) {
       </aside>
 
       {/* ── CONTENT OFFSET SPACER ─────────────────────────────────── */}
-      {/* This invisible div pushes the flex layout by the collapsed sidebar width */}
-      <div style={{ width: W_CLOSED, flexShrink: 0 }} />
+      {/* Dynamically matches sidebar width with matching transition to squeeze the page smoothly */}
+      <div
+        style={{
+          width: w,
+          flexShrink: 0,
+          transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
+        }}
+      />
     </>
   );
 }

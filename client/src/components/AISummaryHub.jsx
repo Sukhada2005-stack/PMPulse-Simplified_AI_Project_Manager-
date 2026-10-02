@@ -3,7 +3,6 @@ import { api } from '../services/api';
 import {
   Sparkles,
   Filter,
-  Users,
   CheckSquare,
   FolderGit2,
   Calendar,
@@ -140,15 +139,9 @@ export default function AISummaryHub({ selectedWorkspace, activeDimension, onDim
         }
         setSelectedProjectIds(initialProjIds);
 
-        let initialEmpIds = [];
-        if (empList.length > 0) {
-          initialEmpIds = [empList[0].id];
-          setSelectedEmployeeIds(initialEmpIds);
-        }
-
         handleGenerateSummary({
           project_ids: initialProjIds,
-          employee_ids: initialEmpIds
+          employee_ids: []
         });
       } catch (err) {
         console.error('Failed to load filter options:', err);
@@ -259,7 +252,7 @@ export default function AISummaryHub({ selectedWorkspace, activeDimension, onDim
         </div>
 
         {/* Filter Controls Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
           
           {/* 1. Date Range Preset & Custom Range */}
           <div className="p-3 rounded-lg border border-gray-200 space-y-1.5" style={{ background: 'var(--table-th-bg)' }}>
@@ -337,29 +330,7 @@ export default function AISummaryHub({ selectedWorkspace, activeDimension, onDim
             </select>
           </div>
 
-          {/* 3. Employee Filter */}
-          <div className="p-3 rounded-lg border border-gray-200 space-y-1.5" style={{ background: 'var(--table-th-bg)' }}>
-            <label className="font-semibold flex items-center gap-1.5" style={{ color: 'var(--color-text-2)' }}>
-              <Users className="w-3.5 h-3.5 text-blue-600" />
-              <span>Personnel Filter:</span>
-            </label>
-            <select
-              value={selectedEmployeeIds[0] || 'all'}
-              onChange={(e) => {
-                const newIds = e.target.value === 'all' ? [] : [parseInt(e.target.value, 10)];
-                setSelectedEmployeeIds(newIds);
-                handleGenerateSummary({ employee_ids: newIds });
-              }}
-              className="jira-select"
-            >
-              <option value="all">All Contributors</option>
-              {employees.map(e => (
-                <option key={e.id} value={e.id}>{e.full_name} ({e.role_title})</option>
-              ))}
-            </select>
-          </div>
-
-          {/* 4. Status Filter */}
+          {/* 3. Status Filter */}
           <div className="p-3 rounded-lg border border-gray-200 space-y-1.5" style={{ background: 'var(--table-th-bg)' }}>
             <label className="font-semibold flex items-center gap-1.5" style={{ color: 'var(--color-text-2)' }}>
               <CheckSquare className="w-3.5 h-3.5 text-blue-600" />
