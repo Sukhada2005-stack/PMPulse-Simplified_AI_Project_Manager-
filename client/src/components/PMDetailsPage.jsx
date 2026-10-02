@@ -367,7 +367,7 @@ export default function PMDetailsPage({ pm, onBack }) {
               </span>
             </div>
             <p className="text-xs mt-0.5 text-slate-600 dark:text-slate-400">
-              Project Manager Details &bull; <span className="font-mono text-slate-700 dark:text-slate-300 font-medium">{pm.email}</span>
+              Project Manager Details
             </p>
           </div>
         </div>
